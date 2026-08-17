@@ -400,8 +400,25 @@ class Handler(BaseHTTPRequestHandler):
                     code, body = _error("INVALID_ARGUMENT", "目标群和来源群不能相同")
                     _json_response(self, code, body)
                     return
-                batch_size = int(data.get("batch_count") or data.get("batch_size") or data.get("count") or 20)
-                interval_ms = int(data.get("interval_ms") or 1500)
+                if "batch_count" in data or "batch_size" in data or "count" in data:
+                    raw_batch = data.get("batch_count", data.get("batch_size", data.get("count")))
+                    try:
+                        batch_size = int(raw_batch)
+                    except (TypeError, ValueError):
+                        code, body = _error("INVALID_ARGUMENT", "batch_count must be 1-1000")
+                        _json_response(self, code, body)
+                        return
+                else:
+                    batch_size = 20
+                if "interval_ms" in data:
+                    try:
+                        interval_ms = int(data.get("interval_ms"))
+                    except (TypeError, ValueError):
+                        code, body = _error("INVALID_ARGUMENT", "interval_ms must be 100-600000")
+                        _json_response(self, code, body)
+                        return
+                else:
+                    interval_ms = 1500
                 if batch_size < 1 or batch_size > 1000:
                     code, body = _error("INVALID_ARGUMENT", "batch_count must be 1-1000")
                     _json_response(self, code, body)

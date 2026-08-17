@@ -691,12 +691,15 @@ def load_source_members(
         for qq, token in token_map.items():
             if qq < 10000:
                 continue
+            # No OneBot roles available: when filtering staff, unknowns must not be invitible.
+            eligible = not bool(filter_staff)
             by_qq[qq] = SourceMember(
                 qq=qq,
                 nickname=str(qq),
                 token=token,
                 role=MemberRole.UNKNOWN,
-                eligible=True,
+                eligible=eligible,
+                filter_reason="角色未知" if filter_staff else "",
             )
 
     members = sorted(by_qq.values(), key=lambda m: m.qq)
@@ -988,9 +991,12 @@ def start_batch(
                 token = member.token
                 if not token or not token_owner_safe(cap, member.qq, token):
                     fresh = query_invitee_token(cap, source_group_id, member.qq)
-                    if fresh:
+                    if fresh and token_owner_safe(cap, member.qq, fresh):
                         token = fresh
                         member.token = fresh
+                    else:
+                        token = ""
+                        member.token = ""
                 if not token:
                     reason = "找不到该成员的邀请信息"
                     _finish_member(
