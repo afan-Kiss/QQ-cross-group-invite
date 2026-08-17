@@ -18,6 +18,9 @@ type BootstrapStatusRaw = {
   napcatOnline: boolean;
   napcatMessage: string;
   appSession?: string;
+  backendInstance?: string;
+  backendPid?: number;
+  backendVersion?: string;
 };
 
 type AppInfoRaw = {
@@ -35,7 +38,7 @@ type DiagnosticItemRaw = {
   ok: boolean;
 };
 
-const NOT_IN_WAILS = "当前未运行在 Wails 桌面环境中";
+const NOT_IN_WAILS = "\u5f53\u524d\u672a\u8fd0\u884c\u5728 Wails \u684c\u9762\u73af\u5883\u4e2d";
 
 function mapBootstrap(raw: BootstrapStatusRaw): BootstrapStatus {
   const localService =
@@ -50,17 +53,17 @@ function mapBootstrap(raw: BootstrapStatusRaw): BootstrapStatus {
             : "booting";
 
   let message = raw.message;
-  if (message === "service ready") message = "服务已就绪";
+  if (message === "service ready") message = "\u670d\u52a1\u5df2\u5c31\u7eea";
   else if (message === "service started, waiting for NapCat...")
-    message = "服务已启动，正在等待 NapCat...";
-  else if (message === "connecting to local service...") message = "正在连接本地服务...";
-  else if (message === "starting local service...") message = "正在启动本地服务...";
-  else if (message === "backend not running") message = "后端服务未启动";
+    message = "\u670d\u52a1\u5df2\u542f\u52a8\uff0c\u6b63\u5728\u7b49\u5f85 NapCat...";
+  else if (message === "connecting to local service...") message = "\u6b63\u5728\u8fde\u63a5\u672c\u5730\u670d\u52a1...";
+  else if (message === "starting local service...") message = "\u6b63\u5728\u542f\u52a8\u672c\u5730\u670d\u52a1...";
+  else if (message === "backend not running") message = "\u540e\u7aef\u670d\u52a1\u672a\u542f\u52a8";
   else if (message.startsWith("port 17888") || message.includes("occupied"))
-    message = `端口 17888 已被其他程序占用：${raw.message}`;
+    message = `\u7aef\u53e3 17888 \u5df2\u88ab\u5176\u4ed6\u7a0b\u5e8f\u5360\u7528\uff1a${raw.message}`;
   else if (message.startsWith("local service startup timeout"))
-    message = "本地服务启动超时，请检查 17888 端口";
-  else if (message.startsWith("failed to start sidecar")) message = "本地服务启动失败";
+    message = "\u672c\u5730\u670d\u52a1\u542f\u52a8\u8d85\u65f6\uff0c\u8bf7\u68c0\u67e5 17888 \u7aef\u53e3";
+  else if (message.startsWith("failed to start sidecar")) message = "\u672c\u5730\u670d\u52a1\u542f\u52a8\u5931\u8d25";
 
   return {
     localService,
@@ -69,6 +72,9 @@ function mapBootstrap(raw: BootstrapStatusRaw): BootstrapStatus {
     napcatOnline: raw.napcatOnline,
     napcatMessage: raw.napcatMessage,
     appSession: raw.startedByUs ? raw.appSession || "" : "",
+    backendInstance: raw.backendInstance || "",
+    backendPid: Number(raw.backendPid || 0),
+    backendVersion: raw.backendVersion || "",
   };
 }
 

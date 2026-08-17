@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { api, ApiError, applyResultsToMembers } from "@/lib/api";
+import { validateInviteBatchInterval } from "@/lib/invite-config-schema";
 import { toEpochMs } from "@/lib/utils";
 import type {
   AppStatus,
@@ -424,11 +425,15 @@ export const useInviteStore = create<InviteStore>((set, get) => ({
     });
     try {
       await api.saveConfig(config);
+      const bounds = validateInviteBatchInterval(config.batch_count, config.interval_ms);
+      if (!bounds.ok) {
+        throw new Error(bounds.message);
+      }
       const res = await api.startInvite({
         target_group_id: config.target_group_id,
         source_group_id: config.source_group_id,
-        batch_count: Number(config.batch_count) || 20,
-        interval_ms: Number(config.interval_ms) || 1500,
+        batch_count: bounds.batch,
+        interval_ms: bounds.interval,
         filter_staff: config.filter_staff,
         qq_list: qqList,
       });

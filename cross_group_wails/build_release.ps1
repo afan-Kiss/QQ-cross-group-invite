@@ -2,13 +2,16 @@
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $MyqqHttp = Split-Path -Parent $Root
-$Failed = $false
+$WailsCfg = Get-Content -LiteralPath (Join-Path $Root "wails.json") -Raw -Encoding UTF8 | ConvertFrom-Json
+$MainExeName = "$($WailsCfg.outputfilename).exe"
+$SidecarExeName = "cross-group-service.exe"
+$ScriptExit = 1
 
 function Step([string]$Name, [scriptblock]$Action) {
     Write-Host ""
     Write-Host "==> $Name" -ForegroundColor Cyan
     & $Action
-    if ($LASTEXITCODE -ne 0 -and $null -ne $LASTEXITCODE) {
+    if ($null -ne $LASTEXITCODE -and $LASTEXITCODE -ne 0) {
         throw "Step failed: $Name (exit $LASTEXITCODE)"
     }
 }
@@ -17,6 +20,67 @@ function Require-Cmd([string]$Cmd, [string]$Hint) {
     $found = Get-Command $Cmd -ErrorAction SilentlyContinue
     if (-not $found) { throw "Missing dependency: $Cmd. $Hint" }
     Write-Host "  OK $Cmd = $($found.Source)"
+}
+
+function Get-FreeLoopbackPort {
+    $listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, 0)
+    $listener.Start()
+    $port = ([System.Net.IPEndPoint]$listener.LocalEndpoint).Port
+    $listener.Stop()
+    return [int]$port
+}
+
+function Invoke-OwnedSidecarSmoke([string]$SidecarPath) {
+    if (-not (Test-Path -LiteralPath $SidecarPath)) {
+        throw "sidecar missing for smoke: $SidecarPath"
+    }
+    $port = Get-FreeLoopbackPort
+    $session = [guid]::NewGuid().ToString()
+    $base = "http://127.0.0.1:$port"
+    Write-Host "  smoke port=$port (never 17888)"
+    $proc = $null
+    try {
+        $proc = Start-Process -FilePath $SidecarPath `
+            -ArgumentList @("--no-browser", "--session-id", $session, "--port", "$port") `
+            -PassThru -WindowStyle Hidden
+        $ok = $false
+        $lastErr = ""
+        for ($i = 0; $i -lt 40; $i++) {
+            Start-Sleep -Milliseconds 400
+            try {
+                $headers = @{ "X-App-Session" = $session }
+                $h = Invoke-RestMethod -Uri "$base/health" -Headers $headers -TimeoutSec 2
+                if (
+                    $h.ok -eq $true -and
+                    $h.service -eq "cross-group-invite" -and
+                    $h.session_required -eq $true -and
+                    $h.session_match -eq $true -and
+                    [int]$h.pid -gt 0
+                ) {
+                    $ok = $true
+                    Write-Host "  smoke health pid=$($h.pid) session_match=true"
+                    break
+                }
+                $lastErr = "unexpected health payload"
+            } catch {
+                $lastErr = $_.Exception.Message
+            }
+        }
+        if (-not $ok) { throw "sidecar health smoke failed: $lastErr" }
+
+        try {
+            Invoke-RestMethod -Method POST -Uri "$base/shutdown" `
+                -Headers @{ "X-App-Session" = $session } `
+                -ContentType "application/json" -Body "{}" -TimeoutSec 3 | Out-Null
+        } catch {}
+        Start-Sleep -Milliseconds 500
+        Write-Host "  sidecar smoke OK (temp port)"
+    }
+    finally {
+        if ($null -ne $proc -and -not $proc.HasExited) {
+            try { Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue } catch {}
+        }
+    }
 }
 
 try {
@@ -31,15 +95,25 @@ try {
     Step "Check Wails" { Require-Cmd wails "go install github.com/wailsapp/wails/v2/cmd/wails@latest" }
     Step "Check Node" { Require-Cmd npm "Install Node.js 20+" }
 
+    Step "Clean previous build/bin" {
+        $outDir = Join-Path $Root "build\bin"
+        if (Test-Path -LiteralPath $outDir) {
+            Remove-Item -LiteralPath $outDir -Recurse -Force
+            Write-Host "  removed $outDir"
+        }
+    }
+
     Step "npm ci" {
         Set-Location "$Root\frontend"
         npm ci
+        if ($LASTEXITCODE -ne 0) { throw "npm ci failed" }
         Set-Location $Root
     }
 
     Step "TypeScript check + frontend build" {
         Set-Location "$Root\frontend"
         npm run build
+        if ($LASTEXITCODE -ne 0) { throw "frontend build failed" }
         Set-Location $Root
     }
 
@@ -59,75 +133,75 @@ if bad:
     raise SystemExit(1)
 print('mojibake scan OK')
 "@
+        if ($LASTEXITCODE -ne 0) { throw "mojibake scan failed" }
         Set-Location $Root
     }
 
     Step "Python tests" {
         Set-Location $MyqqHttp
         python -m pytest tests -q
+        if ($LASTEXITCODE -ne 0) { throw "pytest failed" }
         Set-Location $Root
     }
 
     Step "Go tests" {
         go test ./...
+        if ($LASTEXITCODE -ne 0) { throw "go test failed" }
     }
 
     Step "Build sidecar" {
-        $sidecarResult = & "$MyqqHttp\build_sidecar.ps1"
-        $sidecarPath = "$MyqqHttp\dist\cross-group-service.exe"
-        if ($sidecarResult -is [hashtable] -and $sidecarResult.SidecarPath) {
-            $sidecarPath = [string]$sidecarResult.SidecarPath
-        }
+        & "$MyqqHttp\build_sidecar.ps1"
+        if ($LASTEXITCODE -ne 0) { throw "build_sidecar failed" }
+        $sidecarPath = "$MyqqHttp\dist\$SidecarExeName"
         if (-not (Test-Path -LiteralPath $sidecarPath)) {
             throw "sidecar missing after build: $sidecarPath"
         }
         New-Item -ItemType Directory -Force -Path "$Root\bin" | Out-Null
-        Copy-Item -Force $sidecarPath "$Root\bin\cross-group-service.exe"
+        Copy-Item -Force $sidecarPath "$Root\bin\$SidecarExeName"
     }
 
-    Step "Sidecar health smoke" {
-        Set-Location $Root
-        $sidecar = "$Root\bin\cross-group-service.exe"
-        $proc = Start-Process -FilePath $sidecar -ArgumentList "--no-browser","--session-id","smoke-test" -PassThru -WindowStyle Hidden
-        $ok = $false
-        for ($i = 0; $i -lt 40; $i++) {
-            Start-Sleep -Milliseconds 400
-            try {
-                $h = Invoke-RestMethod -Uri "http://127.0.0.1:17888/health" -TimeoutSec 2
-                if ($h.service -eq "cross-group-invite" -and $h.ok -eq $true) { $ok = $true; break }
-            } catch {}
-        }
-        try { Invoke-RestMethod -Method POST -Uri "http://127.0.0.1:17888/shutdown" -Headers @{"X-App-Session"="smoke-test"} -ContentType "application/json" -Body "{}" -TimeoutSec 3 | Out-Null } catch {}
-        Start-Sleep -Milliseconds 500
-        if (-not $proc.HasExited) { Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue }
-        if (-not $ok) { throw "sidecar health smoke failed" }
-        Write-Host "  sidecar smoke OK"
-        Set-Location $Root
+    Step "Sidecar health smoke (temp port)" {
+        Invoke-OwnedSidecarSmoke "$Root\bin\$SidecarExeName"
     }
 
     Step "wails build" {
         Set-Location $Root
         wails build
+        if ($LASTEXITCODE -ne 0) { throw "wails build failed" }
     }
 
-    Step "Copy sidecar into release dir" {
+    Step "Copy sidecar + verify release contents" {
         $outDir = "$Root\build\bin"
-        if (-not (Test-Path $outDir)) { throw "build/bin missing" }
-        Copy-Item -Force "$MyqqHttp\dist\cross-group-service.exe" "$outDir\cross-group-service.exe"
-        Copy-Item -Force "$MyqqHttp\VERSION" "$outDir\VERSION" -ErrorAction SilentlyContinue
-        # keep only runtime essentials
-        Get-ChildItem $outDir | ForEach-Object {
+        if (-not (Test-Path -LiteralPath $outDir)) { throw "build/bin missing" }
+        Copy-Item -Force "$MyqqHttp\dist\$SidecarExeName" "$outDir\$SidecarExeName"
+        $versionSrc = Join-Path $MyqqHttp "VERSION"
+        if (Test-Path -LiteralPath $versionSrc) {
+            Copy-Item -Force $versionSrc "$outDir\VERSION"
+        }
+
+        $mainExe = Join-Path $outDir $MainExeName
+        $sidecarExe = Join-Path $outDir $SidecarExeName
+        if (-not (Test-Path -LiteralPath $mainExe)) {
+            throw "main exe missing or wrong name: expected $MainExeName"
+        }
+        if (-not (Test-Path -LiteralPath $sidecarExe)) {
+            throw "sidecar missing in release dir"
+        }
+        $otherExes = Get-ChildItem -LiteralPath $outDir -Filter "*.exe" |
+            Where-Object { $_.Name -ne $MainExeName -and $_.Name -ne $SidecarExeName }
+        if ($otherExes.Count -gt 0) {
+            throw ("unexpected exe artifacts: " + (($otherExes | ForEach-Object { $_.Name }) -join ", "))
+        }
+        Get-ChildItem -LiteralPath $outDir | ForEach-Object {
             Write-Host ("  " + $_.Name + " " + $_.Length)
         }
     }
 
     Step "Release hashes" {
         $outDir = "$Root\build\bin"
-        $exe = Get-ChildItem $outDir -Filter "*.exe" | Where-Object { $_.Name -like "*跨群*" -or $_.Name -like "*QQ*" -or $_.Name -eq "QQ跨群邀请工具.exe" } | Select-Object -First 1
-        if (-not $exe) { $exe = Get-ChildItem $outDir -Filter "*.exe" | Where-Object { $_.Name -ne "cross-group-service.exe" } | Select-Object -First 1 }
-        $sidecar = Get-Item "$outDir\cross-group-service.exe"
-        foreach ($f in @($exe, $sidecar)) {
-            if (-not $f) { continue }
+        $main = Get-Item -LiteralPath (Join-Path $outDir $MainExeName)
+        $sidecar = Get-Item -LiteralPath (Join-Path $outDir $SidecarExeName)
+        foreach ($f in @($main, $sidecar)) {
             $hash = (Get-FileHash -Algorithm SHA256 $f.FullName).Hash
             Write-Host ("  " + $f.Name)
             Write-Host ("    size=" + $f.Length)
@@ -137,9 +211,13 @@ print('mojibake scan OK')
 
     Write-Host ""
     Write-Host "RELEASE BUILD OK" -ForegroundColor Green
+    $ScriptExit = 0
 }
 catch {
     Write-Host ""
     Write-Host "RELEASE BUILD FAILED: $_" -ForegroundColor Red
-    exit 1
+    $ScriptExit = 1
+}
+finally {
+    exit $ScriptExit
 }

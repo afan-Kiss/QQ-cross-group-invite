@@ -7,7 +7,7 @@ import {
   getPaginationRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import { ChevronLeft, ChevronRight, Eye, EyeOff, RefreshCw, Search } from "lucide-react";
+import { ChevronLeft, ChevronRight, RefreshCw, Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -20,7 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { Member, MemberStatus } from "@/lib/types";
-import { cn, formatNumber, maskToken } from "@/lib/utils";
+import { cn, formatNumber } from "@/lib/utils";
 import { useInviteStore } from "@/store/useInviteStore";
 import { useSettingsStore } from "@/store/useSettingsStore";
 import { MemberDetailDrawer } from "@/components/dashboard/MemberDetailDrawer";
@@ -44,23 +44,16 @@ function canSelect(status: MemberStatus) {
 
 export function MemberTable() {
   const members = useInviteStore((s) => s.members);
-  const membersRevision = useInviteStore((s) => s.membersRevision);
   const membersLoaded = useInviteStore((s) => s.membersLoaded);
   const selectedQqs = useInviteStore((s) => s.selectedQqs);
   const toggleSelect = useInviteStore((s) => s.toggleSelect);
   const toggleSelectAll = useInviteStore((s) => s.toggleSelectAll);
   const setDetailMemberQq = useInviteStore((s) => s.setDetailMemberQq);
-  const detailMemberQq = useInviteStore((s) => s.detailMemberQq);
   const refreshStatus = useInviteStore((s) => s.refreshStatus);
   const compactTable = useSettingsStore((s) => s.settings.compactTable);
 
   const [globalFilter, setGlobalFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [revealedTokens, setRevealedTokens] = useState<Set<number>>(new Set());
-
-  useEffect(() => {
-    setRevealedTokens(new Set());
-  }, [membersRevision]);
   const [menu, setMenu] = useState<{ x: number; y: number; member: Member } | null>(null);
 
   const filteredMembers = useMemo(() => {
@@ -119,29 +112,11 @@ export function MemberTable() {
         id: "token",
         header: "Token",
         cell: ({ row }) => {
-          const token = row.original.token;
-          const revealed = revealedTokens.has(row.original.qq);
+          const has = Boolean(row.original.has_token);
           return (
-            <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-              <span className="font-mono text-[12px] text-muted-foreground">
-                {revealed ? token || "—" : maskToken(token)}
-              </span>
-              <button
-                type="button"
-                className="rounded p-1 text-muted-foreground hover:bg-[#eef1eb]"
-                title={revealed ? "隐藏" : "显示"}
-                onClick={() =>
-                  setRevealedTokens((prev) => {
-                    const next = new Set(prev);
-                    if (next.has(row.original.qq)) next.delete(row.original.qq);
-                    else next.add(row.original.qq);
-                    return next;
-                  })
-                }
-              >
-                {revealed ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-              </button>
-            </div>
+            <span className={cn("text-[12px]", has ? "text-primary" : "text-muted-foreground")}>
+              {has ? "\u5df2\u83b7\u53d6" : "\u672a\u83b7\u53d6"}
+            </span>
           );
         },
       },
@@ -174,7 +149,7 @@ export function MemberTable() {
         ),
       },
     ],
-    [selectedQqs, toggleSelect, toggleSelectAll, revealedTokens, setDetailMemberQq],
+    [selectedQqs, toggleSelect, toggleSelectAll, setDetailMemberQq],
   );
 
   const table = useReactTable({
@@ -203,12 +178,6 @@ export function MemberTable() {
     .map((r) => r.original.qq);
   const allPageSelected =
     pageSelectable.length > 0 && pageSelectable.every((qq) => selectedQqs.has(qq));
-
-  useEffect(() => {
-    if (detailMemberQq == null) {
-      setRevealedTokens(new Set());
-    }
-  }, [detailMemberQq]);
 
   return (
     <div className="flex h-full min-h-0 flex-col">

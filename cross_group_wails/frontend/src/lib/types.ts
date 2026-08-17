@@ -32,7 +32,9 @@ export interface Member {
   role: MemberRole;
   status: MemberStatus;
   card?: string;
+  /** Raw token never leaves Python backend; kept empty on purpose. */
   token?: string;
+  has_token?: boolean;
   filterReason?: string;
   failReason?: string;
   startedAt?: number;
@@ -135,6 +137,7 @@ export interface LoadMembersResponse {
     role: string;
     card?: string;
     token?: string;
+    has_token?: boolean;
     eligible?: boolean;
     filter_reason?: string;
   }>;
@@ -158,6 +161,10 @@ export interface BootstrapStatus {
   napcatOnline: boolean;
   napcatMessage: string;
   appSession?: string;
+  /** Non-secret backend identity: service:version:pid */
+  backendInstance?: string;
+  backendPid?: number;
+  backendVersion?: string;
 }
 
 export interface ChartPoint {

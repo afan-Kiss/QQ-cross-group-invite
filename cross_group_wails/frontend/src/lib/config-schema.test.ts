@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { inviteConfigSchema, parseInviteConfigForm } from "./invite-config-schema";
+import {
+  inviteConfigSchema,
+  parseInviteConfigForm,
+  parseInviteDefaults,
+  validateInviteBatchInterval,
+} from "./invite-config-schema";
 
 describe("inviteConfigSchema shared", () => {
   const base = {
@@ -35,5 +40,27 @@ describe("inviteConfigSchema shared", () => {
 
   it("exports the same schema object used by ConfigPanel", () => {
     expect(inviteConfigSchema).toBeTruthy();
+  });
+
+  it("settings defaults share the same batch/interval bounds", () => {
+    expect(parseInviteDefaults({ defaultBatchCount: "1", defaultIntervalMs: "100" }).success).toBe(true);
+    expect(parseInviteDefaults({ defaultBatchCount: "1000", defaultIntervalMs: "600000" }).success).toBe(true);
+    expect(parseInviteDefaults({ defaultBatchCount: "0", defaultIntervalMs: "1500" }).success).toBe(false);
+    expect(parseInviteDefaults({ defaultBatchCount: "1001", defaultIntervalMs: "1500" }).success).toBe(false);
+    expect(parseInviteDefaults({ defaultBatchCount: "abc", defaultIntervalMs: "1500" }).success).toBe(false);
+    expect(parseInviteDefaults({ defaultBatchCount: "20", defaultIntervalMs: "99" }).success).toBe(false);
+    expect(parseInviteDefaults({ defaultBatchCount: "20", defaultIntervalMs: "600001" }).success).toBe(false);
+    expect(parseInviteDefaults({ defaultBatchCount: "20", defaultIntervalMs: "abc" }).success).toBe(false);
+  });
+
+  it("validateInviteBatchInterval rejects silent fallbacks", () => {
+    expect(validateInviteBatchInterval("0", "1500").ok).toBe(false);
+    expect(validateInviteBatchInterval("20", "1").ok).toBe(false);
+    const ok = validateInviteBatchInterval("20", "1500");
+    expect(ok.ok).toBe(true);
+    if (ok.ok) {
+      expect(ok.batch).toBe(20);
+      expect(ok.interval).toBe(1500);
+    }
   });
 });

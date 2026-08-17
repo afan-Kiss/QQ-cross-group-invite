@@ -21,6 +21,16 @@ class _Mem:
             "eligible": self.eligible,
         }
 
+    def to_public_dict(self):
+        return {
+            "qq": self.qq,
+            "nickname": self.nickname,
+            "role": self.role,
+            "token": "",
+            "has_token": bool(self.token),
+            "eligible": self.eligible,
+        }
+
 
 def test_get_members_strips_token_and_requires_session(monkeypatch):
     import cross_group_service as svc
@@ -48,12 +58,7 @@ def test_get_members_strips_token_and_requires_session(monkeypatch):
 
     # authorized path builds safe payload
     members = svc.get_cached_members()
-    safe = []
-    for m in members:
-        d = m.to_dict()
-        d["token"] = ""
-        d["has_token"] = bool(m.token)
-        safe.append(d)
+    safe = [svc._member_public_dict(m) for m in members]
     assert safe[0]["token"] == ""
     assert safe[0]["has_token"] is True
     assert "RAW-TOKEN-SECRET" not in str(safe)

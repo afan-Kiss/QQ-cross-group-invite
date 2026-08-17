@@ -24,7 +24,11 @@ describe("appSession cleared on bootstrap", () => {
       napcatMessage: "",
       bootstrapped: true,
       appSession: "sess-A",
+      backendInstance: "cross-group-invite:1.0.0:1",
+      backendPid: 1,
+      backendVersion: "1.0.0",
       serviceEpoch: 1,
+      lifecycleGeneration: 1,
     });
   });
 

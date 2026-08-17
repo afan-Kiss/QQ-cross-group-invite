@@ -53,9 +53,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       "Content-Type": "application/json",
       ...((init?.headers as Record<string, string> | undefined) ?? {}),
     };
-    const method = String(init?.method || "GET").toUpperCase();
     const session = useServiceStore.getState().appSession || "";
-    if (method !== "GET" && session) {
+    // Owned mode: attach session on all business GET/POST (never log/store session).
+    if (session) {
       headers["X-App-Session"] = session;
     }
     res = await fetch(`${API_BASE_URL}${path}`, {
@@ -343,7 +343,8 @@ export const api = {
         role,
         status,
         card: m.card,
-        token: m.token,
+        token: "",
+        has_token: Boolean(m.has_token ?? m.token),
         filterReason,
       };
     });

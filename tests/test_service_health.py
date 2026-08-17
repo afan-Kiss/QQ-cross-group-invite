@@ -3,12 +3,14 @@ from __future__ import annotations
 
 
 def test_build_health_payload_service_id(monkeypatch):
-    monkeypatch.setattr(
-        "cross_group_service.check_napcat_online",
-        lambda *a, **k: (True, "ok"),
-    )
+    import napcat_health
     import cross_group_service as svc
 
+    monkeypatch.setattr(
+        napcat_health,
+        "_state",
+        {"online": True, "message": "NapCat online", "checked_at": 1.0},
+    )
     monkeypatch.setattr(svc, "SESSION_ID", "sess-test-secret")
     monkeypatch.setattr(svc, "SESSION_REQUIRED", True)
 
@@ -23,6 +25,7 @@ def test_build_health_payload_service_id(monkeypatch):
     assert payload["session_required"] is True
     assert payload["owned"] is True
     assert payload["napcat_online"] is True
+    assert payload["napcat_message"] == "NapCat online"
 
     matched = svc.build_health_payload("sess-test-secret")
     assert matched["session_match"] is True

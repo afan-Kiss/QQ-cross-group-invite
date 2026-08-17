@@ -11,5 +11,13 @@ if (-not (Test-Path -LiteralPath $WailsRelease)) {
 }
 
 Write-Host "==> Delegating to cross_group_wails\build_release.ps1" -ForegroundColor Cyan
-& $WailsRelease @args
-exit $LASTEXITCODE
+try {
+    & $WailsRelease @args
+    $code = $LASTEXITCODE
+    if ($null -eq $code) { $code = 0 }
+    exit $code
+}
+catch {
+    Write-Error $_
+    exit 1
+}

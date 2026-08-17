@@ -104,6 +104,19 @@ class SourceMember:
             "filter_reason": self.filter_reason,
         }
 
+    def to_public_dict(self) -> dict[str, Any]:
+        """API-safe member row: raw invite token never leaves the backend."""
+        return {
+            "qq": self.qq,
+            "nickname": self.nickname,
+            "token": "",
+            "has_token": bool(self.token),
+            "role": self.role.value,
+            "card": self.card,
+            "eligible": self.eligible,
+            "filter_reason": self.filter_reason,
+        }
+
 
 @dataclass
 class InviteRecord:

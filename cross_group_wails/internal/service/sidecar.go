@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -18,13 +19,39 @@ import (
 )
 
 type BootstrapStatus struct {
-	LocalService  string `json:"localService"`
-	Message       string `json:"message"`
-	StartedByUs   bool   `json:"startedByUs"`
-	NapcatOnline  bool   `json:"napcatOnline"`
-	NapcatMessage string `json:"napcatMessage"`
+	LocalService     string `json:"localService"`
+	Message          string `json:"message"`
+	StartedByUs      bool   `json:"startedByUs"`
+	NapcatOnline     bool   `json:"napcatOnline"`
+	NapcatMessage    string `json:"napcatMessage"`
 	// AppSession is the sidecar session for X-App-Session. Only set when we own the live service.
 	AppSession string `json:"appSession"`
+	// BackendInstance is a non-secret identity (service:version:pid) for epoch bumping.
+	BackendInstance string `json:"backendInstance"`
+	BackendPID      int    `json:"backendPid"`
+	BackendVersion  string `json:"backendVersion"`
+}
+
+func backendInstanceOf(result HealthResult) string {
+	svc := strings.TrimSpace(result.Service)
+	if svc == "" {
+		svc = ServiceID
+	}
+	ver := strings.TrimSpace(result.Version)
+	if ver == "" {
+		ver = "unknown"
+	}
+	if result.PID <= 0 {
+		return ""
+	}
+	return fmt.Sprintf("%s:%s:%d", svc, ver, result.PID)
+}
+
+func withBackendIdentity(st BootstrapStatus, result HealthResult) BootstrapStatus {
+	st.BackendPID = result.PID
+	st.BackendVersion = result.Version
+	st.BackendInstance = backendInstanceOf(result)
+	return st
 }
 
 var (
@@ -44,14 +71,14 @@ func classifyReadyService(startedByUs bool, session string, result HealthResult)
 		if !result.NapcatOnline {
 			msg = "service started, waiting for NapCat..."
 		}
-		return BootstrapStatus{
+		return withBackendIdentity(BootstrapStatus{
 			LocalService:  "ready",
 			Message:       msg,
 			StartedByUs:   true,
 			NapcatOnline:  result.NapcatOnline,
 			NapcatMessage: result.NapcatMsg,
 			AppSession:    appSessionIfOwned(true, session),
-		}
+		}, result)
 	}
 	// External unlocked services remain usable without X-App-Session.
 	if !result.SessionRequired {
@@ -59,24 +86,24 @@ func classifyReadyService(startedByUs bool, session string, result HealthResult)
 		if !result.NapcatOnline {
 			msg = "service started, waiting for NapCat..."
 		}
-		return BootstrapStatus{
+		return withBackendIdentity(BootstrapStatus{
 			LocalService:  "ready",
 			Message:       msg,
 			StartedByUs:   false,
 			NapcatOnline:  result.NapcatOnline,
 			NapcatMessage: result.NapcatMsg,
 			AppSession:    "",
-		}
+		}, result)
 	}
 	// Protected external service: never pretend ready without session.
-	return BootstrapStatus{
+	return withBackendIdentity(BootstrapStatus{
 		LocalService:  "port_conflict",
 		Message:       lockedServiceMsg,
 		StartedByUs:   false,
 		NapcatOnline:  result.NapcatOnline,
 		NapcatMessage: result.NapcatMsg,
 		AppSession:    "",
-	}
+	}, result)
 }
 
 func sessionFingerprint(session string) string {

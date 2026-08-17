@@ -5,6 +5,7 @@ import { useServiceStore } from "@/store/useServiceStore";
 import { useInviteStore } from "@/store/useInviteStore";
 import { api } from "@/lib/api";
 import { wailsBridge } from "@/lib/wails-bridge";
+import { parseInviteDefaults } from "@/lib/invite-config-schema";
 import { toast } from "@/store/useToastStore";
 
 export function SettingsPage() {
@@ -24,6 +25,15 @@ export function SettingsPage() {
   }, [load]);
 
   const save = async () => {
+    const parsed = parseInviteDefaults({
+      defaultBatchCount: settings.defaultBatchCount,
+      defaultIntervalMs: settings.defaultIntervalMs,
+    });
+    if (!parsed.success) {
+      const msg = parsed.error.issues[0]?.message || "参数无效";
+      toast("error", msg);
+      return;
+    }
     const token = settings.napcatWebuiToken;
     persistSettings(settings);
     setConfig({

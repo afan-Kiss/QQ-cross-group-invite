@@ -75,27 +75,27 @@ describe("api request X-App-Session", () => {
     expect(headers["X-App-Session"]).toBeUndefined();
   });
 
-  it("uses updated session after change", async () => {
-    const store = useServiceStore as unknown as { __set: (s: string) => void };
-    store.__set("old");
-    await api.saveConfig({
-      target_group_id: "1",
-      source_group_id: "2",
-      batch_count: "20",
-      interval_ms: "1500",
-      filter_staff: true,
+  it("adds header for GET business calls when appSession present", async () => {
+    (useServiceStore as unknown as { __set: (s: string) => void }).__set("sess-A");
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ok: true,
+        target_group_id: "1",
+        source_group_id: "2",
+        batch_count: "20",
+        interval_ms: "1500",
+        filter_staff: true,
+        tasks: [],
+        running: false,
+      }),
     });
-    store.__set("new");
-    await api.saveConfig({
-      target_group_id: "1",
-      source_group_id: "2",
-      batch_count: "20",
-      interval_ms: "1500",
-      filter_staff: true,
-    });
-    const h1 = fetchMock.mock.calls[0][1]?.headers as Record<string, string>;
-    const h2 = fetchMock.mock.calls[1][1]?.headers as Record<string, string>;
-    expect(h1["X-App-Session"]).toBe("old");
-    expect(h2["X-App-Session"]).toBe("new");
+    await api.getConfig();
+    await api.getStatus();
+    await api.listTasks();
+    for (const call of fetchMock.mock.calls) {
+      const headers = call[1]?.headers as Record<string, string>;
+      expect(headers["X-App-Session"]).toBe("sess-A");
+    }
   });
 });

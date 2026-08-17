@@ -52,24 +52,14 @@ export function MemberContextMenu({ x, y, member, onClose }: Props) {
       },
     },
     {
-      label: "复制昵称",
+      label: "\u590d\u5236\u6635\u79f0",
       onClick: async () => {
         await navigator.clipboard.writeText(member.nickname);
-        toast("success", "已复制昵称");
+        toast("success", "\u5df2\u590d\u5236\u6635\u79f0");
       },
     },
     {
-      label: "复制 Token",
-      disabled: !member.token,
-      onClick: async () => {
-        if (!member.token) return;
-        toast("warning", "Token 属于敏感运行数据，请勿泄露");
-        await navigator.clipboard.writeText(member.token);
-        toast("success", "已复制Token");
-      },
-    },
-    {
-      label: selectedQqs.has(member.qq) ? "移出邀请队列" : "加入邀请队列",
+      label: selectedQqs.has(member.qq) ? "\u79fb\u51fa\u9080\u8bf7\u961f\u5217" : "\u52a0\u5165\u9080\u8bf7\u961f\u5217",
       disabled: !canQueue,
       onClick: () => {
         if (selectedQqs.has(member.qq)) deselectQq(member.qq);

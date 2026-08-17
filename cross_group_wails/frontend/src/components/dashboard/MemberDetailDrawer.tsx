@@ -1,7 +1,7 @@
-import { useEffect, useState, type ReactNode } from "react";
-import { Eye, EyeOff, X } from "lucide-react";
+import { useEffect, type ReactNode } from "react";
+import { X } from "lucide-react";
 import { useInviteStore } from "@/store/useInviteStore";
-import { formatDateTime, formatDurationMs, maskToken } from "@/lib/utils";
+import { formatDateTime, formatDurationMs } from "@/lib/utils";
 import { toast } from "@/store/useToastStore";
 import { useSettingsStore } from "@/store/useSettingsStore";
 
@@ -22,7 +22,6 @@ async function copyText(text: string, label: string) {
 
 export function MemberDetailDrawer() {
   const qq = useInviteStore((s) => s.detailMemberQq);
-  const membersRevision = useInviteStore((s) => s.membersRevision);
   const member = useInviteStore((s) => (qq == null ? undefined : s.getMember(qq)));
   const setDetailMemberQq = useInviteStore((s) => s.setDetailMemberQq);
   const selectQq = useInviteStore((s) => s.selectQq);
@@ -31,12 +30,8 @@ export function MemberDetailDrawer() {
   const selectedQqs = useInviteStore((s) => s.selectedQqs);
   const config = useInviteStore((s) => s.config);
   const animations = useSettingsStore((s) => s.settings.animations);
-  const [showToken, setShowToken] = useState(false);
   const open = Boolean(member);
 
-  useEffect(() => {
-    setShowToken(false);
-  }, [qq, membersRevision, member?.token]);
 
   useEffect(() => {
     if (!open) return;
@@ -111,20 +106,7 @@ export function MemberDetailDrawer() {
               />
               <Row
                 label="Token"
-                value={
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono">
-                      {showToken ? member.token || "—" : maskToken(member.token)}
-                    </span>
-                    <button
-                      type="button"
-                      className="rounded p-1 hover:bg-[#eef1eb]"
-                      onClick={() => setShowToken((v) => !v)}
-                    >
-                      {showToken ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                    </button>
-                  </div>
-                }
+                value={member.has_token ? "已获取" : "未获取"}
               />
               <Row label="失败原因" value={member.failReason || "—"} />
               <Row label="邀请开始时间" value={formatDateTime(member.startedAt || 0)} />
@@ -134,19 +116,7 @@ export function MemberDetailDrawer() {
 
             <div className="mt-6 grid grid-cols-2 gap-2">
               <Action onClick={() => void copyText(String(member.qq), "QQ")}>复制 QQ</Action>
-              <Action
-                onClick={() => {
-                  if (!member.token) {
-                    toast("warning", "该成员没有 Token");
-                    return;
-                  }
-                  toast("warning", "Token 属于敏感运行数据，请勿泄露");
-                  void copyText(member.token, "Token");
-                }}
-              >
-                复制 Token
-              </Action>
-              {canRequeue ? (
+                            {canRequeue ? (
                 <Action onClick={() => requeueMember(member.qq)}>重新加入队列</Action>
               ) : (
                 <Action disabled>重新加入队列</Action>

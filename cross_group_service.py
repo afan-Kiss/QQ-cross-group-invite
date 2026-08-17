@@ -31,6 +31,7 @@ from cross_group_batch import (
     stop_batch,
 )
 from myqq_api import check_napcat_online, load_cfg, onebot_action, save_cfg, test_napcat_connection
+from napcat_health import get_napcat_cache, refresh_napcat_cache, start_napcat_health_refresh
 from service_logger import setup_service_logger
 
 WEB_DIR = Path(__file__).resolve().parent / "web"
@@ -62,7 +63,17 @@ MUTATING_PATHS = frozenset(
         "/state/clear-rate-limits",
         "/state/clear",
         "/test-connection",
+        "/napcat/refresh",
         "/shutdown",
+    }
+)
+
+SENSITIVE_GET_PATHS = frozenset(
+    {
+        "/config",
+        "/status",
+        "/members",
+        "/tasks",
     }
 )
 
@@ -135,6 +146,28 @@ def _check_session(handler: BaseHTTPRequestHandler, required: bool = True) -> tu
     return _error("UNAUTHORIZED", "会话校验失败，拒绝操作", 403)
 
 
+def _require_owned_read(handler: BaseHTTPRequestHandler) -> bool:
+    """When SESSION_REQUIRED, deny sensitive GET without valid X-App-Session."""
+    if not SESSION_REQUIRED:
+        return False
+    denied = _check_session(handler, required=True)
+    if denied is not None:
+        code, body = denied
+        _json_response(handler, code, body)
+        return True
+    return False
+
+
+def _member_public_dict(m: Any) -> dict[str, Any]:
+    if hasattr(m, "to_public_dict"):
+        return m.to_public_dict()
+    d = m.to_dict()
+    tok = d.get("token")
+    d["token"] = ""
+    d["has_token"] = bool(tok)
+    return d
+
+
 def _session_fingerprint(session: str) -> str:
     if not session:
         return ""
@@ -143,7 +176,7 @@ def _session_fingerprint(session: str) -> str:
 
 
 def build_health_payload(caller_session: str = "") -> dict[str, Any]:
-    napcat_online, napcat_message = check_napcat_online()
+    napcat_online, napcat_message, _checked_at = get_napcat_cache()
     payload = {
         "ok": True,
         "service": SERVICE_ID,
@@ -212,6 +245,8 @@ class Handler(BaseHTTPRequestHandler):
             _json_response(self, 200, build_health_payload(caller))
             return
         if path == "/config":
+            if _require_owned_read(self):
+                return
             cfg = load_cfg()
             _json_response(
                 self,
@@ -230,29 +265,21 @@ class Handler(BaseHTTPRequestHandler):
             )
             return
         if path == "/status":
+            if _require_owned_read(self):
+                return
             state = get_state()
-            napcat_online, napcat_message = check_napcat_online()
+            napcat_online, napcat_message, _checked = get_napcat_cache()
             state["ok"] = True
             state["napcat_online"] = napcat_online
             state["napcat_message"] = napcat_message
             _json_response(self, 200, state)
             return
         if path == "/members":
-            if SESSION_REQUIRED:
-                denied = _check_session(self, required=True)
-                if denied is not None:
-                    code, body = denied
-                    _json_response(self, code, body)
-                    return
+            if _require_owned_read(self):
+                return
             members = get_cached_members()
             eligible = sum(1 for m in members if m.eligible)
-            # Never expose raw tokens on GET /members.
-            safe = []
-            for m in members:
-                d = m.to_dict()
-                d["token"] = ""
-                d["has_token"] = bool(m.token)
-                safe.append(d)
+            safe = [_member_public_dict(m) for m in members]
             _json_response(
                 self,
                 200,
@@ -266,9 +293,13 @@ class Handler(BaseHTTPRequestHandler):
             )
             return
         if path == "/tasks":
+            if _require_owned_read(self):
+                return
             _json_response(self, 200, {"ok": True, "tasks": list_tasks()})
             return
         if path.startswith("/tasks/"):
+            if _require_owned_read(self):
+                return
             tid = path[len("/tasks/") :]
             task = get_task(tid)
             if not task:
@@ -348,7 +379,7 @@ class Handler(BaseHTTPRequestHandler):
                         "count": len(members),
                         "eligible": eligible,
                         "filtered": len(members) - eligible,
-                        "members": [m.to_dict() for m in members],
+                        "members": [_member_public_dict(m) for m in members],
                     }
                 )
                 _json_response(self, code, body)
@@ -489,7 +520,14 @@ class Handler(BaseHTTPRequestHandler):
                     code, body = _error(code_name, msg or "NapCat connection failed")
                     _json_response(self, code, body)
                     return
+                refresh_napcat_cache()
                 code, body = _ok({"message": msg, "napcat_online": True})
+                _json_response(self, code, body)
+                return
+
+            if path == "/napcat/refresh":
+                online, message = refresh_napcat_cache()
+                code, body = _ok({"napcat_online": online, "napcat_message": message})
                 _json_response(self, code, body)
                 return
 
@@ -554,8 +592,16 @@ def _start_parent_watchdog(parent_pid: int) -> None:
     threading.Thread(target=_watch, daemon=True, name="parent-watchdog").start()
 
 
-def main(open_browser: bool = False, session_id: str = "", parent_pid: int = 0) -> None:
+def main(
+    open_browser: bool = False,
+    session_id: str = "",
+    parent_pid: int = 0,
+    port: int = PORT,
+) -> None:
     global SESSION_ID, SESSION_REQUIRED, _server, logger
+    bind_port = int(port) if port else PORT
+    if bind_port <= 0 or bind_port > 65535:
+        raise ValueError(f"invalid port: {port}")
     if session_id:
         SESSION_ID = session_id
         SESSION_REQUIRED = True
@@ -576,12 +622,16 @@ def main(open_browser: bool = False, session_id: str = "", parent_pid: int = 0) 
     if recovered:
         logger.info("recovered %s stale task(s) as interrupted", recovered)
 
-    _server = ThreadingHTTPServer((HOST, PORT), Handler)
-    url = f"http://{HOST}:{PORT}/"
+    start_napcat_health_refresh()
+
+    _server = ThreadingHTTPServer((HOST, bind_port), Handler)
+    url = f"http://{HOST}:{bind_port}/"
     logger.info(
-        "cross-group service started at %s (service=%s session_fp=%s session_required=%s pid=%s parent=%s)",
+        "cross-group service started at %s (service=%s host=%s port=%s session_fp=%s session_required=%s pid=%s parent=%s)",
         url,
         SERVICE_ID,
+        HOST,
+        bind_port,
         _session_fingerprint(SESSION_ID),
         SESSION_REQUIRED,
         os.getpid(),
@@ -621,9 +671,11 @@ if __name__ == "__main__":
     parser.add_argument("--open-browser", action="store_true", help="Open browser on start")
     parser.add_argument("--session-id", default="", help="Ownership session id from host app")
     parser.add_argument("--parent-pid", type=int, default=0, help="Host app PID for watchdog")
+    parser.add_argument("--port", type=int, default=PORT, help="Listen port (default 17888)")
     args = parser.parse_args()
     main(
         open_browser=args.open_browser and not args.no_browser,
         session_id=args.session_id,
         parent_pid=args.parent_pid,
+        port=args.port,
     )

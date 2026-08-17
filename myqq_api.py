@@ -158,7 +158,7 @@ def call(func: str, *args: Any, token: str | None = None, base_url: str | None =
         url,
         hint=(
             "请在 MyQQ / CBot64 中开启 HTTP API，"
-            f"端口 {parse_host_port(url)[1]}，Token={cfg.get('token', '123')}。"
+            f"端口 {parse_host_port(url)[1]}，请检查 HTTP API Token 配置。"
         ),
     )
 
@@ -193,7 +193,7 @@ def call_post(func: str, params: dict[str, Any], *, token: str | None = None, ba
         url,
         hint=(
             "请在 MyQQ / CBot64 中开启 HTTP API，"
-            f"端口 {parse_host_port(url)[1]}，Token={cfg.get('token', '123')}。"
+            f"端口 {parse_host_port(url)[1]}，请检查 HTTP API Token 配置。"
         ),
     )
     payload = {
@@ -337,10 +337,10 @@ def napcat_webui_login(
     with urllib.request.urlopen(req, timeout=timeout) as r:
         obj = json.loads(r.read().decode("utf-8", errors="replace"))
     if obj.get("code") != 0:
-        raise RuntimeError(f"NapCat WebUI login failed: {obj}")
+        raise RuntimeError(f"NapCat WebUI login failed: code={obj.get('code')}")
     cred = obj.get("data", {}).get("Credential")
     if not cred:
-        raise RuntimeError(f"NapCat WebUI login response missing Credential: {obj}")
+        raise RuntimeError("NapCat WebUI login response missing Credential")
     napcat_webui_login._cache = {cache_key: {"cred": str(cred), "debug_url": debug_url}}  # type: ignore[attr-defined]
     napcat_webui_login._debug_url = debug_url  # type: ignore[attr-defined]
     return str(cred)

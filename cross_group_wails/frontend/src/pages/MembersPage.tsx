@@ -11,7 +11,7 @@ export function MembersPage() {
 
   const normalCount = members.filter((m) => m.role === "member").length;
   const staffCount = members.filter((m) => m.role === "owner" || m.role === "admin").length;
-  const tokenCount = members.filter((m) => m.token).length;
+  const tokenCount = members.filter((m) => m.has_token).length;
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-4">

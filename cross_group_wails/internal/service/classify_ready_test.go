@@ -29,10 +29,13 @@ func TestClassifyReadyServiceExternalUnlocked(t *testing.T) {
 }
 
 func TestClassifyReadyServiceOwned(t *testing.T) {
-	h := HealthResult{Probe: ProbeReady, SessionRequired: true, SessionMatch: true}
+	h := HealthResult{Probe: ProbeReady, SessionRequired: true, SessionMatch: true, PID: 42, Version: "1.0.0", Service: ServiceID}
 	got := classifyReadyService(true, "sess", h)
 	if got.LocalService != "ready" || !got.StartedByUs || got.AppSession != "sess" {
 		t.Fatalf("got %+v", got)
+	}
+	if got.BackendInstance != "cross-group-invite:1.0.0:42" || got.BackendPID != 42 {
+		t.Fatalf("backend identity %+v", got)
 	}
 }
 
