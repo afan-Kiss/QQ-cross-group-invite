@@ -58,3 +58,20 @@ def test_concurrent_save_cfg(monkeypatch, tmp_path):
         th.join()
     assert not errors
     json.loads(cfg_file.read_text(encoding="utf-8"))
+
+
+def test_backup_not_clobbered_by_corrupt_primary(monkeypatch, tmp_path):
+    import myqq_api as api
+
+    cfg_file = tmp_path / "config.json"
+    bak = cfg_file.with_name("config.json.bak")
+    good = {"onebot_url": "from-bak", "napcat_webui_token": "GOOD"}
+    bak.write_text(__import__("json").dumps(good), encoding="utf-8")
+    cfg_file.write_text("{broken-primary", encoding="utf-8")
+    monkeypatch.setattr(api, "cfg_path", lambda: cfg_file)
+
+    data = api.load_cfg()
+    assert data["onebot_url"] == "from-bak"
+    # backup must still be the good config, not the corrupt primary
+    assert __import__("json").loads(bak.read_text(encoding="utf-8")) == good
+    assert __import__("json").loads(cfg_file.read_text(encoding="utf-8"))["onebot_url"] == "from-bak"

@@ -73,12 +73,16 @@ print('mojibake scan OK')
     }
 
     Step "Build sidecar" {
-        & "$MyqqHttp\build_sidecar.ps1"
-        if (-not (Test-Path "$MyqqHttp\dist\cross-group-service.exe")) {
-            throw "sidecar missing after build"
+        $sidecarResult = & "$MyqqHttp\build_sidecar.ps1"
+        $sidecarPath = "$MyqqHttp\dist\cross-group-service.exe"
+        if ($sidecarResult -is [hashtable] -and $sidecarResult.SidecarPath) {
+            $sidecarPath = [string]$sidecarResult.SidecarPath
+        }
+        if (-not (Test-Path -LiteralPath $sidecarPath)) {
+            throw "sidecar missing after build: $sidecarPath"
         }
         New-Item -ItemType Directory -Force -Path "$Root\bin" | Out-Null
-        Copy-Item -Force "$MyqqHttp\dist\cross-group-service.exe" "$Root\bin\cross-group-service.exe"
+        Copy-Item -Force $sidecarPath "$Root\bin\cross-group-service.exe"
     }
 
     Step "Sidecar health smoke" {

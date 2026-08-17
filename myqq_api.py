@@ -61,6 +61,42 @@ def _cfg_bak_path(path: Path) -> Path:
     return path.with_name(path.name + ".bak")
 
 
+def _write_cfg_atomic(path: Path, cfg: dict[str, Any], *, rotate_bak: bool) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = json.dumps(cfg, ensure_ascii=False, indent=2) + "\n"
+    tmp = path.with_name(path.name + ".tmp")
+    bak = _cfg_bak_path(path)
+    try:
+        if rotate_bak and path.is_file():
+            try:
+                # Only promote a readable primary to .bak.
+                json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                pass
+            else:
+                try:
+                    shutil.copy2(path, bak)
+                except OSError:
+                    pass
+        with open(tmp, "w", encoding="utf-8", newline="\n") as fh:
+            fh.write(payload)
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp, path)
+    except Exception:
+        try:
+            if tmp.is_file():
+                tmp.unlink()
+        except OSError:
+            pass
+        raise
+
+
+def _restore_primary_from_backup(path: Path, data: dict[str, Any]) -> None:
+    """Rewrite corrupt primary from already-parsed backup data without clobbering .bak."""
+    _write_cfg_atomic(path, data, rotate_bak=False)
+
+
 def load_cfg() -> dict[str, Any]:
     path = cfg_path()
     with _cfg_io_lock:
@@ -73,8 +109,7 @@ def load_cfg() -> dict[str, Any]:
             if bak.is_file():
                 try:
                     data = json.loads(bak.read_text(encoding="utf-8"))
-                    # Restore primary from backup without logging secrets.
-                    save_cfg(data)
+                    _restore_primary_from_backup(path, data)
                     return data
                 except Exception as bak_exc:
                     raise RuntimeError(
@@ -85,21 +120,9 @@ def load_cfg() -> dict[str, Any]:
 
 def save_cfg(cfg: dict[str, Any]) -> None:
     path = cfg_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    payload = json.dumps(cfg, ensure_ascii=False, indent=2) + "\n"
-    tmp = path.with_name(path.name + ".tmp")
     with _cfg_io_lock:
-        bak = _cfg_bak_path(path)
-        if path.is_file():
-            try:
-                shutil.copy2(path, bak)
-            except OSError:
-                pass
-        with open(tmp, "w", encoding="utf-8", newline="\n") as fh:
-            fh.write(payload)
-            fh.flush()
-            os.fsync(fh.fileno())
-        os.replace(tmp, path)
+        _write_cfg_atomic(path, cfg, rotate_bak=True)
+
 
 
 def parse_host_port(base_url: str) -> tuple[str, int]:

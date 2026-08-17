@@ -2,8 +2,7 @@
 
 本地桌面端：基于 **Wails v2 + Go + React 19 + TypeScript + Tailwind + Zustand**，Python sidecar 提供 OneBot / NapCat 跨群邀请能力。
 
-> 正式桌面端目录：`cross_group_wails/`  
-> 不要使用 Electron / Tauri 作为正式交付。
+> 正式桌面端为 Wails v2（目录：`cross_group_wails/`）。
 
 ## 技术栈
 
@@ -22,6 +21,8 @@ myqq_http/
   cross_group_service.py    # 本地 HTTP sidecar (127.0.0.1:17888)
   service_logger.py
   pull_cross_group.py       # 协议发送（勿随意改动）
+  build_sidecar.ps1         # 框架无关 sidecar 构建
+  build_release.ps1         # 根入口，转调 cross_group_wails/build_release.ps1
   tests/                    # pytest
   VERSION
   cross_group_wails/        # 正式桌面端
@@ -68,9 +69,23 @@ npm run build
 
 ## 构建 / Release
 
+根目录入口（转调同一套 Wails 脚本）：
+
+```powershell
+.\build_release.ps1
+```
+
+或直接：
+
 ```powershell
 cd cross_group_wails
 .\build_release.ps1
+```
+
+仅构建 sidecar：
+
+```powershell
+.\build_sidecar.ps1
 ```
 
 产物：
@@ -87,17 +102,22 @@ cross_group_wails\build\bin\
 - 任务历史：`%LOCALAPPDATA%\QQCrossGroupInvite\data\tasks.json`
 - 本地服务：`http://127.0.0.1:17888`（仅回环）
 
-## Sidecar 生命周期
+## Sidecar 生命周期与会话安全
 
 1. 主程序启动后立即显示窗口
-2. 探测 17888；若已是 `service=cross-group-invite` 则复用
-3. 否则启动 `cross-group-service.exe --session-id <uuid> --no-browser`
-4. 仅当健康检查 `session_id` 匹配时，退出时才会 graceful `/shutdown`（超时再 Kill）
-5. 外部已运行的同名服务不会被杀掉
+2. Go Manager 生成 app session，仅在进程内持有；owned bootstrap 再传给本机 frontend
+3. 探测 17888：
+   - `service=cross-group-invite` 且 `session_required=false` → 可复用（external unlocked）
+   - `session_required=true` 且带 `X-App-Session` 后 `session_match=true` → owned ready，frontend 持有 appSession
+   - `session_required=true` 但 `session_match=false` → `port_conflict`（受保护外部实例，不进入假 ready）
+4. `/health` **永不回显** raw session；只返回 `session_required` / `session_match` 等非秘密字段
+5. frontend 写操作通过 `X-App-Session` 认证
+6. 退出时仅对确认 owned 的 sidecar 调用 `/shutdown`；外部同名服务不会被杀掉
 
 ## NapCat 依赖
 
 - 加载成员 / 开始邀请需要 NapCat 在线
+- “测试连接”会验证 OneBot 登录身份与 WebUI Token（不写入正式配置）
 - NapCat 离线不阻塞窗口进入 Dashboard，仅禁用相关操作
 
 ## GitHub

@@ -1,6 +1,5 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
 import { Loader2, Play, Square, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,27 +8,12 @@ import { Switch } from "@/components/ui/switch";
 import { useInviteStore } from "@/store/useInviteStore";
 import { useServiceStore } from "@/store/useServiceStore";
 import { cn } from "@/lib/utils";
+import {
+  inviteConfigSchema,
+  type InviteConfigFormValues,
+} from "@/lib/invite-config-schema";
 
-const schema = z
-  .object({
-    target_group_id: z.string().regex(/^\d+$/, "target group must be digits"),
-    source_group_id: z.string().regex(/^\d+$/, "source group must be digits"),
-    batch_count: z.string().refine((v) => {
-      const n = Number(v);
-      return Number.isInteger(n) && n >= 1 && n <= 1000;
-    }, "batch must be 1-1000"),
-    interval_ms: z.string().refine((v) => {
-      const n = Number(v);
-      return Number.isInteger(n) && n >= 100 && n <= 600000;
-    }, "interval must be 100-600000"),
-    filter_staff: z.boolean(),
-  })
-  .refine((v) => v.target_group_id !== v.source_group_id, {
-    message: "target and source must differ",
-    path: ["target_group_id"],
-  });
-
-type FormValues = z.infer<typeof schema>;
+type FormValues = InviteConfigFormValues;
 
 export function ConfigPanel() {
   const config = useInviteStore((s) => s.config);
@@ -54,7 +38,7 @@ export function ConfigPanel() {
     config.target_group_id === config.source_group_id;
 
   const { register, watch, setValue, formState, trigger } = useForm<FormValues>({
-    resolver: zodResolver(schema),
+    resolver: zodResolver(inviteConfigSchema),
     defaultValues: config,
     values: config,
     mode: "onChange",
@@ -125,6 +109,9 @@ export function ConfigPanel() {
               onChange: (e) => setConfig({ target_group_id: e.target.value.replace(/\D/g, "") }),
             })}
           />
+          {errors.target_group_id && (
+            <p className="text-[12px] text-danger">{String(errors.target_group_id.message || "")}</p>
+          )}
         </div>
 
         <div className="space-y-2">
@@ -169,12 +156,16 @@ export function ConfigPanel() {
           <Input
             id="interval"
             type="number"
-            min={500}
+            min={100}
+            max={600000}
             disabled={!serviceReady}
             {...register("interval_ms", {
               onChange: (e) => setConfig({ interval_ms: e.target.value }),
             })}
           />
+          {errors.interval_ms && (
+            <p className="text-[12px] text-danger">{String(errors.interval_ms.message || "")}</p>
+          )}
         </div>
 
         <div className="space-y-2">

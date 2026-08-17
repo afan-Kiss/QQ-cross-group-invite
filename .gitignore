@@ -21,12 +21,9 @@ frontend/dist/
 **/frontend/dist/
 npm-debug.log*
 
-# Wails / Tauri build outputs
+# Wails build outputs
 cross_group_wails/build/bin/
 cross_group_wails/bin/*.exe
-cross_group_tauri/src-tauri/target/
-cross_group_tauri/dist/
-cross_group_tauri/node_modules/
 
 # IDE / OS
 .vscode/
@@ -44,5 +41,7 @@ _fix_*.py
 _patch_*.py
 _check_enc.py
 _tmp_*.py
+_r*_*.py
+_smoke_*.py
 enc_*.txt
 **/_enc_report.txt

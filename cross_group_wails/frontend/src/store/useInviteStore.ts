@@ -503,6 +503,7 @@ export const useInviteStore = create<InviteStore>((set, get) => ({
     const service = useServiceStore.getState();
     if (service.localService !== "ready") return;
     const seq = ++statusRequestGeneration;
+    const epoch = service.serviceEpoch;
     const snap = get();
     const rev = snap.membersRevision;
     const mut = snap.membersMutationGeneration;
@@ -511,6 +512,7 @@ export const useInviteStore = create<InviteStore>((set, get) => ({
     try {
       const status = await api.getStatus();
       if (seq !== statusRequestGeneration) return;
+      if (useServiceStore.getState().serviceEpoch !== epoch) return;
 
       useServiceStore.setState({
         napcatOnline: Boolean(status.napcat_online),
@@ -519,6 +521,7 @@ export const useInviteStore = create<InviteStore>((set, get) => ({
 
       const latest = get();
       if (seq !== statusRequestGeneration) return;
+      if (useServiceStore.getState().serviceEpoch !== epoch) return;
 
       const configChanged =
         latest.membersRevision !== rev ||

@@ -24,12 +24,14 @@ describe("appSession cleared on bootstrap", () => {
       napcatMessage: "",
       bootstrapped: true,
       appSession: "sess-A",
+      serviceEpoch: 1,
     });
   });
 
   it("setBootstrapping clears appSession immediately", () => {
     useServiceStore.getState().setBootstrapping("booting");
     expect(useServiceStore.getState().appSession).toBe("");
+    expect(useServiceStore.getState().serviceEpoch).toBeGreaterThan(1);
   });
 
   it("ensureBackend clears then sets new owned session", async () => {

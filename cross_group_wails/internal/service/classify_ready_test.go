@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
@@ -67,6 +68,35 @@ func TestWaitForHealthMismatchAfterChildExit(t *testing.T) {
 		t.Fatalf("got %q want port_conflict msg=%q", got.LocalService, got.Message)
 	}
 	if elapsed > 1500*time.Millisecond {
+		t.Fatalf("took too long: %v", elapsed)
+	}
+}
+
+
+func TestWaitForHealthChildGoneUnavailable(t *testing.T) {
+	prevTO, prevIV := WaitHealthTimeout, WaitHealthInterval
+	WaitHealthTimeout = 5 * time.Second
+	WaitHealthInterval = 50 * time.Millisecond
+	t.Cleanup(func() {
+		WaitHealthTimeout, WaitHealthInterval = prevTO, prevIV
+	})
+
+	prev := HealthURL
+	// Connection refused -> ProbeUnavailable (not port-conflict JSON).
+	HealthURL = "http://127.0.0.1:1/health"
+	t.Cleanup(func() { HealthURL = prev })
+
+	m := &Manager{startedByUs: true, sessionID: "ours", cmd: nil}
+	start := time.Now()
+	got := m.waitForHealth("x", true)
+	elapsed := time.Since(start)
+	if got.LocalService != "error" {
+		t.Fatalf("got %q want error msg=%q", got.LocalService, got.Message)
+	}
+	if !strings.Contains(got.Message, "exited before health") {
+		t.Fatalf("unexpected message %q", got.Message)
+	}
+	if elapsed > 3*time.Second {
 		t.Fatalf("took too long: %v", elapsed)
 	}
 }

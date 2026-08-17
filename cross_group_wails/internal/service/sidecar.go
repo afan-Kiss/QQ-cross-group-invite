@@ -371,6 +371,7 @@ func (m *Manager) waitForHealth(initial string, startedByUs bool) BootstrapStatu
 	deadline := time.Now().Add(WaitHealthTimeout)
 	ourSession := m.SessionID()
 	mismatchSince := time.Time{}
+	unavailableSince := time.Time{}
 
 	for time.Now().Before(deadline) {
 		var result HealthResult
@@ -420,15 +421,24 @@ func (m *Manager) waitForHealth(initial string, startedByUs bool) BootstrapStatu
 				AppSession:   "",
 			}
 		default:
-			// If our process already exited while port is still down/unavailable, keep waiting briefly.
 			m.mu.Lock()
 			childGone := startedByUs && ourSession != "" && (m.cmd == nil || m.sessionID != ourSession)
 			m.mu.Unlock()
 			if childGone {
-				// Port may still be coming up for an external service; one more probe cycle handled above.
+				if unavailableSince.IsZero() {
+					unavailableSince = time.Now()
+				} else if time.Since(unavailableSince) > 2*time.Second {
+					return BootstrapStatus{
+						LocalService: "error",
+						Message:      "sidecar exited before health became ready",
+						StartedByUs:  false,
+						AppSession:   "",
+					}
+				}
 				time.Sleep(WaitHealthInterval)
 				continue
 			}
+			unavailableSince = time.Time{}
 			time.Sleep(WaitHealthInterval)
 		}
 	}
