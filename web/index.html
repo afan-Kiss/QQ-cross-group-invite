@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>��Ⱥ��������</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <div class="title-wrap">
+        <h1>��Ⱥ��������</h1>
+        <p>���Ͱ���ҳ�� �� ��Ч���� �� �Զ���ȡ Token</p>
+      </div>
+      <div id="statusPill" class="status-pill offline">
+        <span class="status-dot"></span>
+        <span id="statusText">��������...</span>
+      </div>
+    </header>
+
+    <div class="grid">
+      <section class="card">
+        <h2>��������</h2>
+        <div class="form-grid">
+          <div>
+            <label for="target">Ҫ�����ĸ�Ⱥ</label>
+            <input id="target" type="text" placeholder="��Ⱥ��" />
+          </div>
+          <div>
+            <label for="source">���ĸ�Ⱥ����</label>
+            <input id="source" type="text" placeholder="��Ⱥ��" />
+          </div>
+          <div>
+            <label for="count">һ����������</label>
+            <input id="count" type="number" min="0" placeholder="0 ��ʾȫ��" />
+          </div>
+          <div>
+            <label for="interval">ÿ�μ�������룩</label>
+            <input id="interval" type="number" min="0" placeholder="���� 2000" />
+          </div>
+          <div class="span2 check">
+            <input id="filter" type="checkbox" checked />
+            <label for="filter">����Ⱥ���͹���Ա</label>
+          </div>
+        </div>
+        <div class="actions">
+          <button id="btnLoad" class="btn btn-secondary">���س�Ա�б�</button>
+          <button id="btnStart" class="btn btn-primary">��ʼ����</button>
+          <button id="btnStop" class="btn btn-danger" disabled>ֹͣ</button>
+        </div>
+        <div id="hint" class="hint">׼���ú��ȼ��س�Ա���ٿ�ʼ����</div>
+      </section>
+
+      <section class="card">
+        <h2>��ǰ����</h2>
+        <div class="progress-wrap">
+          <div class="progress-bar">
+            <div id="progressFill" class="progress-fill"></div>
+          </div>
+        </div>
+        <div id="statLine" class="stat-line">��û��ʼ</div>
+      </section>
+
+      <section class="card full">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;">
+          <h2 style="margin:0;">������ĳ�Ա</h2>
+          <span id="memberCount" class="hint" style="margin:0;">�� 0 ��</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>QQ</th><th>�ǳ�</th><th>����</th></tr>
+            </thead>
+            <tbody id="memberBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card full">
+        <div class="tabs">
+          <button class="tab active" data-tab="log">������־</button>
+          <button class="tab" data-tab="freq">����̫Ƶ��</button>
+          <button class="tab" data-tab="err">����ʧ��</button>
+        </div>
+        <div id="panel-log" class="panel active">
+          <div id="logBox" class="log-box">�ȴ���ʼ...</div>
+        </div>
+        <div id="panel-freq" class="panel">
+          <div id="frequentBox" class="list-box">���޼�¼</div>
+        </div>
+        <div id="panel-err" class="panel">
+          <div id="errorBox" class="list-box">���޼�¼</div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+  <script src="/app.js"></script>
+</body>
+</html>

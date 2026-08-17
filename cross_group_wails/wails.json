@@ -1,0 +1,20 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "QQ跨群邀请工具",
+  "outputfilename": "QQ跨群邀请工具",
+  "frontend:install": "npm install",
+  "frontend:build": "npm run build",
+  "frontend:dev:watcher": "npm run dev",
+  "frontend:dev:serverUrl": "auto",
+  "author": {
+    "name": "阿饭",
+    "email": "5432916+ff472336362@user.noreply.gitee.com"
+  },
+  "info": {
+    "companyName": "QQCrossGroupInvite",
+    "productName": "QQ跨群邀请工具",
+    "productVersion": "1.0.0",
+    "copyright": "Copyright © 2026",
+    "comments": "QQ跨群邀请工具"
+  }
+}

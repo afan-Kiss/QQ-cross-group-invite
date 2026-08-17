@@ -1,0 +1,22 @@
+{
+  "api_mode": "onebot",
+  "base_url": "http://127.0.0.1:8889/MyQQHTTPAPI",
+  "onebot_url": "http://127.0.0.1:6099/api",
+  "onebot_token": "YOUR_ONEBOT_TOKEN",
+  "napcat_webui_token": "YOUR_NAPCAT_TOKEN",
+  "token": "YOUR_API_TOKEN",
+  "qq": "YOUR_QQ",
+  "sender_qq": "YOUR_SENDER_QQ",
+  "group_id": "YOUR_GROUP_ID",
+  "group_code": "YOUR_GROUP_CODE",
+  "target_group_id": "",
+  "source_group_id": "",
+  "batch_count": "20",
+  "interval_ms": "1500",
+  "filter_staff": true,
+  "invitee_qq": "",
+  "pack_format": "json",
+  "framework_path": "",
+  "friend_qq": "",
+  "invite_token": ""
+}

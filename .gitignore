@@ -1,0 +1,38 @@
+# Secrets / local config
+config.json
+*.env
+.env.*
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+build/
+dist/
+*.egg-info/
+
+# Node
+node_modules/
+frontend/dist/
+npm-debug.log*
+
+# Wails / Tauri build outputs
+cross_group_wails/build/bin/
+cross_group_wails/bin/*.exe
+cross_group_tauri/src-tauri/target/
+cross_group_tauri/dist/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.log
+
+# Binaries (build locally)
+*.exe
+!cross_group_service.spec
+
+# Large local vendor cache (optional keep source in repo)
+# cross_group_gui/vendor/

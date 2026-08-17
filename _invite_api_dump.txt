@@ -1,0 +1,2205 @@
+===== MyQQ_SDK_.NET C#.zip :: AmiableNext-main/AmiableNext.SDK/EventType.cs @ 44
+        消息类型_某人申请加入群 = 2001,
+        消息类型_某人被邀请加入群 = 2002,
+        消息类型_某人已被邀请入群 = 20021,
+        消息类型_我被邀请加入群 = 2003,
+        消息类型_某人被批准加入了群 = 2005,
+        消息类型_某人退出群 = 2006,
+        消息类型_某人被管理移除群 = 2007,
+        消息类型_某群被解散 = 2008,
+        消息类型_某人成为管理 = 2009,
+        消息类型_某人被取消管理 = 2010,
+        消息类型_群名片变动 = 2011,
+        消息类型_群名变动 = 2012,
+        消息类型_群公告变动 = 2013,
+
+===== MyQQ_SDK_.NET C#.zip :: AmiableNext-main/AmiableNext.SDK/EventType.cs @ 45
+        消息类型_某人被邀请加入群 = 2002,
+        消息类型_某人已被邀请入群 = 20021,
+        消息类型_我被邀请加入群 = 2003,
+        消息类型_某人被批准加入了群 = 2005,
+        消息类型_某人退出群 = 2006,
+        消息类型_某人被管理移除群 = 2007,
+        消息类型_某群被解散 = 2008,
+        消息类型_某人成为管理 = 2009,
+        消息类型_某人被取消管理 = 2010,
+        消息类型_群名片变动 = 2011,
+        消息类型_群名变动 = 2012,
+        消息类型_群公告变动 = 2013,
+        消息类型_对象被禁言 = 2014,
+
+===== MyQQ_SDK_.NET C#.zip :: AmiableNext-main/AmiableNext.SDK/EventType.cs @ 46
+        消息类型_某人已被邀请入群 = 20021,
+        消息类型_我被邀请加入群 = 2003,
+        消息类型_某人被批准加入了群 = 2005,
+        消息类型_某人退出群 = 2006,
+        消息类型_某人被管理移除群 = 2007,
+        消息类型_某群被解散 = 2008,
+        消息类型_某人成为管理 = 2009,
+        消息类型_某人被取消管理 = 2010,
+        消息类型_群名片变动 = 2011,
+        消息类型_群名变动 = 2012,
+        消息类型_群公告变动 = 2013,
+        消息类型_对象被禁言 = 2014,
+        消息类型_对象被解除禁言 = 2015,
+
+===== MyQQ_SDK_GO--by Gopher X.zip :: MyQQ_SDK_GO--by Gopher X/bin/api/defApi.go @ 99
+	取达人天数                 = getApiProc("Api_GetExpertDays")
+	取短信详情                 = getApiProc("Api_GetJoinGroupMsg")
+	取个人说明                 = getApiProc("Api_GetPerExp")
+	取个性签名                 = getApiProc("Api_GetSign")
+	取公司                   = getApiProc("Api_GetCompany")
+	取好友备注                 = getApiProc("Api_GetFriendsRemark")
+	取好友列表                 = getApiProc("Api_GetFriendList")
+	取好友列表_B               = getApiProc("Api_GetFriendList_B")
+	取好友验证方式               = getApiProc("Api_GetQQAddMode")
+	取机器人屏蔽状态              = getApiProc("Api_GetShieldedState")
+	取机器人状态                = getApiProc("Api_GetStatus")
+	api_GetOnlineQQlist   = getApiProc("Api_GetOnlineQQlist")
+	api_GetQQList         = getApiProc("Api_GetQQList")
+
+===== MyQQ_SDK_GO--by Gopher X.zip :: MyQQ_SDK_GO--by Gopher X/bin/api/defApi.go @ 179
+	设置特别关心                 = getApiProc("Api_SetSpecialCare")
+	申请加群                   = getApiProc("Api_JoinGroup")
+	申请加群Ex                 = getApiProc("Api_JoinGroupEx")
+	私聊图片GUI转群聊GUID         = getApiProc("Api_FriendGUIDToGroup")
+	提交短信验证                 = getApiProc("Api_CheckJoinGroupMsg")
+	添加QQ                   = getApiProc("Api_AddQQ")
+	添加好友                   = getApiProc("Api_AddFriend")
+	添加好友Ex                 = getApiProc("Api_AddFriendEx")
+	添加好友Max                = getApiProc("Api_AddFriendMax")
+	添加群机器人                 = getApiProc("Api_AddGroupRobot")
+	退出讨论组                  = getApiProc("Api_QuitDisGroup")
+	退群                     = getApiProc("Api_QuitGroup")
+	下线QQ                   = getApiProc("Api_Logout")
+
+===== MyQQ_SDK_GO--by Gopher X.zip :: MyQQ_SDK_GO--by Gopher X/bin/api/defApi.go @ 180
+	申请加群                   = getApiProc("Api_JoinGroup")
+	申请加群Ex                 = getApiProc("Api_JoinGroupEx")
+	私聊图片GUI转群聊GUID         = getApiProc("Api_FriendGUIDToGroup")
+	提交短信验证                 = getApiProc("Api_CheckJoinGroupMsg")
+	添加QQ                   = getApiProc("Api_AddQQ")
+	添加好友                   = getApiProc("Api_AddFriend")
+	添加好友Ex                 = getApiProc("Api_AddFriendEx")
+	添加好友Max                = getApiProc("Api_AddFriendMax")
+	添加群机器人                 = getApiProc("Api_AddGroupRobot")
+	退出讨论组                  = getApiProc("Api_QuitDisGroup")
+	退群                     = getApiProc("Api_QuitGroup")
+	下线QQ                   = getApiProc("Api_Logout")
+	下线其他设备                 = getApiProc("Api_OfflineOtherDevice")
+
+===== MyQQ_SDK_GO--by Gopher X.zip :: MyQQ_SDK_GO--by Gopher X/bin/api/defApi.go @ 182
+	私聊图片GUI转群聊GUID         = getApiProc("Api_FriendGUIDToGroup")
+	提交短信验证                 = getApiProc("Api_CheckJoinGroupMsg")
+	添加QQ                   = getApiProc("Api_AddQQ")
+	添加好友                   = getApiProc("Api_AddFriend")
+	添加好友Ex                 = getApiProc("Api_AddFriendEx")
+	添加好友Max                = getApiProc("Api_AddFriendMax")
+	添加群机器人                 = getApiProc("Api_AddGroupRobot")
+	退出讨论组                  = getApiProc("Api_QuitDisGroup")
+	退群                     = getApiProc("Api_QuitGroup")
+	下线QQ                   = getApiProc("Api_Logout")
+	下线其他设备                 = getApiProc("Api_OfflineOtherDevice")
+	修改群验证方式                = getApiProc("Api_SetGroupVerify")
+	邀请别人群成员                = getApiProc("Api_InviteGroup_other")
+
+===== MyQQ_SDK_GO--by Gopher X.zip :: MyQQ_SDK_GO--by Gopher X/bin/api/defApi.go @ 193
+	修改群验证方式                = getApiProc("Api_SetGroupVerify")
+	邀请别人群成员                = getApiProc("Api_InviteGroup_other")
+	邀请别人群成员Ex              = getApiProc("Api_InviteGroup_otherEx")
+	api_NoAdminInviteGroup = getApiProc("Api_NoAdminInviteGroup")
+	api_AdminInviteGroup   = getApiProc("Api_AdminInviteGroup")
+	api_红包_一笔画红包           = getApiProc(中文DLL名("Api_红包_一笔画红包"))
+	移除群机器人                 = getApiProc("Api_DelGroupRobot")
+	api_红包_引力球红包           = getApiProc(中文DLL名("Api_红包_引力球红包"))
+	api_红包_语音红包            = getApiProc(中文DLL名("Api_红包_语音红包"))
+	置单项好友                  = getApiProc("Api_DelFriend_A")
+	置管理员                   = getApiProc("Api_SetAdmin")
+	置好友备注                  = getApiProc("Api_SetFriendsRemark")
+	置好友验证方式                = getApiProc("Api_SetFriendVerify")
+
+===== MyQQ_SDK_GO--by Gopher X.zip :: MyQQ_SDK_GO--by Gopher X/bin/api/defApi.go @ 194
+	邀请别人群成员                = getApiProc("Api_InviteGroup_other")
+	邀请别人群成员Ex              = getApiProc("Api_InviteGroup_otherEx")
+	api_NoAdminInviteGroup = getApiProc("Api_NoAdminInviteGroup")
+	api_AdminInviteGroup   = getApiProc("Api_AdminInviteGroup")
+	api_红包_一笔画红包           = getApiProc(中文DLL名("Api_红包_一笔画红包"))
+	移除群机器人                 = getApiProc("Api_DelGroupRobot")
+	api_红包_引力球红包           = getApiProc(中文DLL名("Api_红包_引力球红包"))
+	api_红包_语音红包            = getApiProc(中文DLL名("Api_红包_语音红包"))
+	置单项好友                  = getApiProc("Api_DelFriend_A")
+	置管理员                   = getApiProc("Api_SetAdmin")
+	置好友备注                  = getApiProc("Api_SetFriendsRemark")
+	置好友验证方式                = getApiProc("Api_SetFriendVerify")
+	置好友验证方式Ex              = getApiProc("Api_SetFriendVerifyEx")
+
+===== MyQQ_SDK_GO--by Gopher X.zip :: MyQQ_SDK_GO--by Gopher X/bin/api/defApi.go @ 195
+	邀请别人群成员Ex              = getApiProc("Api_InviteGroup_otherEx")
+	api_NoAdminInviteGroup = getApiProc("Api_NoAdminInviteGroup")
+	api_AdminInviteGroup   = getApiProc("Api_AdminInviteGroup")
+	api_红包_一笔画红包           = getApiProc(中文DLL名("Api_红包_一笔画红包"))
+	移除群机器人                 = getApiProc("Api_DelGroupRobot")
+	api_红包_引力球红包           = getApiProc(中文DLL名("Api_红包_引力球红包"))
+	api_红包_语音红包            = getApiProc(中文DLL名("Api_红包_语音红包"))
+	置单项好友                  = getApiProc("Api_DelFriend_A")
+	置管理员                   = getApiProc("Api_SetAdmin")
+	置好友备注                  = getApiProc("Api_SetFriendsRemark")
+	置好友验证方式                = getApiProc("Api_SetFriendVerify")
+	置好友验证方式Ex              = getApiProc("Api_SetFriendVerifyEx")
+	置好友验证事件                = getApiProc("Api_HandleFriendEvent")
+
+===== MyQQ_SDK_GO--by Gopher X.zip :: MyQQ_SDK_GO--by Gopher X/bin/api/defApi.go @ 196
+	api_NoAdminInviteGroup = getApiProc("Api_NoAdminInviteGroup")
+	api_AdminInviteGroup   = getApiProc("Api_AdminInviteGroup")
+	api_红包_一笔画红包           = getApiProc(中文DLL名("Api_红包_一笔画红包"))
+	移除群机器人                 = getApiProc("Api_DelGroupRobot")
+	api_红包_引力球红包           = getApiProc(中文DLL名("Api_红包_引力球红包"))
+	api_红包_语音红包            = getApiProc(中文DLL名("Api_红包_语音红包"))
+	置单项好友                  = getApiProc("Api_DelFriend_A")
+	置管理员                   = getApiProc("Api_SetAdmin")
+	置好友备注                  = getApiProc("Api_SetFriendsRemark")
+	置好友验证方式                = getApiProc("Api_SetFriendVerify")
+	置好友验证方式Ex              = getApiProc("Api_SetFriendVerifyEx")
+	置好友验证事件                = getApiProc("Api_HandleFriendEvent")
+	置好友语音上传                = getApiProc("Api_SendVoice")
+
+===== MyQQ_SDK_GO--by Gopher X.zip :: MyQQ_SDK_GO--by Gopher X/bin/api/defApi.go @ 233
+	置踢出群成员                 = getApiProc("Api_KickGroupMBR")
+	置邀请讨论组                 = getApiProc("Api_InviteDisGroup")
+	置移除讨论组成员               = getApiProc("Api_KickDisGroupMBR")
+	重载自身                   = getApiProc("Api_Reload")
+	api_红包_专享红包            = getApiProc(中文DLL名("Api_红包_专享红包"))
+	转发群文件到好友               = getApiProc("Api_FileGroupToFriend")
+	转发群文件到群                = getApiProc("Api_FileGroupToGroup")
+	api_红包_转账              = getApiProc(中文DLL名("Api_红包_转账"))
+	outPutLog              = getApiProc("Api_OutPut")
+	//
+	//
+	//
+	// sendMsg               = getApiProc("Api_SendMsg")
+
+===== MyQQ_SDK_GO--by Gopher X.zip :: MyQQ_SDK_GO--by Gopher X/bin/api/defApi.go @ 258
+	// getLongClientKey      = getApiProc("Api_GetLongClientkey")
+	// adminInviteGroup      = getApiProc("Api_AdminInviteGroup")
+	// noAdminInviteGroup    = getApiProc("Api_NoAdminInviteGroup")
+	// getNick               = getApiProc("Api_GetNick")
+	// getGroupCard          = getApiProc("Api_GetGroupCard")
+	// getObjLevel           = getApiProc("Api_GetQQLevel")
+	// getFriendList         = getApiProc("Api_GetFriendList")
+	// getFriendListB        = getApiProc("Api_GetFriendList_B")
+	// getGroupAdmin         = getApiProc("Api_GetAdminList")
+	// getGroupListA         = getApiProc("Api_GetGroupList_A")
+	// getGroupList          = getApiProc("Api_GetGroupList")
+	// getGroupListB         = getApiProc("Api_GetGroupList_B")
+	// getGroupMemberList    = getApiProc("Api_GetGroupMemberList")
+
+===== MyQQ_SDK_GO--by Gopher X.zip :: MyQQ_SDK_GO--by Gopher X/bin/api/defApi.go @ 259
+	// adminInviteGroup      = getApiProc("Api_AdminInviteGroup")
+	// noAdminInviteGroup    = getApiProc("Api_NoAdminInviteGroup")
+	// getNick               = getApiProc("Api_GetNick")
+	// getGroupCard          = getApiProc("Api_GetGroupCard")
+	// getObjLevel           = getApiProc("Api_GetQQLevel")
+	// getFriendList         = getApiProc("Api_GetFriendList")
+	// getFriendListB        = getApiProc("Api_GetFriendList_B")
+	// getGroupAdmin         = getApiProc("Api_GetAdminList")
+	// getGroupListA         = getApiProc("Api_GetGroupList_A")
+	// getGroupList          = getApiProc("Api_GetGroupList")
+	// getGroupListB         = getApiProc("Api_GetGroupList_B")
+	// getGroupMemberList    = getApiProc("Api_GetGroupMemberList")
+	// getGroupMemberListB   = getApiProc("Api_GetGroupMemberList_B")
+
+===== MyQQ_SDK_GO--by Gopher X.zip :: MyQQ_SDK_GO--by Gopher X/bin/api/defApi.go @ 274
+	// shutUp                = getApiProc("Api_ShutUP")
+	// joinGroup             = getApiProc("Api_JoinGroup")
+	// quitGroup             = getApiProc("Api_QuitGroup")
+	// uploadPic             = getApiProc("Api_UpLoadPic")
+	// getPicLink            = getApiProc("Api_GetPicLink")
+	// outPutLog             = getApiProc("Api_OutPut")
+	// teaEncry              = getApiProc("Api_TeaEncrypt")
+	// teaDecry              = getApiProc("Api_TeaDecrypt")
+	// sessionKey            = getApiProc("Api_SessionKey")
+	// gn2Gid                = getApiProc("Api_GNTransGID")
+	// gid2Gn                = getApiProc("Api_GIDTransGN")
+	// pbGroupNotic          = getApiProc("Api_PBGroupNotic")
+	// getNotice             = getApiProc("Api_GetNotice")
+
+===== MyQQ_SDK_GO--by Gopher X.zip :: MyQQ_SDK_GO--by Gopher X/bin/api/defApi.go @ 295
+	// kickDisGroupMBR       = getApiProc("Api_KickDisGroupMBR")
+	// inviteDisGroup        = getApiProc("Api_InviteDisGroup")
+	// getDisGroupList       = getApiProc("Api_GetDisGroupList")
+	// getDisGroupMemberList = getApiProc("Api_GetDisGroupMemberList")
+	// setDisGroupName       = getApiProc("Api_SetDisGroupName")
+	// kickGroupMBR          = getApiProc("Api_KickGroupMBR")
+	// getObjVote            = getApiProc("Api_GetObjVote")
+	// uploadVoice           = getApiProc("Api_UpLoadVoice")
+	// getVoiceLink          = getApiProc("Api_GetVoiLink")
+	// getTimeStamp          = getApiProc("Api_GetTimeStamp")
+	// sendPack              = getApiProc("Api_SendPack")
+	// getObjInfo            = getApiProc("Api_GetObjInfo")
+	// getGender             = getApiProc("Api_GetGender")
+
+===== MyQQ_SDK_GO--by Gopher X.zip :: MyQQ_SDK_GO--by Gopher X/bin/api/defApi.go @ 457
+
+// //管理员邀请对象入群，频率过快会失败
+// func AdminInviteGroup(QQ, objQQ, objGroup int64) {
+// 	_, _, _ = adminInviteGroup.Call(cStr2Ptr(int642Str(QQ)), cStr2Ptr(int642Str(objQQ)), cStr2Ptr(int642Str(objGroup)))
+// }
+
+// //非管理员邀请对象入群，频率过快会失败
+// func NoAdminInviteGroup(QQ, objQQ, objGroup int64) {
+// 	_, _, _ = noAdminInviteGroup.Call(cStr2Ptr(int642Str(QQ)), cStr2Ptr(int642Str(objQQ)), cStr2Ptr(int642Str(objGroup)))
+// }
+
+// //取对象昵称
+// //测试通过
+
+===== MyQQ_SDK_GO--by Gopher X.zip :: MyQQ_SDK_GO--by Gopher X/bin/api/defApi.go @ 458
+// //管理员邀请对象入群，频率过快会失败
+// func AdminInviteGroup(QQ, objQQ, objGroup int64) {
+// 	_, _, _ = adminInviteGroup.Call(cStr2Ptr(int642Str(QQ)), cStr2Ptr(int642Str(objQQ)), cStr2Ptr(int642Str(objGroup)))
+// }
+
+// //非管理员邀请对象入群，频率过快会失败
+// func NoAdminInviteGroup(QQ, objQQ, objGroup int64) {
+// 	_, _, _ = noAdminInviteGroup.Call(cStr2Ptr(int642Str(QQ)), cStr2Ptr(int642Str(objQQ)), cStr2Ptr(int642Str(objGroup)))
+// }
+
+// //取对象昵称
+// //测试通过
+// func GetNick(QQ, objQQ int64) string {
+
+===== MyQQ_SDK_GO--by Gopher X.zip :: MyQQ_SDK_GO--by Gopher X/bin/api/defApi.go @ 459
+// func AdminInviteGroup(QQ, objQQ, objGroup int64) {
+// 	_, _, _ = adminInviteGroup.Call(cStr2Ptr(int642Str(QQ)), cStr2Ptr(int642Str(objQQ)), cStr2Ptr(int642Str(objGroup)))
+// }
+
+// //非管理员邀请对象入群，频率过快会失败
+// func NoAdminInviteGroup(QQ, objQQ, objGroup int64) {
+// 	_, _, _ = noAdminInviteGroup.Call(cStr2Ptr(int642Str(QQ)), cStr2Ptr(int642Str(objQQ)), cStr2Ptr(int642Str(objGroup)))
+// }
+
+// //取对象昵称
+// //测试通过
+// func GetNick(QQ, objQQ int64) string {
+// 	r, _, _ := getNick.Call(cStr2Ptr(int642Str(QQ)), cStr2Ptr(int642Str(objQQ)))
+
+===== MyQQ_SDK_GO--by Gopher X.zip :: MyQQ_SDK_GO--by Gopher X/bin/api/defApi.go @ 462
+
+// //非管理员邀请对象入群，频率过快会失败
+// func NoAdminInviteGroup(QQ, objQQ, objGroup int64) {
+// 	_, _, _ = noAdminInviteGroup.Call(cStr2Ptr(int642Str(QQ)), cStr2Ptr(int642Str(objQQ)), cStr2Ptr(int642Str(objGroup)))
+// }
+
+// //取对象昵称
+// //测试通过
+// func GetNick(QQ, objQQ int64) string {
+// 	r, _, _ := getNick.Call(cStr2Ptr(int642Str(QQ)), cStr2Ptr(int642Str(objQQ)))
+// 	return ptr2str(r)
+// }
+
+
+===== MyQQ_SDK_GO--by Gopher X.zip :: MyQQ_SDK_GO--by Gopher X/bin/api/defApi.go @ 463
+// //非管理员邀请对象入群，频率过快会失败
+// func NoAdminInviteGroup(QQ, objQQ, objGroup int64) {
+// 	_, _, _ = noAdminInviteGroup.Call(cStr2Ptr(int642Str(QQ)), cStr2Ptr(int642Str(objQQ)), cStr2Ptr(int642Str(objGroup)))
+// }
+
+// //取对象昵称
+// //测试通过
+// func GetNick(QQ, objQQ int64) string {
+// 	r, _, _ := getNick.Call(cStr2Ptr(int642Str(QQ)), cStr2Ptr(int642Str(objQQ)))
+// 	return ptr2str(r)
+// }
+
+// //取对象群名片
+
+===== MyQQ_SDK_GO--by Gopher X.zip :: MyQQ_SDK_GO--by Gopher X/bin/api/defApi.go @ 464
+// func NoAdminInviteGroup(QQ, objQQ, objGroup int64) {
+// 	_, _, _ = noAdminInviteGroup.Call(cStr2Ptr(int642Str(QQ)), cStr2Ptr(int642Str(objQQ)), cStr2Ptr(int642Str(objGroup)))
+// }
+
+// //取对象昵称
+// //测试通过
+// func GetNick(QQ, objQQ int64) string {
+// 	r, _, _ := getNick.Call(cStr2Ptr(int642Str(QQ)), cStr2Ptr(int642Str(objQQ)))
+// 	return ptr2str(r)
+// }
+
+// //取对象群名片
+// //测试通过
+
+===== MyQQ_SDK_GO--by Gopher X.zip :: MyQQ_SDK_GO--by Gopher X/bin/api/defApi.go @ 644
+
+// //某人请求入群 被邀请入群 等 群验证处理
+// //.版本 2
+// //
+// //.参数 QQ, 文本型, , 机器人QQ
+// //.参数 reqType, 整数型, , 213请求入群  214我被邀请加入某群  215某人被邀请加入群
+// //.参数 objQQ, 文本型, , 申请入群、被邀请人的QQ （当请求类型为214时这里为邀请人QQ）
+// //.参数 objGroup, 文本型, , 收到请求群号
+// //.参数 seq, 文本型, , 需要处理事件的seq ，这个参数在收到群事件时，IRC_原始信息会传递
+// //.参数 handleType, 整数型, , 10同意 20拒绝 30忽略
+// //.参数 addMsg, 文本型, , 拒绝入群附加信息
+// func HandleGroupEvent(QQ int64, reqType int64, objQQ, objGroup, seq int64, handleType int64, addMsg string) {
+// 	_, _, _ = handleGroupEvent.Call(cStr2Ptr(int642Str(QQ)), int2ptr(reqType),
+
+===== MyQQ_SDK_GO--by Gopher X.zip :: MyQQ_SDK_GO--by Gopher X/bin/api/defApi.go @ 648
+// //.参数 QQ, 文本型, , 机器人QQ
+// //.参数 reqType, 整数型, , 213请求入群  214我被邀请加入某群  215某人被邀请加入群
+// //.参数 objQQ, 文本型, , 申请入群、被邀请人的QQ （当请求类型为214时这里为邀请人QQ）
+// //.参数 objGroup, 文本型, , 收到请求群号
+// //.参数 seq, 文本型, , 需要处理事件的seq ，这个参数在收到群事件时，IRC_原始信息会传递
+// //.参数 handleType, 整数型, , 10同意 20拒绝 30忽略
+// //.参数 addMsg, 文本型, , 拒绝入群附加信息
+// func HandleGroupEvent(QQ int64, reqType int64, objQQ, objGroup, seq int64, handleType int64, addMsg string) {
+// 	_, _, _ = handleGroupEvent.Call(cStr2Ptr(int642Str(QQ)), int2ptr(reqType),
+// 		cStr2Ptr(int642Str(objQQ)), cStr2Ptr(int642Str(objGroup)), cStr2Ptr(int642Str(seq)), int2ptr(handleType), cStr2Ptr(addMsg))
+// }
+
+// //开关群匿名消息发送功能    成功返回true  失败返回false
+
+===== MyQQ_SDK_GO--by Gopher X.zip :: MyQQ_SDK_GO--by Gopher X/bin/api/realApi.go @ 195
+
+// A邀请入群 : 邀请对象入群，频率过快会失败
+// 响应QQ : 响应QQ
+// 对象QQ : 被邀请人QQ号码（多个号码使用,分割）
+// 群号 : 被邀请加入的群号
+// 类型 : 0 = 普通  1 = 管理
+func A邀请入群(响应QQ int64, 对象QQ, 群号 int64, 类型 int) string {
+
+	var r uintptr
+	// 定义C.char变量
+	c响应QQ := goString2CString(int642Str(响应QQ))
+	c对象QQ := goString2CString(int642Str(对象QQ))
+	c群号 := goString2CString(int642Str(群号))
+
+===== MyQQ_SDK_GO--by Gopher X.zip :: MyQQ_SDK_GO--by Gopher X/bin/api/realApi.go @ 198
+// 对象QQ : 被邀请人QQ号码（多个号码使用,分割）
+// 群号 : 被邀请加入的群号
+// 类型 : 0 = 普通  1 = 管理
+func A邀请入群(响应QQ int64, 对象QQ, 群号 int64, 类型 int) string {
+
+	var r uintptr
+	// 定义C.char变量
+	c响应QQ := goString2CString(int642Str(响应QQ))
+	c对象QQ := goString2CString(int642Str(对象QQ))
+	c群号 := goString2CString(int642Str(群号))
+	//  统一释放
+	defer func() {
+		clear(c响应QQ)
+
+===== MyQQ_SDK_GO--by Gopher X.zip :: MyQQ_SDK_GO--by Gopher X/bin/api/realApi.go @ 200
+// 类型 : 0 = 普通  1 = 管理
+func A邀请入群(响应QQ int64, 对象QQ, 群号 int64, 类型 int) string {
+
+	var r uintptr
+	// 定义C.char变量
+	c响应QQ := goString2CString(int642Str(响应QQ))
+	c对象QQ := goString2CString(int642Str(对象QQ))
+	c群号 := goString2CString(int642Str(群号))
+	//  统一释放
+	defer func() {
+		clear(c响应QQ)
+		clear(c对象QQ)
+		clear(c群号)
+
+===== MyQQ_SDK_GO--by Gopher X.zip :: MyQQ_SDK_GO--by Gopher X/bin/api/realApi.go @ 216
+	case 0:
+		r, _, _ = api_NoAdminInviteGroup.Call(cStr2Ptr(c响应QQ), cStr2Ptr(c群号),
+			cStr2Ptr(c对象QQ))
+	case 1:
+		r, _, _ = api_AdminInviteGroup.Call(cStr2Ptr(c响应QQ), cStr2Ptr(c群号),
+			cStr2Ptr(c对象QQ))
+	default:
+		r, _, _ = api_NoAdminInviteGroup.Call(cStr2Ptr(c响应QQ),
+			cStr2Ptr(c群号), cStr2Ptr(c对象QQ))
+	}
+	return ptr2str(r)
+}
+
+
+===== MyQQ_SDK_GO--by Gopher X.zip :: MyQQ_SDK_GO--by Gopher X/bin/api/realApi.go @ 219
+	case 1:
+		r, _, _ = api_AdminInviteGroup.Call(cStr2Ptr(c响应QQ), cStr2Ptr(c群号),
+			cStr2Ptr(c对象QQ))
+	default:
+		r, _, _ = api_NoAdminInviteGroup.Call(cStr2Ptr(c响应QQ),
+			cStr2Ptr(c群号), cStr2Ptr(c对象QQ))
+	}
+	return ptr2str(r)
+}
+
+// A群礼物抽取 : 抽取群礼物（返回结果Json，需群聊等级LV5后）
+// 响应QQ : 响应QQ
+func A群礼物抽取(响应QQ int64) string {
+
+===== MyQQ_SDK_GO--by Gopher X.zip :: MyQQ_SDK_GO--by Gopher X/bin/api/realApi.go @ 222
+	default:
+		r, _, _ = api_NoAdminInviteGroup.Call(cStr2Ptr(c响应QQ),
+			cStr2Ptr(c群号), cStr2Ptr(c对象QQ))
+	}
+	return ptr2str(r)
+}
+
+// A群礼物抽取 : 抽取群礼物（返回结果Json，需群聊等级LV5后）
+// 响应QQ : 响应QQ
+func A群礼物抽取(响应QQ int64) string {
+	// 定义C.char变量
+	c响应QQ := goString2CString(int642Str(响应QQ))
+	//  统一释放
+
+===== MyQQ_SDK_GO--by Gopher X.zip :: MyQQ_SDK_GO--by Gopher X/bin/api/realApi.go @ 1896
+
+// A邀请别人群成员Ex : 邀请别人群成员加入自己群，多群版,成功返回1，失败返回0
+// 响应QQ : 响应QQ
+// 目标群号 : 被邀请加入的群号
+// 群和QQ : 被邀请人和机器人共同存在的群号，格式为：QQ,群号|QQ,群号|QQ,群号
+func A邀请别人群成员Ex(响应QQ, 目标群号 int64, 群和QQ string) int {
+	// 定义C.char变量
+	c响应QQ := goString2CString(int642Str(响应QQ))
+	c目标群号 := goString2CString(int642Str(目标群号))
+	c群和QQ := goString2CString(群和QQ)
+	//  统一释放
+	defer func() {
+		clear(c响应QQ)
+
+===== MyQQ_SDK_GO--by Gopher X.zip :: MyQQ_SDK_GO--by Gopher X/bin/api/realApi.go @ 1898
+// 响应QQ : 响应QQ
+// 目标群号 : 被邀请加入的群号
+// 群和QQ : 被邀请人和机器人共同存在的群号，格式为：QQ,群号|QQ,群号|QQ,群号
+func A邀请别人群成员Ex(响应QQ, 目标群号 int64, 群和QQ string) int {
+	// 定义C.char变量
+	c响应QQ := goString2CString(int642Str(响应QQ))
+	c目标群号 := goString2CString(int642Str(目标群号))
+	c群和QQ := goString2CString(群和QQ)
+	//  统一释放
+	defer func() {
+		clear(c响应QQ)
+		clear(c目标群号)
+		clear(c群和QQ)
+
+===== MyQQ_SDK_GO--by Gopher X.zip :: MyQQ_SDK_GO--by Gopher X/bin/api/realApi.go @ 1899
+// 目标群号 : 被邀请加入的群号
+// 群和QQ : 被邀请人和机器人共同存在的群号，格式为：QQ,群号|QQ,群号|QQ,群号
+func A邀请别人群成员Ex(响应QQ, 目标群号 int64, 群和QQ string) int {
+	// 定义C.char变量
+	c响应QQ := goString2CString(int642Str(响应QQ))
+	c目标群号 := goString2CString(int642Str(目标群号))
+	c群和QQ := goString2CString(群和QQ)
+	//  统一释放
+	defer func() {
+		clear(c响应QQ)
+		clear(c目标群号)
+		clear(c群和QQ)
+	}()
+
+===== MyQQ_SDK_GO--by Gopher X.zip :: MyQQ_SDK_GO--by Gopher X/bin/api/realApi.go @ 1900
+// 群和QQ : 被邀请人和机器人共同存在的群号，格式为：QQ,群号|QQ,群号|QQ,群号
+func A邀请别人群成员Ex(响应QQ, 目标群号 int64, 群和QQ string) int {
+	// 定义C.char变量
+	c响应QQ := goString2CString(int642Str(响应QQ))
+	c目标群号 := goString2CString(int642Str(目标群号))
+	c群和QQ := goString2CString(群和QQ)
+	//  统一释放
+	defer func() {
+		clear(c响应QQ)
+		clear(c目标群号)
+		clear(c群和QQ)
+	}()
+	r, _, _ := 邀请别人群成员Ex.Call(cStr2Ptr(c响应QQ),
+
+===== MyQQ_SDK_GO--by Gopher X.zip :: MyQQ_SDK_GO--by Gopher X/bin/api/realApi.go @ 1911
+	}()
+	r, _, _ := 邀请别人群成员Ex.Call(cStr2Ptr(c响应QQ),
+		cStr2Ptr(c目标群号), cStr2Ptr(c群和QQ))
+	return ptr2int(r)
+}
+
+// A邀请别人群成员 : 邀请别人群成员加入自己群,成功返回1，失败返回0
+// 响应QQ : 响应QQ
+// 目标群号 : 要进入的群的群号
+// 所在群号 : 被邀请人和机器人共同存在的群号
+// 邀请QQ : 被邀请人的QQ,多个用,分开
+func A邀请别人群成员(响应QQ, 目标群号, 所在群号 int64, 邀请QQ string) int {
+	// 定义C.char变量
+
+===== MyQQ_SDK_GO--by Gopher X.zip :: MyQQ_SDK_GO--by Gopher X/bin/api/realApi.go @ 1916
+
+// A邀请别人群成员 : 邀请别人群成员加入自己群,成功返回1，失败返回0
+// 响应QQ : 响应QQ
+// 目标群号 : 要进入的群的群号
+// 所在群号 : 被邀请人和机器人共同存在的群号
+// 邀请QQ : 被邀请人的QQ,多个用,分开
+func A邀请别人群成员(响应QQ, 目标群号, 所在群号 int64, 邀请QQ string) int {
+	// 定义C.char变量
+	c响应QQ := goString2CString(int642Str(响应QQ))
+	c目标群号 := goString2CString(int642Str(目标群号))
+	c所在群号 := goString2CString(int642Str(所在群号))
+	c邀请QQ := goString2CString(邀请QQ)
+	//  统一释放
+
+===== MyQQ_SDK_GO--by Gopher X.zip :: MyQQ_SDK_GO--by Gopher X/bin/api/realApi.go @ 1919
+// 目标群号 : 要进入的群的群号
+// 所在群号 : 被邀请人和机器人共同存在的群号
+// 邀请QQ : 被邀请人的QQ,多个用,分开
+func A邀请别人群成员(响应QQ, 目标群号, 所在群号 int64, 邀请QQ string) int {
+	// 定义C.char变量
+	c响应QQ := goString2CString(int642Str(响应QQ))
+	c目标群号 := goString2CString(int642Str(目标群号))
+	c所在群号 := goString2CString(int642Str(所在群号))
+	c邀请QQ := goString2CString(邀请QQ)
+	//  统一释放
+	defer func() {
+		clear(c响应QQ)
+		clear(c目标群号)
+
+===== MyQQ_SDK_GO--by Gopher X.zip :: MyQQ_SDK_GO--by Gopher X/bin/api/realApi.go @ 1921
+// 邀请QQ : 被邀请人的QQ,多个用,分开
+func A邀请别人群成员(响应QQ, 目标群号, 所在群号 int64, 邀请QQ string) int {
+	// 定义C.char变量
+	c响应QQ := goString2CString(int642Str(响应QQ))
+	c目标群号 := goString2CString(int642Str(目标群号))
+	c所在群号 := goString2CString(int642Str(所在群号))
+	c邀请QQ := goString2CString(邀请QQ)
+	//  统一释放
+	defer func() {
+		clear(c响应QQ)
+		clear(c目标群号)
+		clear(c所在群号)
+		clear(c邀请QQ)
+
+===== MyQQ_SDK_GO--by Gopher X.zip :: MyQQ_SDK_GO--by Gopher X/bin/api/realApi.go @ 1934
+	}()
+	r, _, _ := 邀请别人群成员.Call(cStr2Ptr(c响应QQ), cStr2Ptr(c目标群号),
+		cStr2Ptr(c所在群号), cStr2Ptr(c邀请QQ))
+	return ptr2int(r)
+}
+
+// A修改群验证方式 : 修改群验证方式，成功返回真，失败返回假
+// 响应QQ : 响应QQ
+// 群号 :
+// 验证方式 : 1允许任何人 2需验证信息 3回答问题并确认 4正确回答问题 5拒绝进群。
+// 设置问题 : 当验证方式为3时填写问题,其他类型可空
+// 问题答案 : 当验证方式为3时填写问题答案,其他类型可空
+func A修改群验证方式(响应QQ, 群号 int64, 验证方式 int, 设置问题, 问题答案 string) bool {
+
+===== MyQQ_SDK_GO--by Gopher X.zip :: MyQQ_SDK_GO--by Gopher X/bin/api/realApi.go @ 2162
+
+// A申请加群Ex : 返回格式为：是否成功=真&失败原因=&短信标识=短信标识，如果短信标识不为空，就是需要短信，调用取短信详情（Api_GetJoinGroupMsg）获取短信详情
+// 响应QQ : 响应QQ
+// 群号 :
+// 理由 :
+// 接口 : 接口 0=随机，1=搜索群号、2=附近的群、3=通知界面加群、4=链接加群、5=关键词、6=精确查找
+// 通道 : 通道 0=随机，1=新版，2=老版
+func A申请加群Ex(响应QQ, 群号 int64, 理由 string, 接口, 通道 int) string {
+	// 定义C.char变量
+	c响应QQ := goString2CString(int642Str(响应QQ))
+	c群号 := goString2CString(int642Str(群号))
+	c理由 := goString2CString(理由)
+	//  统一释放
+
+===== MyQQ_SDK_GO--by Gopher X.zip :: MyQQ_SDK_GO--by Gopher X/bin/consts/consts.go @ 51
+	MT_群_某人申请加入群   = 2001 + iota //某人申请加入群：2001
+	MT_群_某人被邀请加入群                //某人被邀请加入群：2002
+	MT_群_我被邀请加入群                 //我被邀请加入群：2003
+	MT_群_nil                     //占位_无意义：2004
+	MT_群_某人被批准加入了群               //某人被批准加入了群：2005
+	MT_群_某人退出群                   //某人退出群：2006
+	MT_群_某人被管理移除群                //某人被管理移除群：2007
+	MT_群_某群被解散                   //某群被解散：2008
+	MT_群_某人成为管理                  //某人成为管理：2009
+	MT_群_某人被取消管理                 //某人被取消管理：2010
+	MT_群_群名片变动                   //群名片变动：2011
+	MT_群_群名变动                    //群名变动：2012
+	MT_群_群公告变动                   //群公告变动：2013
+
+===== MyQQ_SDK_GO--by Gopher X.zip :: MyQQ_SDK_GO--by Gopher X/bin/consts/consts.go @ 52
+	MT_群_某人被邀请加入群                //某人被邀请加入群：2002
+	MT_群_我被邀请加入群                 //我被邀请加入群：2003
+	MT_群_nil                     //占位_无意义：2004
+	MT_群_某人被批准加入了群               //某人被批准加入了群：2005
+	MT_群_某人退出群                   //某人退出群：2006
+	MT_群_某人被管理移除群                //某人被管理移除群：2007
+	MT_群_某群被解散                   //某群被解散：2008
+	MT_群_某人成为管理                  //某人成为管理：2009
+	MT_群_某人被取消管理                 //某人被取消管理：2010
+	MT_群_群名片变动                   //群名片变动：2011
+	MT_群_群名变动                    //群名变动：2012
+	MT_群_群公告变动                   //群公告变动：2013
+	MT_群_对象被禁言                   //对象被禁言：2014
+
+===== MyQQ_SDK_GO--by Gopher X.zip :: MyQQ_SDK_GO--by Gopher X/bin/consts/consts.go @ 72
+	MT_群_群视频接收                   //群视频接收:2022
+	MT_群_某人已被邀请入群  = 20021       //某人已被邀请入群:20021
+)
+const (
+	MT_群_群语音接收     = 3002 + iota //群语音接收：3002
+	MT_群_群消息被设置为精华               //群消息被设置为精华：3003
+	MT_群_群消息被取消精华                //群消息被取消精华：3004
+)
+
+// 框架消息
+const (
+	MT_框架_框架加载完成 = 10000 + iota // 框架加载完成:10000
+	MT_框架_框架即将重启                // 框架即将重启:10001
+
+===== MyQQ_SDK_GO--by Gopher X.zip :: MyQQ_SDK_GO--by Gopher X/init.go @ 173
+			"()")
+	case consts.MT_群_某人被邀请加入群:
+		res = onebot.ProtectRun(
+			func() int {
+				return 某人被邀请加入群(xe)
+			},
+			"()")
+	case consts.MT_群_我被邀请加入群:
+		res = onebot.ProtectRun(
+			func() int {
+				return 我被邀请加入群(xe)
+			},
+			"()")
+
+===== MyQQ_SDK_GO--by Gopher X.zip :: MyQQ_SDK_GO--by Gopher X/init.go @ 176
+			func() int {
+				return 某人被邀请加入群(xe)
+			},
+			"()")
+	case consts.MT_群_我被邀请加入群:
+		res = onebot.ProtectRun(
+			func() int {
+				return 我被邀请加入群(xe)
+			},
+			"()")
+	case consts.MT_群_某人已被邀请入群:
+		res = onebot.ProtectRun(
+			func() int {
+
+===== MyQQ_SDK_GO--by Gopher X.zip :: MyQQ_SDK_GO--by Gopher X/init.go @ 179
+			"()")
+	case consts.MT_群_我被邀请加入群:
+		res = onebot.ProtectRun(
+			func() int {
+				return 我被邀请加入群(xe)
+			},
+			"()")
+	case consts.MT_群_某人已被邀请入群:
+		res = onebot.ProtectRun(
+			func() int {
+				return 某人已被邀请入群(xe)
+			},
+			"()")
+
+===== MyQQ_SDK_GO--by Gopher X.zip :: MyQQ_SDK_GO--by Gopher X/init.go @ 182
+			func() int {
+				return 我被邀请加入群(xe)
+			},
+			"()")
+	case consts.MT_群_某人已被邀请入群:
+		res = onebot.ProtectRun(
+			func() int {
+				return 某人已被邀请入群(xe)
+			},
+			"()")
+	case consts.MT_群_某人被批准加入了群:
+		res = onebot.ProtectRun(
+			func() int {
+
+===== MyQQ_SDK_GO--by Gopher X.zip :: MyQQ_SDK_GO--by Gopher X/init.go @ 185
+			"()")
+	case consts.MT_群_某人已被邀请入群:
+		res = onebot.ProtectRun(
+			func() int {
+				return 某人已被邀请入群(xe)
+			},
+			"()")
+	case consts.MT_群_某人被批准加入了群:
+		res = onebot.ProtectRun(
+			func() int {
+				return 某人被批准加入了群(xe)
+			},
+			"()")
+
+===== MyQQ_SDK_GO--by Gopher X.zip :: MyQQ_SDK_GO--by Gopher X/init.go @ 188
+			func() int {
+				return 某人已被邀请入群(xe)
+			},
+			"()")
+	case consts.MT_群_某人被批准加入了群:
+		res = onebot.ProtectRun(
+			func() int {
+				return 某人被批准加入了群(xe)
+			},
+			"()")
+	case consts.MT_群_某人退出群:
+		res = onebot.ProtectRun(
+			func() int {
+
+===== MyQQ_SDK_GO--by Gopher X.zip :: MyQQ_SDK_GO--by Gopher X/sdk常见事件.go @ 49
+}
+func 某人被邀请加入群(d onebot.MQEvent) int {
+	// api.A输出日志(d.MQ_触发对象_主动 + "请求加入群" + d.MQ_消息来源 + " 附加理由:" + d.MQ_消息内容)
+	// api.A置群验证事件(d.MQ_机器人QQ, d.MQ_原始信息, consts.MT_事件处理_拒绝, "气死你啊", 0)
+	return consts.MT_消息处理_继续
+}
+func 我被邀请加入群(d onebot.MQEvent) int {
+	// api.A输出日志("我被" + d.MQ_触发对象_主动 + "邀请加入群" + d.MQ_消息来源)
+	// api.A置群验证事件(d.MQ_机器人QQ, d.MQ_原始信息, consts.MT_事件处理_拒绝, "就不哈哈", 0)
+	// api.A置群验证事件(d.MQ_机器人QQ, d.MQ_原始信息, consts.MT_事件处理_同意, "", 0)
+	return consts.MT_消息处理_继续
+}
+func 某人已被邀请入群(d onebot.MQEvent) int {
+
+===== MyQQ_SDK_GO--by Gopher X.zip :: MyQQ_SDK_GO--by Gopher X/sdk常见事件.go @ 54
+}
+func 我被邀请加入群(d onebot.MQEvent) int {
+	// api.A输出日志("我被" + d.MQ_触发对象_主动 + "邀请加入群" + d.MQ_消息来源)
+	// api.A置群验证事件(d.MQ_机器人QQ, d.MQ_原始信息, consts.MT_事件处理_拒绝, "就不哈哈", 0)
+	// api.A置群验证事件(d.MQ_机器人QQ, d.MQ_原始信息, consts.MT_事件处理_同意, "", 0)
+	return consts.MT_消息处理_继续
+}
+func 某人已被邀请入群(d onebot.MQEvent) int {
+	// 一般为群主或者管理员邀请的
+	// api.A输出日志(d.MQ_触发对象_被动 + "已被" + d.MQ_触发对象_主动 + "邀请加入群" + d.MQ_消息来源)
+	return consts.MT_消息处理_继续
+}
+func 某人被批准加入了群(d onebot.MQEvent) int {
+
+===== MyQQ_SDK_GO--by Gopher X.zip :: MyQQ_SDK_GO--by Gopher X/sdk常见事件.go @ 55
+func 我被邀请加入群(d onebot.MQEvent) int {
+	// api.A输出日志("我被" + d.MQ_触发对象_主动 + "邀请加入群" + d.MQ_消息来源)
+	// api.A置群验证事件(d.MQ_机器人QQ, d.MQ_原始信息, consts.MT_事件处理_拒绝, "就不哈哈", 0)
+	// api.A置群验证事件(d.MQ_机器人QQ, d.MQ_原始信息, consts.MT_事件处理_同意, "", 0)
+	return consts.MT_消息处理_继续
+}
+func 某人已被邀请入群(d onebot.MQEvent) int {
+	// 一般为群主或者管理员邀请的
+	// api.A输出日志(d.MQ_触发对象_被动 + "已被" + d.MQ_触发对象_主动 + "邀请加入群" + d.MQ_消息来源)
+	return consts.MT_消息处理_继续
+}
+func 某人被批准加入了群(d onebot.MQEvent) int {
+	// api.A输出日志(api.A取昵称(d.MQ_机器人QQ, d.MQ_触发对象_被动) + "(" + d.MQ_触发对象_被动 + ")被" + api.A取昵称(d.MQ_机器人QQ, d.MQ_触发对象_主动) + "(" + d.MQ_触发对象_主动 + ")批准加入了群")
+
+===== MyQQ_SDK_GO--by Gopher X.zip :: MyQQ_SDK_GO--by Gopher X/sdk常见事件.go @ 60
+}
+func 某人已被邀请入群(d onebot.MQEvent) int {
+	// 一般为群主或者管理员邀请的
+	// api.A输出日志(d.MQ_触发对象_被动 + "已被" + d.MQ_触发对象_主动 + "邀请加入群" + d.MQ_消息来源)
+	return consts.MT_消息处理_继续
+}
+func 某人被批准加入了群(d onebot.MQEvent) int {
+	// api.A输出日志(api.A取昵称(d.MQ_机器人QQ, d.MQ_触发对象_被动) + "(" + d.MQ_触发对象_被动 + ")被" + api.A取昵称(d.MQ_机器人QQ, d.MQ_触发对象_主动) + "(" + d.MQ_触发对象_主动 + ")批准加入了群")
+	return consts.MT_消息处理_继续
+}
+func 某人退出群(d onebot.MQEvent) int {
+	// api.A输出日志(api.A取昵称(d.MQ_机器人QQ, d.MQ_触发对象_主动) + "(" + d.MQ_触发对象_主动 + ")退出了群")
+	return consts.MT_消息处理_继续
+
+===== MyQQ_SDK_GO--by Gopher X.zip :: MyQQ_SDK_GO--by Gopher X/sdk常见事件.go @ 62
+	// 一般为群主或者管理员邀请的
+	// api.A输出日志(d.MQ_触发对象_被动 + "已被" + d.MQ_触发对象_主动 + "邀请加入群" + d.MQ_消息来源)
+	return consts.MT_消息处理_继续
+}
+func 某人被批准加入了群(d onebot.MQEvent) int {
+	// api.A输出日志(api.A取昵称(d.MQ_机器人QQ, d.MQ_触发对象_被动) + "(" + d.MQ_触发对象_被动 + ")被" + api.A取昵称(d.MQ_机器人QQ, d.MQ_触发对象_主动) + "(" + d.MQ_触发对象_主动 + ")批准加入了群")
+	return consts.MT_消息处理_继续
+}
+func 某人退出群(d onebot.MQEvent) int {
+	// api.A输出日志(api.A取昵称(d.MQ_机器人QQ, d.MQ_触发对象_主动) + "(" + d.MQ_触发对象_主动 + ")退出了群")
+	return consts.MT_消息处理_继续
+}
+func 某人被管理移除群(d onebot.MQEvent) int {
+
+===== MyQQ_SDK_GO.zip :: MyQQ_SDK_GO/qq/core/apis.go @ 23
+	getLongClientKey       = getApiProc("Api_GetLongClientkey")
+	adminInviteGroup       = getApiProc("Api_AdminInviteGroup")
+	noAdminInviteGroup     = getApiProc("Api_NoAdminInviteGroup")
+	getNick                = getApiProc("Api_GetNick")
+	getGroupCard           = getApiProc("Api_GetGroupCard")
+	getObjLevel            = getApiProc("Api_GetQQLevel")
+	getFriendList          = getApiProc("Api_GetFriendList")
+	getFriendListB         = getApiProc("Api_GetFriendList_B")
+	getGroupAdmin          = getApiProc("Api_GetAdminList")
+	getGroupListA          = getApiProc("Api_GetGroupList_A")
+	getGroupList           = getApiProc("Api_GetGroupList")
+	getGroupListB          = getApiProc("Api_GetGroupList_B")
+	getGroupMemberList     = getApiProc("Api_GetGroupMemberList")
+
+===== MyQQ_SDK_GO.zip :: MyQQ_SDK_GO/qq/core/apis.go @ 24
+	adminInviteGroup       = getApiProc("Api_AdminInviteGroup")
+	noAdminInviteGroup     = getApiProc("Api_NoAdminInviteGroup")
+	getNick                = getApiProc("Api_GetNick")
+	getGroupCard           = getApiProc("Api_GetGroupCard")
+	getObjLevel            = getApiProc("Api_GetQQLevel")
+	getFriendList          = getApiProc("Api_GetFriendList")
+	getFriendListB         = getApiProc("Api_GetFriendList_B")
+	getGroupAdmin          = getApiProc("Api_GetAdminList")
+	getGroupListA          = getApiProc("Api_GetGroupList_A")
+	getGroupList           = getApiProc("Api_GetGroupList")
+	getGroupListB          = getApiProc("Api_GetGroupList_B")
+	getGroupMemberList     = getApiProc("Api_GetGroupMemberList")
+	getGroupMemberListB    = getApiProc("Api_GetGroupMemberList_B")
+
+===== MyQQ_SDK_GO.zip :: MyQQ_SDK_GO/qq/core/apis.go @ 39
+	shutUp                 = getApiProc("Api_ShutUP")
+	joinGroup              = getApiProc("Api_JoinGroup")
+	quitGroup              = getApiProc("Api_QuitGroup")
+	uploadPic              = getApiProc("Api_UpLoadPic")
+	getPicLink             = getApiProc("Api_GetPicLink")
+	outPutLog              = getApiProc("Api_OutPut")
+	teaEncry               = getApiProc("Api_TeaEncrypt")
+	teaDecry               = getApiProc("Api_TeaDecrypt")
+	sessionKey             = getApiProc("Api_SessionKey")
+	gn2Gid                 = getApiProc("Api_GNTransGID")
+	gid2Gn                 = getApiProc("Api_GIDTransGN")
+	pbGroupNotic           = getApiProc("Api_PBGroupNotic")
+	getNotice              = getApiProc("Api_GetNotice")
+
+===== MyQQ_SDK_GO.zip :: MyQQ_SDK_GO/qq/core/apis.go @ 60
+	kickDisGroupMBR        = getApiProc("Api_KickDisGroupMBR")
+	inviteDisGroup         = getApiProc("Api_InviteDisGroup")
+	getDisGroupList        = getApiProc("Api_GetDisGroupList")
+	getDisGroupMemberList  = getApiProc("Api_GetDisGroupMemberList")
+	setDisGroupName        = getApiProc("Api_SetDisGroupName")
+	kickGroupMBR           = getApiProc("Api_KickGroupMBR")
+	getObjVote             = getApiProc("Api_GetObjVote")
+	uploadVoice            = getApiProc("Api_UpLoadVoice")
+	getVoiceLink           = getApiProc("Api_GetVoiLink")
+	getTimeStamp           = getApiProc("Api_GetTimeStamp")
+	sendPack               = getApiProc("Api_SendPack")
+	getObjInfo             = getApiProc("Api_GetObjInfo")
+	getGender              = getApiProc("Api_GetGender")
+
+===== MyQQ_SDK_GO.zip :: MyQQ_SDK_GO/qq/core/apis.go @ 233
+
+//管理员邀请对象入群，频率过快会失败
+func AdminInviteGroup(QQ, objQQ, objGroup int64) {
+	_, _, _ = adminInviteGroup.Call(str2ptr(Int2Str(QQ)), str2ptr(Int2Str(objQQ)), str2ptr(Int2Str(objGroup)))
+}
+
+//非管理员邀请对象入群，频率过快会失败
+func NoAdminInviteGroup(QQ, objQQ, objGroup int64) {
+	_, _, _ = noAdminInviteGroup.Call(str2ptr(Int2Str(QQ)), str2ptr(Int2Str(objQQ)), str2ptr(Int2Str(objGroup)))
+}
+
+//取对象昵称
+//测试通过
+
+===== MyQQ_SDK_GO.zip :: MyQQ_SDK_GO/qq/core/apis.go @ 234
+//管理员邀请对象入群，频率过快会失败
+func AdminInviteGroup(QQ, objQQ, objGroup int64) {
+	_, _, _ = adminInviteGroup.Call(str2ptr(Int2Str(QQ)), str2ptr(Int2Str(objQQ)), str2ptr(Int2Str(objGroup)))
+}
+
+//非管理员邀请对象入群，频率过快会失败
+func NoAdminInviteGroup(QQ, objQQ, objGroup int64) {
+	_, _, _ = noAdminInviteGroup.Call(str2ptr(Int2Str(QQ)), str2ptr(Int2Str(objQQ)), str2ptr(Int2Str(objGroup)))
+}
+
+//取对象昵称
+//测试通过
+func GetNick(QQ, objQQ int64) string {
+
+===== MyQQ_SDK_GO.zip :: MyQQ_SDK_GO/qq/core/apis.go @ 235
+func AdminInviteGroup(QQ, objQQ, objGroup int64) {
+	_, _, _ = adminInviteGroup.Call(str2ptr(Int2Str(QQ)), str2ptr(Int2Str(objQQ)), str2ptr(Int2Str(objGroup)))
+}
+
+//非管理员邀请对象入群，频率过快会失败
+func NoAdminInviteGroup(QQ, objQQ, objGroup int64) {
+	_, _, _ = noAdminInviteGroup.Call(str2ptr(Int2Str(QQ)), str2ptr(Int2Str(objQQ)), str2ptr(Int2Str(objGroup)))
+}
+
+//取对象昵称
+//测试通过
+func GetNick(QQ, objQQ int64) string {
+	r, _, _ := getNick.Call(str2ptr(Int2Str(QQ)), str2ptr(Int2Str(objQQ)))
+
+===== MyQQ_SDK_GO.zip :: MyQQ_SDK_GO/qq/core/apis.go @ 238
+
+//非管理员邀请对象入群，频率过快会失败
+func NoAdminInviteGroup(QQ, objQQ, objGroup int64) {
+	_, _, _ = noAdminInviteGroup.Call(str2ptr(Int2Str(QQ)), str2ptr(Int2Str(objQQ)), str2ptr(Int2Str(objGroup)))
+}
+
+//取对象昵称
+//测试通过
+func GetNick(QQ, objQQ int64) string {
+	r, _, _ := getNick.Call(str2ptr(Int2Str(QQ)), str2ptr(Int2Str(objQQ)))
+	return ptr2str(r)
+}
+
+
+===== MyQQ_SDK_GO.zip :: MyQQ_SDK_GO/qq/core/apis.go @ 239
+//非管理员邀请对象入群，频率过快会失败
+func NoAdminInviteGroup(QQ, objQQ, objGroup int64) {
+	_, _, _ = noAdminInviteGroup.Call(str2ptr(Int2Str(QQ)), str2ptr(Int2Str(objQQ)), str2ptr(Int2Str(objGroup)))
+}
+
+//取对象昵称
+//测试通过
+func GetNick(QQ, objQQ int64) string {
+	r, _, _ := getNick.Call(str2ptr(Int2Str(QQ)), str2ptr(Int2Str(objQQ)))
+	return ptr2str(r)
+}
+
+//取对象群名片
+
+===== MyQQ_SDK_GO.zip :: MyQQ_SDK_GO/qq/core/apis.go @ 240
+func NoAdminInviteGroup(QQ, objQQ, objGroup int64) {
+	_, _, _ = noAdminInviteGroup.Call(str2ptr(Int2Str(QQ)), str2ptr(Int2Str(objQQ)), str2ptr(Int2Str(objGroup)))
+}
+
+//取对象昵称
+//测试通过
+func GetNick(QQ, objQQ int64) string {
+	r, _, _ := getNick.Call(str2ptr(Int2Str(QQ)), str2ptr(Int2Str(objQQ)))
+	return ptr2str(r)
+}
+
+//取对象群名片
+//测试通过
+
+===== MyQQ_SDK_GO.zip :: MyQQ_SDK_GO/qq/core/apis.go @ 425
+
+//某人请求入群 被邀请入群 等 群验证处理
+//.版本 2
+//
+//.参数 QQ, 文本型, , 机器人QQ
+//.参数 reqType, 整数型, , 213请求入群  214我被邀请加入某群  215某人被邀请加入群
+//.参数 objQQ, 文本型, , 申请入群、被邀请人的QQ （当请求类型为214时这里为邀请人QQ）
+//.参数 objGroup, 文本型, , 收到请求群号
+//.参数 seq, 文本型, , 需要处理事件的seq ，这个参数在收到群事件时，IRC_原始信息会传递
+//.参数 handleType, 整数型, , 10同意 20拒绝 30忽略
+//.参数 addMsg, 文本型, , 拒绝入群附加信息
+func HandleGroupEvent(QQ int64, reqType int64, objQQ, objGroup, seq int64, handleType int64, addMsg string) {
+	_, _, _ = handleGroupEvent.Call(str2ptr(Int2Str(QQ)), int2ptr(reqType),
+
+===== MyQQ_SDK_GO.zip :: MyQQ_SDK_GO/qq/core/apis.go @ 429
+//.参数 QQ, 文本型, , 机器人QQ
+//.参数 reqType, 整数型, , 213请求入群  214我被邀请加入某群  215某人被邀请加入群
+//.参数 objQQ, 文本型, , 申请入群、被邀请人的QQ （当请求类型为214时这里为邀请人QQ）
+//.参数 objGroup, 文本型, , 收到请求群号
+//.参数 seq, 文本型, , 需要处理事件的seq ，这个参数在收到群事件时，IRC_原始信息会传递
+//.参数 handleType, 整数型, , 10同意 20拒绝 30忽略
+//.参数 addMsg, 文本型, , 拒绝入群附加信息
+func HandleGroupEvent(QQ int64, reqType int64, objQQ, objGroup, seq int64, handleType int64, addMsg string) {
+	_, _, _ = handleGroupEvent.Call(str2ptr(Int2Str(QQ)), int2ptr(reqType),
+		str2ptr(Int2Str(objQQ)), str2ptr(Int2Str(objGroup)), str2ptr(Int2Str(seq)), int2ptr(handleType), str2ptr(addMsg))
+}
+
+//开关群匿名消息发送功能    成功返回true  失败返回false
+
+===== MyQQ_SDK_GO.zip :: MyQQ_SDK_GO/qq/core/consts.go @ 49
+	MT_G_SBWANTTOJOINGROUP                    //请求入群：213
+	MT_G_SBINVITATIONMEJOINGROUP              //被邀请加入群：214
+	MT_G_SBINVITATIONSBJOINGROUP              //某人被邀请加入群：215
+	MT_G_GROUPISDISSOLVE                      //某群被解散：216
+	MT_G_GROUPCARDCHANGE                      //群名片变动: 217
+	MT_G_GROUPFILE                            //群文件接收:218
+)
+
+// 框架QQ
+const (
+	MT_QQ_ADD        = 1100 + iota //列表添加了新账号: 1100 （Pro可用）
+	MT_QQ_LOGIN                    //QQ登录完成: 1101
+	MT_QQ_OFFLINEACT               //QQ被手动离线: 1102 （Pro可用）
+
+===== MyQQ_SDK_GO.zip :: MyQQ_SDK_GO/qq/core/consts.go @ 50
+	MT_G_SBINVITATIONMEJOINGROUP              //被邀请加入群：214
+	MT_G_SBINVITATIONSBJOINGROUP              //某人被邀请加入群：215
+	MT_G_GROUPISDISSOLVE                      //某群被解散：216
+	MT_G_GROUPCARDCHANGE                      //群名片变动: 217
+	MT_G_GROUPFILE                            //群文件接收:218
+)
+
+// 框架QQ
+const (
+	MT_QQ_ADD        = 1100 + iota //列表添加了新账号: 1100 （Pro可用）
+	MT_QQ_LOGIN                    //QQ登录完成: 1101
+	MT_QQ_OFFLINEACT               //QQ被手动离线: 1102 （Pro可用）
+	MT_QQ_OFFLINEPAS               //QQ被强制离线: 1103 （Pro可用）
+
+===== MyQQ_SDK_Java(HTTP)(linq).zip :: linq-myqq-spring-boot-starter-master/README.md @ 260
+    /**
+     * Api_JoinGroup	布尔型	申请加群.为了避免广告、群发行为。出现验证码时将会直接失败不处理
+     * 响应QQ	文本型	机器人QQ
+     * 群号	文本型	欲申请加入的群号
+     * 附加理由	文本型	附加理由，可留空（需回答正确问题时，请填写问题答案）
+     */
+    API_JOIN_GROUP("Api_JoinGroup", Boolean.class, HttpMethod.POST),
+    /**
+     * Api_QuitGroup	无返回值	退群
+     * 响应QQ	文本型	机器人QQ
+     * 群号	文本型	欲退出的群号
+     */
+    API_QUIT_GROUP("Api_QuitGroup", Void.class, HttpMethod.POST),
+
+===== MyQQ_SDK_Java(HTTP)(linq).zip :: linq-myqq-spring-boot-starter-master/README.md @ 265
+     */
+    API_JOIN_GROUP("Api_JoinGroup", Boolean.class, HttpMethod.POST),
+    /**
+     * Api_QuitGroup	无返回值	退群
+     * 响应QQ	文本型	机器人QQ
+     * 群号	文本型	欲退出的群号
+     */
+    API_QUIT_GROUP("Api_QuitGroup", Void.class, HttpMethod.POST),
+    /**
+     * Api_SendVoice	布尔型	好友语音上传并发送 （成功返回真 失败返回假）
+     * 响应QQ	文本型	机器人QQ
+     * 接收QQ	文本型	接收语音人QQ
+     * 语音文件	文本型	语音文件路径（AMR Silk编码）
+
+===== MyQQ_SDK_Java(HTTP)(linq).zip :: linq-myqq-spring-boot-starter-master/README.md @ 570
+    /**
+     * 管理员邀请对象入群，频率过快会失败
+     * 响应QQ	String	机器人QQ
+     * 群号	String	被邀请加入的群号
+     * 对象QQ	String	被邀请人QQ号码（多个号码使用 #换行符 分割）
+     */
+    API_ADMIN_INVITE_GROUP("Api_AdminInviteGroup", Void.class, HttpMethod.POST),
+    /**
+     * Api_NoAdminInviteGroup	无返回值	非管理员邀请对象入群，频率过快会失败
+     * 响应QQ	文本型	机器人QQ
+     * 群号	文本型	被邀请加入的群号
+     * 对象QQ	文本型	被邀请人QQ号码（多个号码使用 #换行符 分割）
+     */
+
+===== MyQQ_SDK_Java(HTTP)(linq).zip :: linq-myqq-spring-boot-starter-master/README.md @ 572
+     * 响应QQ	String	机器人QQ
+     * 群号	String	被邀请加入的群号
+     * 对象QQ	String	被邀请人QQ号码（多个号码使用 #换行符 分割）
+     */
+    API_ADMIN_INVITE_GROUP("Api_AdminInviteGroup", Void.class, HttpMethod.POST),
+    /**
+     * Api_NoAdminInviteGroup	无返回值	非管理员邀请对象入群，频率过快会失败
+     * 响应QQ	文本型	机器人QQ
+     * 群号	文本型	被邀请加入的群号
+     * 对象QQ	文本型	被邀请人QQ号码（多个号码使用 #换行符 分割）
+     */
+    API_NO_ADMIN_INVITE_GROUP("Api_NoAdminInviteGroup", Void.class, HttpMethod.POST),
+    /**
+
+===== MyQQ_SDK_Java(HTTP)(linq).zip :: linq-myqq-spring-boot-starter-master/README.md @ 575
+     */
+    API_ADMIN_INVITE_GROUP("Api_AdminInviteGroup", Void.class, HttpMethod.POST),
+    /**
+     * Api_NoAdminInviteGroup	无返回值	非管理员邀请对象入群，频率过快会失败
+     * 响应QQ	文本型	机器人QQ
+     * 群号	文本型	被邀请加入的群号
+     * 对象QQ	文本型	被邀请人QQ号码（多个号码使用 #换行符 分割）
+     */
+    API_NO_ADMIN_INVITE_GROUP("Api_NoAdminInviteGroup", Void.class, HttpMethod.POST),
+    /**
+     * Api_GetGender	整数型	取对象性别 1男 2女 未知或失败返回-1
+     * 响应QQ	文本型	机器人QQ
+     * 对象QQ	文本型	无
+
+===== MyQQ_SDK_Java(HTTP)(linq).zip :: linq-myqq-spring-boot-starter-master/README.md @ 577
+    /**
+     * Api_NoAdminInviteGroup	无返回值	非管理员邀请对象入群，频率过快会失败
+     * 响应QQ	文本型	机器人QQ
+     * 群号	文本型	被邀请加入的群号
+     * 对象QQ	文本型	被邀请人QQ号码（多个号码使用 #换行符 分割）
+     */
+    API_NO_ADMIN_INVITE_GROUP("Api_NoAdminInviteGroup", Void.class, HttpMethod.POST),
+    /**
+     * Api_GetGender	整数型	取对象性别 1男 2女 未知或失败返回-1
+     * 响应QQ	文本型	机器人QQ
+     * 对象QQ	文本型	无
+     */
+    API_GET_GENDER("Api_GetGender", Integer.class, HttpMethod.POST),
+
+===== MyQQ_SDK_Java(HTTP)(linq).zip :: linq-myqq-spring-boot-starter-master/README.md @ 579
+     * 响应QQ	文本型	机器人QQ
+     * 群号	文本型	被邀请加入的群号
+     * 对象QQ	文本型	被邀请人QQ号码（多个号码使用 #换行符 分割）
+     */
+    API_NO_ADMIN_INVITE_GROUP("Api_NoAdminInviteGroup", Void.class, HttpMethod.POST),
+    /**
+     * Api_GetGender	整数型	取对象性别 1男 2女 未知或失败返回-1
+     * 响应QQ	文本型	机器人QQ
+     * 对象QQ	文本型	无
+     */
+    API_GET_GENDER("Api_GetGender", Integer.class, HttpMethod.POST),
+    /**
+     * Api_GetQQAge	整数型	取Q龄 成功返回Q龄 失败返回-1
+
+===== MyQQ_SDK_Java(HTTP)(linq).zip :: linq-myqq-spring-boot-starter-master/README.md @ 582
+     */
+    API_NO_ADMIN_INVITE_GROUP("Api_NoAdminInviteGroup", Void.class, HttpMethod.POST),
+    /**
+     * Api_GetGender	整数型	取对象性别 1男 2女 未知或失败返回-1
+     * 响应QQ	文本型	机器人QQ
+     * 对象QQ	文本型	无
+     */
+    API_GET_GENDER("Api_GetGender", Integer.class, HttpMethod.POST),
+    /**
+     * Api_GetQQAge	整数型	取Q龄 成功返回Q龄 失败返回-1
+     * 响应QQ	文本型	机器人QQ
+     * 对象QQ	文本型	无
+     */
+
+===== MyQQ_SDK_Java(HTTP)(linq).zip :: linq-myqq-spring-boot-starter-master/README.md @ 653
+    /**
+     * Api_InviteDisGroup	文本型	邀请对象加入讨论组 成功返回空 失败返回理由
+     * 响应QQ	文本型	机器人QQ
+     * 讨论组ID	文本型	需执行的讨论组ID
+     * 邀请对象QQ	文本型	被邀请对象QQ 多个用,分割
+     */
+    API_INVITE_DIS_GROUP("Api_InviteDisGroup", String.class, HttpMethod.POST),
+
+
+    /**
+     * Api_GetPerExp	文本型
+     * 响应QQ	文本型	机器人QQ
+     * 对象QQ	文本型	无
+
+===== MyQQ_SDK_Java(HTTP)(linq).zip :: linq-myqq-spring-boot-starter-master/README.md @ 658
+     */
+    API_INVITE_DIS_GROUP("Api_InviteDisGroup", String.class, HttpMethod.POST),
+
+
+    /**
+     * Api_GetPerExp	文本型
+     * 响应QQ	文本型	机器人QQ
+     * 对象QQ	文本型	无
+     */
+    API_GET_PER_EXP("Api_GetPerExp", String.class, HttpMethod.POST),
+    /**
+     * Api_GetSign	文本型
+     * 响应QQ	文本型	机器人QQ
+
+===== MyQQ_SDK_Java(HTTP)(linq).zip :: linq-myqq-spring-boot-starter-master/README.md @ 881
+    /**
+     * Api_InviteGroup_other	整数型	邀请别人群成员加入自己群
+     * 响应QQ	文本型	机器人QQ
+     * 目标群号	文本型	被邀请加入的群号
+     * 所在群号	文本型	被邀请人和机器人共同存在的群号
+     * 对象QQ	文本型	被邀请人QQ号码（多个号码使用 换行符 分开）
+     */
+    API_INVITE_GROUP_OTHER("Api_InviteGroup_other", Integer.class, HttpMethod.POST),
+    /**
+     * Api_SetMsgEssence	文本型	返回结果请调试查看：机器人非管理员，禁止设置精华消息
+     * 响应QQ	文本型	机器人QQ
+     * 群号	文本型	需设置的群号
+     * 消息序号	文本型	需设置的消息序号
+
+===== MyQQ_SDK_Java(HTTP)(linq).zip :: linq-myqq-spring-boot-starter-master/README.md @ 883
+     * 响应QQ	文本型	机器人QQ
+     * 目标群号	文本型	被邀请加入的群号
+     * 所在群号	文本型	被邀请人和机器人共同存在的群号
+     * 对象QQ	文本型	被邀请人QQ号码（多个号码使用 换行符 分开）
+     */
+    API_INVITE_GROUP_OTHER("Api_InviteGroup_other", Integer.class, HttpMethod.POST),
+    /**
+     * Api_SetMsgEssence	文本型	返回结果请调试查看：机器人非管理员，禁止设置精华消息
+     * 响应QQ	文本型	机器人QQ
+     * 群号	文本型	需设置的群号
+     * 消息序号	文本型	需设置的消息序号
+     * 消息ID	文本型	需设置的消息ID
+     */
+
+===== MyQQ_SDK_Java(HTTP)(linq).zip :: linq-myqq-spring-boot-starter-master/README.md @ 884
+     * 目标群号	文本型	被邀请加入的群号
+     * 所在群号	文本型	被邀请人和机器人共同存在的群号
+     * 对象QQ	文本型	被邀请人QQ号码（多个号码使用 换行符 分开）
+     */
+    API_INVITE_GROUP_OTHER("Api_InviteGroup_other", Integer.class, HttpMethod.POST),
+    /**
+     * Api_SetMsgEssence	文本型	返回结果请调试查看：机器人非管理员，禁止设置精华消息
+     * 响应QQ	文本型	机器人QQ
+     * 群号	文本型	需设置的群号
+     * 消息序号	文本型	需设置的消息序号
+     * 消息ID	文本型	需设置的消息ID
+     */
+    API_SET_MSG_ESSENCE("Api_SetMsgEssence", String.class, HttpMethod.POST),
+
+===== MyQQ_SDK_Java(HTTP)(linq).zip :: linq-myqq-spring-boot-starter-master/README.md @ 887
+     */
+    API_INVITE_GROUP_OTHER("Api_InviteGroup_other", Integer.class, HttpMethod.POST),
+    /**
+     * Api_SetMsgEssence	文本型	返回结果请调试查看：机器人非管理员，禁止设置精华消息
+     * 响应QQ	文本型	机器人QQ
+     * 群号	文本型	需设置的群号
+     * 消息序号	文本型	需设置的消息序号
+     * 消息ID	文本型	需设置的消息ID
+     */
+    API_SET_MSG_ESSENCE("Api_SetMsgEssence", String.class, HttpMethod.POST),
+    /**
+     * Api_UpGroupFile	文本型	发送群文件，成功返回 文件信息 失败返回 空
+     * 响应QQ	文本型	机器人QQ
+
+===== MyQQ_SDK_Java(HTTP)(linq).zip :: linq-myqq-spring-boot-starter-master/README.md @ 1029
+    /**
+     * Api_JoinGroupEx	文本型	返回格式为：是否成功=真&短信标识=短信标识，如果短信标识不为空，就是需要短信，调用取短信详情（Api_GetJoinGroupMsg）获取短信详情
+     * 响应QQ	文本型	机器人QQ
+     * 群号	文本型
+     * 理由	文本型
+     * 接口	文本型	接口 0=随机，1=搜索群号、2=附近的群、3=通知界面加群、4=链接加群、5=关键词、6=精确查找
+     * 通道	文本型	通道 0=随机，1=新版，2=老版
+     */
+    API_JOIN_GROUP_EX("Api_JoinGroupEx", String.class, HttpMethod.POST),
+    /**
+     * Api_GetJoinGroupMsg	文本型	返回json文本 含有需发送至短信号码 短信内容,{"SendMsgNumber":"1888666666","SendMsgToNumber":"1069***794","MsgText":"***"}
+     * 响应QQ	文本型	机器人QQ
+     * 短信标识	文本型
+
+===== MyQQ_SDK_Java(HTTP)(linq).zip :: linq-myqq-spring-boot-starter-master/README.md @ 1036
+     */
+    API_JOIN_GROUP_EX("Api_JoinGroupEx", String.class, HttpMethod.POST),
+    /**
+     * Api_GetJoinGroupMsg	文本型	返回json文本 含有需发送至短信号码 短信内容,{"SendMsgNumber":"1888666666","SendMsgToNumber":"1069***794","MsgText":"***"}
+     * 响应QQ	文本型	机器人QQ
+     * 短信标识	文本型
+     */
+    API_GET_JOIN_GROUP_MSG("Api_GetJoinGroupMsg", String.class, HttpMethod.POST),
+    /**
+     * Api_CheckJoinGroupMsg	文本型	发送短信后，调用此API查询是否加群成功，成功返回真，失败返回假
+     * 响应QQ	文本型	机器人QQ
+     * 短信标识	文本型
+     */
+
+===== MyQQ_SDK_Java(HTTP)(linq).zip :: linq-myqq-spring-boot-starter-master/README.md @ 1038
+    /**
+     * Api_GetJoinGroupMsg	文本型	返回json文本 含有需发送至短信号码 短信内容,{"SendMsgNumber":"1888666666","SendMsgToNumber":"1069***794","MsgText":"***"}
+     * 响应QQ	文本型	机器人QQ
+     * 短信标识	文本型
+     */
+    API_GET_JOIN_GROUP_MSG("Api_GetJoinGroupMsg", String.class, HttpMethod.POST),
+    /**
+     * Api_CheckJoinGroupMsg	文本型	发送短信后，调用此API查询是否加群成功，成功返回真，失败返回假
+     * 响应QQ	文本型	机器人QQ
+     * 短信标识	文本型
+     */
+    API_CHECK_JOIN_GROUP_MSG("Api_CheckJoinGroupMsg", String.class, HttpMethod.POST),
+    /**
+
+===== MyQQ_SDK_Java(HTTP)(linq).zip :: linq-myqq-spring-boot-starter-master/README.md @ 1042
+     */
+    API_GET_JOIN_GROUP_MSG("Api_GetJoinGroupMsg", String.class, HttpMethod.POST),
+    /**
+     * Api_CheckJoinGroupMsg	文本型	发送短信后，调用此API查询是否加群成功，成功返回真，失败返回假
+     * 响应QQ	文本型	机器人QQ
+     * 短信标识	文本型
+     */
+    API_CHECK_JOIN_GROUP_MSG("Api_CheckJoinGroupMsg", String.class, HttpMethod.POST),
+    /**
+     * Api_SetGroupTempSession	逻辑型	置群成员发起临时会话开关，成功返回真，失败返回假
+     * 响应QQ	文本型	机器人QQ
+     * 群号	文本型	群号
+     * 开关	文本型	1=允许，0=禁止
+
+===== MyQQ_SDK_Java(HTTP)(linq).zip :: linq-myqq-spring-boot-starter-master/README.md @ 1044
+    /**
+     * Api_CheckJoinGroupMsg	文本型	发送短信后，调用此API查询是否加群成功，成功返回真，失败返回假
+     * 响应QQ	文本型	机器人QQ
+     * 短信标识	文本型
+     */
+    API_CHECK_JOIN_GROUP_MSG("Api_CheckJoinGroupMsg", String.class, HttpMethod.POST),
+    /**
+     * Api_SetGroupTempSession	逻辑型	置群成员发起临时会话开关，成功返回真，失败返回假
+     * 响应QQ	文本型	机器人QQ
+     * 群号	文本型	群号
+     * 开关	文本型	1=允许，0=禁止
+     */
+    API_SET_GROUP_TEMP_SESSION("Api_SetGroupTempSession", Boolean.class, HttpMethod.POST),
+
+===== MyQQ_SDK_Java(HTTP)(linq).zip :: linq-myqq-spring-boot-starter-master/README.md @ 1048
+     */
+    API_CHECK_JOIN_GROUP_MSG("Api_CheckJoinGroupMsg", String.class, HttpMethod.POST),
+    /**
+     * Api_SetGroupTempSession	逻辑型	置群成员发起临时会话开关，成功返回真，失败返回假
+     * 响应QQ	文本型	机器人QQ
+     * 群号	文本型	群号
+     * 开关	文本型	1=允许，0=禁止
+     */
+    API_SET_GROUP_TEMP_SESSION("Api_SetGroupTempSession", Boolean.class, HttpMethod.POST),
+    /**
+     * Api_SetGroupLaunchNew	逻辑型	置群成员发起群聊开关，成功返回真，失败返回假
+     * 响应QQ	文本型	机器人QQ
+     * 群号	文本型	群号
+
+===== MyQQ_SDK_Java(HTTP)(linq).zip :: linq-myqq-spring-boot-starter-master/README.md @ 1076
+    /**
+     * Api_InviteGroup_otherEx	逻辑型	邀请别人群成员加入自己群，多群版,成功返回1，失败返回0
+     * 响应QQ	文本型	机器人QQ
+     * 目标群号	文本型	被邀请加入的群号
+     * 群和QQ	文本型	被邀请人和机器人共同存在的群号，格式为：QQ,群号|QQ,群号|QQ,群号
+     */
+    API_INVITE_GROUP_OTHER_EX("Api_InviteGroup_otherEx", Boolean.class, HttpMethod.POST),
+    ;
+
+
+    private final String apiFunctionName;
+    private final Class<?> returnValueType;
+    private final HttpMethod httpMethod;
+
+===== MyQQ_SDK_Java(HTTP)(linq).zip :: linq-myqq-spring-boot-starter-master/README.md @ 1078
+     * 响应QQ	文本型	机器人QQ
+     * 目标群号	文本型	被邀请加入的群号
+     * 群和QQ	文本型	被邀请人和机器人共同存在的群号，格式为：QQ,群号|QQ,群号|QQ,群号
+     */
+    API_INVITE_GROUP_OTHER_EX("Api_InviteGroup_otherEx", Boolean.class, HttpMethod.POST),
+    ;
+
+
+    private final String apiFunctionName;
+    private final Class<?> returnValueType;
+    private final HttpMethod httpMethod;
+}
+```
+
+===== MyQQ_SDK_Java(HTTP)(linq).zip :: linq-myqq-spring-boot-starter-master/README.md @ 1079
+     * 目标群号	文本型	被邀请加入的群号
+     * 群和QQ	文本型	被邀请人和机器人共同存在的群号，格式为：QQ,群号|QQ,群号|QQ,群号
+     */
+    API_INVITE_GROUP_OTHER_EX("Api_InviteGroup_otherEx", Boolean.class, HttpMethod.POST),
+    ;
+
+
+    private final String apiFunctionName;
+    private final Class<?> returnValueType;
+    private final HttpMethod httpMethod;
+}
+```
+
+
+===== MyQQ_SDK_Java(HTTP)(linq).zip :: linq-myqq-spring-boot-starter-master/README.md @ 1081
+     */
+    API_INVITE_GROUP_OTHER_EX("Api_InviteGroup_otherEx", Boolean.class, HttpMethod.POST),
+    ;
+
+
+    private final String apiFunctionName;
+    private final Class<?> returnValueType;
+    private final HttpMethod httpMethod;
+}
+```
+
+
+
+
+===== MyQQ_SDK_Java(HTTP)(linq).zip :: linq-myqq-spring-boot-starter-master/README.md @ 1123
+    MESSAGE_TYPE_BE_INVITE_TO_GROUP(2001, "消息类型_某人申请加入群"),
+    MESSAGE_TYPE_SOMEONE_APPLIED_TO_JOIN_GROUP(2002, "消息类型_某人被邀请加入群"),
+    MESSAGE_TYPE_SOMEONE_HAS_BEEN_INVITED_INTO_GROUP(20021, "消息类型_某人已被邀请入群"),
+    MESSAGE_TYPE_I_WAS_INVITED_INTO_GROUP(2003, "消息类型_我被邀请加入群"),
+    MESSAGE_TYPE_SOMEONE_WAS_ADMITTED_TO_GROUP(2005, "消息类型_某人被批准加入了群"),
+    MESSAGE_TYPE_SOMEONE_DROP_OUT_OF_GROUP(2006, "消息类型_某人退出群"),
+    MESSAGE_TYPE_SOMEONE_IS_MANAGED_TO_REMOVE_GROUP(2007, "消息类型_某人被管理移除群"),
+    MESSAGE_TYPE_GROUP_IS_DISABLED(2008, "消息类型_某群被解散"),
+    MESSAGE_TYPE_ONE_BECOME_MANAGER(2009, "消息类型_某人成为管理"),
+    MESSAGE_TYPE_SOME_IS_TAKEN_OUT_OF_ADMIN(2010, "消息类型_某人被取消管理"),
+    MESSAGE_TYPE_GROUP_CARD_CHANGE(2011, "消息类型_群名片变动"),
+    MESSAGE_TYPE_GROUP_NICK_CHANGE(2012, "消息类型_群名变动"),
+    MESSAGE_TYPE_GROUP_ANNOUNCEMENT_CHANGE(2013, "消息类型_群公告变动"),
+
+===== MyQQ_SDK_Java(HTTP)(linq).zip :: linq-myqq-spring-boot-starter-master/README.md @ 1124
+    MESSAGE_TYPE_SOMEONE_APPLIED_TO_JOIN_GROUP(2002, "消息类型_某人被邀请加入群"),
+    MESSAGE_TYPE_SOMEONE_HAS_BEEN_INVITED_INTO_GROUP(20021, "消息类型_某人已被邀请入群"),
+    MESSAGE_TYPE_I_WAS_INVITED_INTO_GROUP(2003, "消息类型_我被邀请加入群"),
+    MESSAGE_TYPE_SOMEONE_WAS_ADMITTED_TO_GROUP(2005, "消息类型_某人被批准加入了群"),
+    MESSAGE_TYPE_SOMEONE_DROP_OUT_OF_GROUP(2006, "消息类型_某人退出群"),
+    MESSAGE_TYPE_SOMEONE_IS_MANAGED_TO_REMOVE_GROUP(2007, "消息类型_某人被管理移除群"),
+    MESSAGE_TYPE_GROUP_IS_DISABLED(2008, "消息类型_某群被解散"),
+    MESSAGE_TYPE_ONE_BECOME_MANAGER(2009, "消息类型_某人成为管理"),
+    MESSAGE_TYPE_SOME_IS_TAKEN_OUT_OF_ADMIN(2010, "消息类型_某人被取消管理"),
+    MESSAGE_TYPE_GROUP_CARD_CHANGE(2011, "消息类型_群名片变动"),
+    MESSAGE_TYPE_GROUP_NICK_CHANGE(2012, "消息类型_群名变动"),
+    MESSAGE_TYPE_GROUP_ANNOUNCEMENT_CHANGE(2013, "消息类型_群公告变动"),
+    MESSAGE_TYPE_SUBJECT_IS_BANNED(2014, "消息类型_对象被禁言"),
+
+===== MyQQ_SDK_Java(HTTP)(linq).zip :: linq-myqq-spring-boot-starter-master/README.md @ 1125
+    MESSAGE_TYPE_SOMEONE_HAS_BEEN_INVITED_INTO_GROUP(20021, "消息类型_某人已被邀请入群"),
+    MESSAGE_TYPE_I_WAS_INVITED_INTO_GROUP(2003, "消息类型_我被邀请加入群"),
+    MESSAGE_TYPE_SOMEONE_WAS_ADMITTED_TO_GROUP(2005, "消息类型_某人被批准加入了群"),
+    MESSAGE_TYPE_SOMEONE_DROP_OUT_OF_GROUP(2006, "消息类型_某人退出群"),
+    MESSAGE_TYPE_SOMEONE_IS_MANAGED_TO_REMOVE_GROUP(2007, "消息类型_某人被管理移除群"),
+    MESSAGE_TYPE_GROUP_IS_DISABLED(2008, "消息类型_某群被解散"),
+    MESSAGE_TYPE_ONE_BECOME_MANAGER(2009, "消息类型_某人成为管理"),
+    MESSAGE_TYPE_SOME_IS_TAKEN_OUT_OF_ADMIN(2010, "消息类型_某人被取消管理"),
+    MESSAGE_TYPE_GROUP_CARD_CHANGE(2011, "消息类型_群名片变动"),
+    MESSAGE_TYPE_GROUP_NICK_CHANGE(2012, "消息类型_群名变动"),
+    MESSAGE_TYPE_GROUP_ANNOUNCEMENT_CHANGE(2013, "消息类型_群公告变动"),
+    MESSAGE_TYPE_SUBJECT_IS_BANNED(2014, "消息类型_对象被禁言"),
+    MESSAGE_TYPE_SUBJECT_IS_UNGAGGED(2015, "消息类型_对象被解除禁言"),
+
+===== MyQQ_SDK_Java(HTTP)(linq).zip :: linq-myqq-spring-boot-starter-master/src/main/java/com/linq/cool/qqbot/myqq/enums/MyQQApiEnum.java @ 256
+    /**
+     * Api_JoinGroup	布尔型	申请加群.为了避免广告、群发行为。出现验证码时将会直接失败不处理
+     * 响应QQ	文本型	机器人QQ
+     * 群号	文本型	欲申请加入的群号
+     * 附加理由	文本型	附加理由，可留空（需回答正确问题时，请填写问题答案）
+     */
+    API_JOIN_GROUP("Api_JoinGroup", Boolean.class, HttpMethod.POST),
+    /**
+     * Api_QuitGroup	无返回值	退群
+     * 响应QQ	文本型	机器人QQ
+     * 群号	文本型	欲退出的群号
+     */
+    API_QUIT_GROUP("Api_QuitGroup", Void.class, HttpMethod.POST),
+
+===== MyQQ_SDK_Java(HTTP)(linq).zip :: linq-myqq-spring-boot-starter-master/src/main/java/com/linq/cool/qqbot/myqq/enums/MyQQApiEnum.java @ 261
+     */
+    API_JOIN_GROUP("Api_JoinGroup", Boolean.class, HttpMethod.POST),
+    /**
+     * Api_QuitGroup	无返回值	退群
+     * 响应QQ	文本型	机器人QQ
+     * 群号	文本型	欲退出的群号
+     */
+    API_QUIT_GROUP("Api_QuitGroup", Void.class, HttpMethod.POST),
+    /**
+     * Api_SendVoice	布尔型	好友语音上传并发送 （成功返回真 失败返回假）
+     * 响应QQ	文本型	机器人QQ
+     * 接收QQ	文本型	接收语音人QQ
+     * 语音文件	文本型	语音文件路径（AMR Silk编码）
+
+===== MyQQ_SDK_Java(HTTP)(linq).zip :: linq-myqq-spring-boot-starter-master/src/main/java/com/linq/cool/qqbot/myqq/enums/MyQQApiEnum.java @ 566
+    /**
+     * 管理员邀请对象入群，频率过快会失败
+     * 响应QQ	String	机器人QQ
+     * 群号	String	被邀请加入的群号
+     * 对象QQ	String	被邀请人QQ号码（多个号码使用 #换行符 分割）
+     */
+    API_ADMIN_INVITE_GROUP("Api_AdminInviteGroup", Void.class, HttpMethod.POST),
+    /**
+     * Api_NoAdminInviteGroup	无返回值	非管理员邀请对象入群，频率过快会失败
+     * 响应QQ	文本型	机器人QQ
+     * 群号	文本型	被邀请加入的群号
+     * 对象QQ	文本型	被邀请人QQ号码（多个号码使用 #换行符 分割）
+     */
+
+===== MyQQ_SDK_Java(HTTP)(linq).zip :: linq-myqq-spring-boot-starter-master/src/main/java/com/linq/cool/qqbot/myqq/enums/MyQQApiEnum.java @ 568
+     * 响应QQ	String	机器人QQ
+     * 群号	String	被邀请加入的群号
+     * 对象QQ	String	被邀请人QQ号码（多个号码使用 #换行符 分割）
+     */
+    API_ADMIN_INVITE_GROUP("Api_AdminInviteGroup", Void.class, HttpMethod.POST),
+    /**
+     * Api_NoAdminInviteGroup	无返回值	非管理员邀请对象入群，频率过快会失败
+     * 响应QQ	文本型	机器人QQ
+     * 群号	文本型	被邀请加入的群号
+     * 对象QQ	文本型	被邀请人QQ号码（多个号码使用 #换行符 分割）
+     */
+    API_NO_ADMIN_INVITE_GROUP("Api_NoAdminInviteGroup", Void.class, HttpMethod.POST),
+    /**
+
+===== MyQQ_SDK_Java(HTTP)(linq).zip :: linq-myqq-spring-boot-starter-master/src/main/java/com/linq/cool/qqbot/myqq/enums/MyQQApiEnum.java @ 571
+     */
+    API_ADMIN_INVITE_GROUP("Api_AdminInviteGroup", Void.class, HttpMethod.POST),
+    /**
+     * Api_NoAdminInviteGroup	无返回值	非管理员邀请对象入群，频率过快会失败
+     * 响应QQ	文本型	机器人QQ
+     * 群号	文本型	被邀请加入的群号
+     * 对象QQ	文本型	被邀请人QQ号码（多个号码使用 #换行符 分割）
+     */
+    API_NO_ADMIN_INVITE_GROUP("Api_NoAdminInviteGroup", Void.class, HttpMethod.POST),
+    /**
+     * Api_GetGender	整数型	取对象性别 1男 2女 未知或失败返回-1
+     * 响应QQ	文本型	机器人QQ
+     * 对象QQ	文本型	无
+
+===== MyQQ_SDK_Java(HTTP)(linq).zip :: linq-myqq-spring-boot-starter-master/src/main/java/com/linq/cool/qqbot/myqq/enums/MyQQApiEnum.java @ 573
+    /**
+     * Api_NoAdminInviteGroup	无返回值	非管理员邀请对象入群，频率过快会失败
+     * 响应QQ	文本型	机器人QQ
+     * 群号	文本型	被邀请加入的群号
+     * 对象QQ	文本型	被邀请人QQ号码（多个号码使用 #换行符 分割）
+     */
+    API_NO_ADMIN_INVITE_GROUP("Api_NoAdminInviteGroup", Void.class, HttpMethod.POST),
+    /**
+     * Api_GetGender	整数型	取对象性别 1男 2女 未知或失败返回-1
+     * 响应QQ	文本型	机器人QQ
+     * 对象QQ	文本型	无
+     */
+    API_GET_GENDER("Api_GetGender", Integer.class, HttpMethod.POST),
+
+===== MyQQ_SDK_Java(HTTP)(linq).zip :: linq-myqq-spring-boot-starter-master/src/main/java/com/linq/cool/qqbot/myqq/enums/MyQQApiEnum.java @ 575
+     * 响应QQ	文本型	机器人QQ
+     * 群号	文本型	被邀请加入的群号
+     * 对象QQ	文本型	被邀请人QQ号码（多个号码使用 #换行符 分割）
+     */
+    API_NO_ADMIN_INVITE_GROUP("Api_NoAdminInviteGroup", Void.class, HttpMethod.POST),
+    /**
+     * Api_GetGender	整数型	取对象性别 1男 2女 未知或失败返回-1
+     * 响应QQ	文本型	机器人QQ
+     * 对象QQ	文本型	无
+     */
+    API_GET_GENDER("Api_GetGender", Integer.class, HttpMethod.POST),
+    /**
+     * Api_GetQQAge	整数型	取Q龄 成功返回Q龄 失败返回-1
+
+===== MyQQ_SDK_Java(HTTP)(linq).zip :: linq-myqq-spring-boot-starter-master/src/main/java/com/linq/cool/qqbot/myqq/enums/MyQQApiEnum.java @ 578
+     */
+    API_NO_ADMIN_INVITE_GROUP("Api_NoAdminInviteGroup", Void.class, HttpMethod.POST),
+    /**
+     * Api_GetGender	整数型	取对象性别 1男 2女 未知或失败返回-1
+     * 响应QQ	文本型	机器人QQ
+     * 对象QQ	文本型	无
+     */
+    API_GET_GENDER("Api_GetGender", Integer.class, HttpMethod.POST),
+    /**
+     * Api_GetQQAge	整数型	取Q龄 成功返回Q龄 失败返回-1
+     * 响应QQ	文本型	机器人QQ
+     * 对象QQ	文本型	无
+     */
+
+===== MyQQ_SDK_Java(HTTP)(linq).zip :: linq-myqq-spring-boot-starter-master/src/main/java/com/linq/cool/qqbot/myqq/enums/MyQQApiEnum.java @ 649
+    /**
+     * Api_InviteDisGroup	文本型	邀请对象加入讨论组 成功返回空 失败返回理由
+     * 响应QQ	文本型	机器人QQ
+     * 讨论组ID	文本型	需执行的讨论组ID
+     * 邀请对象QQ	文本型	被邀请对象QQ 多个用,分割
+     */
+    API_INVITE_DIS_GROUP("Api_InviteDisGroup", String.class, HttpMethod.POST),
+
+
+    /**
+     * Api_GetPerExp	文本型
+     * 响应QQ	文本型	机器人QQ
+     * 对象QQ	文本型	无
+
+===== MyQQ_SDK_Java(HTTP)(linq).zip :: linq-myqq-spring-boot-starter-master/src/main/java/com/linq/cool/qqbot/myqq/enums/MyQQApiEnum.java @ 654
+     */
+    API_INVITE_DIS_GROUP("Api_InviteDisGroup", String.class, HttpMethod.POST),
+
+
+    /**
+     * Api_GetPerExp	文本型
+     * 响应QQ	文本型	机器人QQ
+     * 对象QQ	文本型	无
+     */
+    API_GET_PER_EXP("Api_GetPerExp", String.class, HttpMethod.POST),
+    /**
+     * Api_GetSign	文本型
+     * 响应QQ	文本型	机器人QQ
+
+===== MyQQ_SDK_Java(HTTP)(linq).zip :: linq-myqq-spring-boot-starter-master/src/main/java/com/linq/cool/qqbot/myqq/enums/MyQQApiEnum.java @ 877
+    /**
+     * Api_InviteGroup_other	整数型	邀请别人群成员加入自己群
+     * 响应QQ	文本型	机器人QQ
+     * 目标群号	文本型	被邀请加入的群号
+     * 所在群号	文本型	被邀请人和机器人共同存在的群号
+     * 对象QQ	文本型	被邀请人QQ号码（多个号码使用 换行符 分开）
+     */
+    API_INVITE_GROUP_OTHER("Api_InviteGroup_other", Integer.class, HttpMethod.POST),
+    /**
+     * Api_SetMsgEssence	文本型	返回结果请调试查看：机器人非管理员，禁止设置精华消息
+     * 响应QQ	文本型	机器人QQ
+     * 群号	文本型	需设置的群号
+     * 消息序号	文本型	需设置的消息序号
+
+===== MyQQ_SDK_Java(HTTP)(linq).zip :: linq-myqq-spring-boot-starter-master/src/main/java/com/linq/cool/qqbot/myqq/enums/MyQQApiEnum.java @ 879
+     * 响应QQ	文本型	机器人QQ
+     * 目标群号	文本型	被邀请加入的群号
+     * 所在群号	文本型	被邀请人和机器人共同存在的群号
+     * 对象QQ	文本型	被邀请人QQ号码（多个号码使用 换行符 分开）
+     */
+    API_INVITE_GROUP_OTHER("Api_InviteGroup_other", Integer.class, HttpMethod.POST),
+    /**
+     * Api_SetMsgEssence	文本型	返回结果请调试查看：机器人非管理员，禁止设置精华消息
+     * 响应QQ	文本型	机器人QQ
+     * 群号	文本型	需设置的群号
+     * 消息序号	文本型	需设置的消息序号
+     * 消息ID	文本型	需设置的消息ID
+     */
+
+===== MyQQ_SDK_Java(HTTP)(linq).zip :: linq-myqq-spring-boot-starter-master/src/main/java/com/linq/cool/qqbot/myqq/enums/MyQQApiEnum.java @ 880
+     * 目标群号	文本型	被邀请加入的群号
+     * 所在群号	文本型	被邀请人和机器人共同存在的群号
+     * 对象QQ	文本型	被邀请人QQ号码（多个号码使用 换行符 分开）
+     */
+    API_INVITE_GROUP_OTHER("Api_InviteGroup_other", Integer.class, HttpMethod.POST),
+    /**
+     * Api_SetMsgEssence	文本型	返回结果请调试查看：机器人非管理员，禁止设置精华消息
+     * 响应QQ	文本型	机器人QQ
+     * 群号	文本型	需设置的群号
+     * 消息序号	文本型	需设置的消息序号
+     * 消息ID	文本型	需设置的消息ID
+     */
+    API_SET_MSG_ESSENCE("Api_SetMsgEssence", String.class, HttpMethod.POST),
+
+===== MyQQ_SDK_Java(HTTP)(linq).zip :: linq-myqq-spring-boot-starter-master/src/main/java/com/linq/cool/qqbot/myqq/enums/MyQQApiEnum.java @ 883
+     */
+    API_INVITE_GROUP_OTHER("Api_InviteGroup_other", Integer.class, HttpMethod.POST),
+    /**
+     * Api_SetMsgEssence	文本型	返回结果请调试查看：机器人非管理员，禁止设置精华消息
+     * 响应QQ	文本型	机器人QQ
+     * 群号	文本型	需设置的群号
+     * 消息序号	文本型	需设置的消息序号
+     * 消息ID	文本型	需设置的消息ID
+     */
+    API_SET_MSG_ESSENCE("Api_SetMsgEssence", String.class, HttpMethod.POST),
+    /**
+     * Api_UpGroupFile	文本型	发送群文件，成功返回 文件信息 失败返回 空
+     * 响应QQ	文本型	机器人QQ
+
+===== MyQQ_SDK_Java(HTTP)(linq).zip :: linq-myqq-spring-boot-starter-master/src/main/java/com/linq/cool/qqbot/myqq/enums/MyQQApiEnum.java @ 1025
+    /**
+     * Api_JoinGroupEx	文本型	返回格式为：是否成功=真&短信标识=短信标识，如果短信标识不为空，就是需要短信，调用取短信详情（Api_GetJoinGroupMsg）获取短信详情
+     * 响应QQ	文本型	机器人QQ
+     * 群号	文本型
+     * 理由	文本型
+     * 接口	文本型	接口 0=随机，1=搜索群号、2=附近的群、3=通知界面加群、4=链接加群、5=关键词、6=精确查找
+     * 通道	文本型	通道 0=随机，1=新版，2=老版
+     */
+    API_JOIN_GROUP_EX("Api_JoinGroupEx", String.class, HttpMethod.POST),
+    /**
+     * Api_GetJoinGroupMsg	文本型	返回json文本 含有需发送至短信号码 短信内容,{"SendMsgNumber":"1888666666","SendMsgToNumber":"1069***794","MsgText":"***"}
+     * 响应QQ	文本型	机器人QQ
+     * 短信标识	文本型
+
+===== MyQQ_SDK_Java(HTTP)(linq).zip :: linq-myqq-spring-boot-starter-master/src/main/java/com/linq/cool/qqbot/myqq/enums/MyQQApiEnum.java @ 1032
+     */
+    API_JOIN_GROUP_EX("Api_JoinGroupEx", String.class, HttpMethod.POST),
+    /**
+     * Api_GetJoinGroupMsg	文本型	返回json文本 含有需发送至短信号码 短信内容,{"SendMsgNumber":"1888666666","SendMsgToNumber":"1069***794","MsgText":"***"}
+     * 响应QQ	文本型	机器人QQ
+     * 短信标识	文本型
+     */
+    API_GET_JOIN_GROUP_MSG("Api_GetJoinGroupMsg", String.class, HttpMethod.POST),
+    /**
+     * Api_CheckJoinGroupMsg	文本型	发送短信后，调用此API查询是否加群成功，成功返回真，失败返回假
+     * 响应QQ	文本型	机器人QQ
+     * 短信标识	文本型
+     */
+
+===== MyQQ_SDK_Java(HTTP)(linq).zip :: linq-myqq-spring-boot-starter-master/src/main/java/com/linq/cool/qqbot/myqq/enums/MyQQApiEnum.java @ 1034
+    /**
+     * Api_GetJoinGroupMsg	文本型	返回json文本 含有需发送至短信号码 短信内容,{"SendMsgNumber":"1888666666","SendMsgToNumber":"1069***794","MsgText":"***"}
+     * 响应QQ	文本型	机器人QQ
+     * 短信标识	文本型
+     */
+    API_GET_JOIN_GROUP_MSG("Api_GetJoinGroupMsg", String.class, HttpMethod.POST),
+    /**
+     * Api_CheckJoinGroupMsg	文本型	发送短信后，调用此API查询是否加群成功，成功返回真，失败返回假
+     * 响应QQ	文本型	机器人QQ
+     * 短信标识	文本型
+     */
+    API_CHECK_JOIN_GROUP_MSG("Api_CheckJoinGroupMsg", String.class, HttpMethod.POST),
+    /**
+
+===== MyQQ_SDK_Java(HTTP)(linq).zip :: linq-myqq-spring-boot-starter-master/src/main/java/com/linq/cool/qqbot/myqq/enums/MyQQApiEnum.java @ 1038
+     */
+    API_GET_JOIN_GROUP_MSG("Api_GetJoinGroupMsg", String.class, HttpMethod.POST),
+    /**
+     * Api_CheckJoinGroupMsg	文本型	发送短信后，调用此API查询是否加群成功，成功返回真，失败返回假
+     * 响应QQ	文本型	机器人QQ
+     * 短信标识	文本型
+     */
+    API_CHECK_JOIN_GROUP_MSG("Api_CheckJoinGroupMsg", String.class, HttpMethod.POST),
+    /**
+     * Api_SetGroupTempSession	逻辑型	置群成员发起临时会话开关，成功返回真，失败返回假
+     * 响应QQ	文本型	机器人QQ
+     * 群号	文本型	群号
+     * 开关	文本型	1=允许，0=禁止
+
+===== MyQQ_SDK_Java(HTTP)(linq).zip :: linq-myqq-spring-boot-starter-master/src/main/java/com/linq/cool/qqbot/myqq/enums/MyQQApiEnum.java @ 1040
+    /**
+     * Api_CheckJoinGroupMsg	文本型	发送短信后，调用此API查询是否加群成功，成功返回真，失败返回假
+     * 响应QQ	文本型	机器人QQ
+     * 短信标识	文本型
+     */
+    API_CHECK_JOIN_GROUP_MSG("Api_CheckJoinGroupMsg", String.class, HttpMethod.POST),
+    /**
+     * Api_SetGroupTempSession	逻辑型	置群成员发起临时会话开关，成功返回真，失败返回假
+     * 响应QQ	文本型	机器人QQ
+     * 群号	文本型	群号
+     * 开关	文本型	1=允许，0=禁止
+     */
+    API_SET_GROUP_TEMP_SESSION("Api_SetGroupTempSession", Boolean.class, HttpMethod.POST),
+
+===== MyQQ_SDK_Java(HTTP)(linq).zip :: linq-myqq-spring-boot-starter-master/src/main/java/com/linq/cool/qqbot/myqq/enums/MyQQApiEnum.java @ 1044
+     */
+    API_CHECK_JOIN_GROUP_MSG("Api_CheckJoinGroupMsg", String.class, HttpMethod.POST),
+    /**
+     * Api_SetGroupTempSession	逻辑型	置群成员发起临时会话开关，成功返回真，失败返回假
+     * 响应QQ	文本型	机器人QQ
+     * 群号	文本型	群号
+     * 开关	文本型	1=允许，0=禁止
+     */
+    API_SET_GROUP_TEMP_SESSION("Api_SetGroupTempSession", Boolean.class, HttpMethod.POST),
+    /**
+     * Api_SetGroupLaunchNew	逻辑型	置群成员发起群聊开关，成功返回真，失败返回假
+     * 响应QQ	文本型	机器人QQ
+     * 群号	文本型	群号
+
+===== MyQQ_SDK_Java(HTTP)(linq).zip :: linq-myqq-spring-boot-starter-master/src/main/java/com/linq/cool/qqbot/myqq/enums/MyQQApiEnum.java @ 1072
+    /**
+     * Api_InviteGroup_otherEx	逻辑型	邀请别人群成员加入自己群，多群版,成功返回1，失败返回0
+     * 响应QQ	文本型	机器人QQ
+     * 目标群号	文本型	被邀请加入的群号
+     * 群和QQ	文本型	被邀请人和机器人共同存在的群号，格式为：QQ,群号|QQ,群号|QQ,群号
+     */
+    API_INVITE_GROUP_OTHER_EX("Api_InviteGroup_otherEx", Boolean.class, HttpMethod.POST),
+    ;
+
+
+    private final String apiFunctionName;
+    private final Class<?> returnValueType;
+    private final HttpMethod httpMethod;
+
+===== MyQQ_SDK_Java(HTTP)(linq).zip :: linq-myqq-spring-boot-starter-master/src/main/java/com/linq/cool/qqbot/myqq/enums/MyQQApiEnum.java @ 1074
+     * 响应QQ	文本型	机器人QQ
+     * 目标群号	文本型	被邀请加入的群号
+     * 群和QQ	文本型	被邀请人和机器人共同存在的群号，格式为：QQ,群号|QQ,群号|QQ,群号
+     */
+    API_INVITE_GROUP_OTHER_EX("Api_InviteGroup_otherEx", Boolean.class, HttpMethod.POST),
+    ;
+
+
+    private final String apiFunctionName;
+    private final Class<?> returnValueType;
+    private final HttpMethod httpMethod;
+}
+
+===== MyQQ_SDK_Java(HTTP)(linq).zip :: linq-myqq-spring-boot-starter-master/src/main/java/com/linq/cool/qqbot/myqq/enums/MyQQApiEnum.java @ 1075
+     * 目标群号	文本型	被邀请加入的群号
+     * 群和QQ	文本型	被邀请人和机器人共同存在的群号，格式为：QQ,群号|QQ,群号|QQ,群号
+     */
+    API_INVITE_GROUP_OTHER_EX("Api_InviteGroup_otherEx", Boolean.class, HttpMethod.POST),
+    ;
+
+
+    private final String apiFunctionName;
+    private final Class<?> returnValueType;
+    private final HttpMethod httpMethod;
+}
+
+===== MyQQ_SDK_Java(HTTP)(linq).zip :: linq-myqq-spring-boot-starter-master/src/main/java/com/linq/cool/qqbot/myqq/enums/MyQQApiEnum.java @ 1077
+     */
+    API_INVITE_GROUP_OTHER_EX("Api_InviteGroup_otherEx", Boolean.class, HttpMethod.POST),
+    ;
+
+
+    private final String apiFunctionName;
+    private final Class<?> returnValueType;
+    private final HttpMethod httpMethod;
+}
+
+===== MyQQ_SDK_Java(HTTP)(linq).zip :: linq-myqq-spring-boot-starter-master/src/main/java/com/linq/cool/qqbot/myqq/enums/MyQQTypeEnum.java @ 36
+    MESSAGE_TYPE_BE_INVITE_TO_GROUP(2001, "消息类型_某人申请加入群"),
+    MESSAGE_TYPE_SOMEONE_APPLIED_TO_JOIN_GROUP(2002, "消息类型_某人被邀请加入群"),
+    MESSAGE_TYPE_SOMEONE_HAS_BEEN_INVITED_INTO_GROUP(20021, "消息类型_某人已被邀请入群"),
+    MESSAGE_TYPE_I_WAS_INVITED_INTO_GROUP(2003, "消息类型_我被邀请加入群"),
+    MESSAGE_TYPE_SOMEONE_WAS_ADMITTED_TO_GROUP(2005, "消息类型_某人被批准加入了群"),
+    MESSAGE_TYPE_SOMEONE_DROP_OUT_OF_GROUP(2006, "消息类型_某人退出群"),
+    MESSAGE_TYPE_SOMEONE_IS_MANAGED_TO_REMOVE_GROUP(2007, "消息类型_某人被管理移除群"),
+    MESSAGE_TYPE_GROUP_IS_DISABLED(2008, "消息类型_某群被解散"),
+    MESSAGE_TYPE_ONE_BECOME_MANAGER(2009, "消息类型_某人成为管理"),
+    MESSAGE_TYPE_SOME_IS_TAKEN_OUT_OF_ADMIN(2010, "消息类型_某人被取消管理"),
+    MESSAGE_TYPE_GROUP_CARD_CHANGE(2011, "消息类型_群名片变动"),
+    MESSAGE_TYPE_GROUP_NICK_CHANGE(2012, "消息类型_群名变动"),
+    MESSAGE_TYPE_GROUP_ANNOUNCEMENT_CHANGE(2013, "消息类型_群公告变动"),
+
+===== MyQQ_SDK_Java(HTTP)(linq).zip :: linq-myqq-spring-boot-starter-master/src/main/java/com/linq/cool/qqbot/myqq/enums/MyQQTypeEnum.java @ 37
+    MESSAGE_TYPE_SOMEONE_APPLIED_TO_JOIN_GROUP(2002, "消息类型_某人被邀请加入群"),
+    MESSAGE_TYPE_SOMEONE_HAS_BEEN_INVITED_INTO_GROUP(20021, "消息类型_某人已被邀请入群"),
+    MESSAGE_TYPE_I_WAS_INVITED_INTO_GROUP(2003, "消息类型_我被邀请加入群"),
+    MESSAGE_TYPE_SOMEONE_WAS_ADMITTED_TO_GROUP(2005, "消息类型_某人被批准加入了群"),
+    MESSAGE_TYPE_SOMEONE_DROP_OUT_OF_GROUP(2006, "消息类型_某人退出群"),
+    MESSAGE_TYPE_SOMEONE_IS_MANAGED_TO_REMOVE_GROUP(2007, "消息类型_某人被管理移除群"),
+    MESSAGE_TYPE_GROUP_IS_DISABLED(2008, "消息类型_某群被解散"),
+    MESSAGE_TYPE_ONE_BECOME_MANAGER(2009, "消息类型_某人成为管理"),
+    MESSAGE_TYPE_SOME_IS_TAKEN_OUT_OF_ADMIN(2010, "消息类型_某人被取消管理"),
+    MESSAGE_TYPE_GROUP_CARD_CHANGE(2011, "消息类型_群名片变动"),
+    MESSAGE_TYPE_GROUP_NICK_CHANGE(2012, "消息类型_群名变动"),
+    MESSAGE_TYPE_GROUP_ANNOUNCEMENT_CHANGE(2013, "消息类型_群公告变动"),
+    MESSAGE_TYPE_SUBJECT_IS_BANNED(2014, "消息类型_对象被禁言"),
+
+===== MyQQ_SDK_Java(HTTP)(linq).zip :: linq-myqq-spring-boot-starter-master/src/main/java/com/linq/cool/qqbot/myqq/enums/MyQQTypeEnum.java @ 38
+    MESSAGE_TYPE_SOMEONE_HAS_BEEN_INVITED_INTO_GROUP(20021, "消息类型_某人已被邀请入群"),
+    MESSAGE_TYPE_I_WAS_INVITED_INTO_GROUP(2003, "消息类型_我被邀请加入群"),
+    MESSAGE_TYPE_SOMEONE_WAS_ADMITTED_TO_GROUP(2005, "消息类型_某人被批准加入了群"),
+    MESSAGE_TYPE_SOMEONE_DROP_OUT_OF_GROUP(2006, "消息类型_某人退出群"),
+    MESSAGE_TYPE_SOMEONE_IS_MANAGED_TO_REMOVE_GROUP(2007, "消息类型_某人被管理移除群"),
+    MESSAGE_TYPE_GROUP_IS_DISABLED(2008, "消息类型_某群被解散"),
+    MESSAGE_TYPE_ONE_BECOME_MANAGER(2009, "消息类型_某人成为管理"),
+    MESSAGE_TYPE_SOME_IS_TAKEN_OUT_OF_ADMIN(2010, "消息类型_某人被取消管理"),
+    MESSAGE_TYPE_GROUP_CARD_CHANGE(2011, "消息类型_群名片变动"),
+    MESSAGE_TYPE_GROUP_NICK_CHANGE(2012, "消息类型_群名变动"),
+    MESSAGE_TYPE_GROUP_ANNOUNCEMENT_CHANGE(2013, "消息类型_群公告变动"),
+    MESSAGE_TYPE_SUBJECT_IS_BANNED(2014, "消息类型_对象被禁言"),
+    MESSAGE_TYPE_SUBJECT_IS_UNGAGGED(2015, "消息类型_对象被解除禁言"),
+
+===== MyQQ_SDK_Java(HTTP).zip :: src/main/java/top/flagshen/myqq/common/TypeConstant.java @ 31
+    public static final int MSGTYPE_BE_INVITE_TO_GROUP = 2001;//消息类型_某人申请加入群	2001
+    public static final int MSGTYPE_ONE_BE_INVITE_GROUP = 2002;//消息类型_某人被邀请加入群	2002
+    public static final int MSGTYPE_HAS_BE_INVITE_GROUP = 20021;//消息类型_某人已被邀请入群	20021
+    public static final int MSGTYPE_ME_BE_INVITE_GROUP = 2003;//消息类型_我被邀请加入群	2003
+    public static final int MSGTYPE_ONE_BE_AGREE_GROUP = 2005;//消息类型_某人被批准加入了群	2005
+    public static final int MSGTYPE_ONE_QUIT_GROUP = 2006;//消息类型_某人退出群	2006
+    public static final int MSGTYPE_ONE_BE_QUIT = 2007;//消息类型_某人被管理移除群	2007
+    public static final int MSGTYPE_GROUP_BE_QUI = 2008;//消息类型_某群被解散	2008
+    public static final int MSGTYPE_ONE_BECOME_MANAGER = 2009;//消息类型_某人成为管理	2009
+    public static final int MSGTYPE_ONE_BE_CANCEL_MANAGER = 2010;//消息类型_某人被取消管理	2010
+    public static final int MSGTYPE_GROUPCARD_CHANGE = 2011;//消息类型_群名片变动	2011
+    public static final int MSGTYPE_GROUPNICK_CHANGE = 2012;//消息类型_群名变动	2012
+    public static final int MSGTYPE_GROUPNOTICE_CHANGE = 2013;//消息类型_群公告变动	2013
+
+===== MyQQ_SDK_Java(HTTP).zip :: src/main/java/top/flagshen/myqq/common/TypeConstant.java @ 32
+    public static final int MSGTYPE_ONE_BE_INVITE_GROUP = 2002;//消息类型_某人被邀请加入群	2002
+    public static final int MSGTYPE_HAS_BE_INVITE_GROUP = 20021;//消息类型_某人已被邀请入群	20021
+    public static final int MSGTYPE_ME_BE_INVITE_GROUP = 2003;//消息类型_我被邀请加入群	2003
+    public static final int MSGTYPE_ONE_BE_AGREE_GROUP = 2005;//消息类型_某人被批准加入了群	2005
+    public static final int MSGTYPE_ONE_QUIT_GROUP = 2006;//消息类型_某人退出群	2006
+    public static final int MSGTYPE_ONE_BE_QUIT = 2007;//消息类型_某人被管理移除群	2007
+    public static final int MSGTYPE_GROUP_BE_QUI = 2008;//消息类型_某群被解散	2008
+    public static final int MSGTYPE_ONE_BECOME_MANAGER = 2009;//消息类型_某人成为管理	2009
+    public static final int MSGTYPE_ONE_BE_CANCEL_MANAGER = 2010;//消息类型_某人被取消管理	2010
+    public static final int MSGTYPE_GROUPCARD_CHANGE = 2011;//消息类型_群名片变动	2011
+    public static final int MSGTYPE_GROUPNICK_CHANGE = 2012;//消息类型_群名变动	2012
+    public static final int MSGTYPE_GROUPNOTICE_CHANGE = 2013;//消息类型_群公告变动	2013
+    public static final int MSGTYPE_ONE_BE_BAN = 2014;//消息类型_对象被禁言	2014
+
+===== MyQQ_SDK_Java(HTTP).zip :: src/main/java/top/flagshen/myqq/common/TypeConstant.java @ 33
+    public static final int MSGTYPE_HAS_BE_INVITE_GROUP = 20021;//消息类型_某人已被邀请入群	20021
+    public static final int MSGTYPE_ME_BE_INVITE_GROUP = 2003;//消息类型_我被邀请加入群	2003
+    public static final int MSGTYPE_ONE_BE_AGREE_GROUP = 2005;//消息类型_某人被批准加入了群	2005
+    public static final int MSGTYPE_ONE_QUIT_GROUP = 2006;//消息类型_某人退出群	2006
+    public static final int MSGTYPE_ONE_BE_QUIT = 2007;//消息类型_某人被管理移除群	2007
+    public static final int MSGTYPE_GROUP_BE_QUI = 2008;//消息类型_某群被解散	2008
+    public static final int MSGTYPE_ONE_BECOME_MANAGER = 2009;//消息类型_某人成为管理	2009
+    public static final int MSGTYPE_ONE_BE_CANCEL_MANAGER = 2010;//消息类型_某人被取消管理	2010
+    public static final int MSGTYPE_GROUPCARD_CHANGE = 2011;//消息类型_群名片变动	2011
+    public static final int MSGTYPE_GROUPNICK_CHANGE = 2012;//消息类型_群名变动	2012
+    public static final int MSGTYPE_GROUPNOTICE_CHANGE = 2013;//消息类型_群公告变动	2013
+    public static final int MSGTYPE_ONE_BE_BAN = 2014;//消息类型_对象被禁言	2014
+    public static final int MSGTYPE_ONE_QUIT_BE_BAN = 2015;//消息类型_对象被解除禁言	2015
+
+===== MyQQ_SDK_易语言_S1.zip :: MyQQ_SDK_╥╫╙∩╤╘_S1/UpdateLog.txt @ 5
+[20220405] 2022年4月5日13:31:49
+【新增】新增API：同意邀请入群请求（Api_HandleGroupMyEvent）
+【新增】新增API：取指定域名Cookies（Api_GetDomainCookies）
+=======================
+[20220112] 2022年1月12日21:38:06
+【修复】修复API：取QQ等级（Api_GetQQLevel）部分情况获取失败问题
+【优化】修改API：11个红包相关的API名称已经改为英文
+=======================
+[20220101] 2022年1月1日16:03:52
+【新增】新增API：删除说说（Api_DelSay）
+【新增】新增API：取插件列表（Api_GetPluginList）
+=======================
+[20211211] 2021年12月11日15:12:41
+
+===== MyQQ_SDK_易语言_S1.zip :: MyQQ_SDK_╥╫╙∩╤╘_S1/UpdateLog.txt @ 178
+4.新增API：取是否允许群成员发起群聊（Api_GetGroupLaunchNew）
+5.新增API：邀请别人群成员Ex，支持多群（Api_InviteGroup_otherEx）
+====================================
+[20210728] 2021年7月28日21:00:59
+新增API：申请加群Ex（Api_JoinGroupEx）
+新增API：取短信详情（Api_GetJoinGroupMsg）
+新增API：提交短信验证（Api_CheckJoinGroupMsg）
+====================================
+[20210724] 2021年7月24日14:05:44
+修复了邀请入群参数写反的问题...卧槽了
+新增API：获取扫码登录QQ号（Api_GetQrQQNumber）
+====================================
+[20210722] 2021年7月22日01:13:24
+
+===== MyQQ_SDK_易语言_S1.zip :: MyQQ_SDK_╥╫╙∩╤╘_S1/UpdateLog.txt @ 181
+[20210728] 2021年7月28日21:00:59
+新增API：申请加群Ex（Api_JoinGroupEx）
+新增API：取短信详情（Api_GetJoinGroupMsg）
+新增API：提交短信验证（Api_CheckJoinGroupMsg）
+====================================
+[20210724] 2021年7月24日14:05:44
+修复了邀请入群参数写反的问题...卧槽了
+新增API：获取扫码登录QQ号（Api_GetQrQQNumber）
+====================================
+[20210722] 2021年7月22日01:13:24
+新增API：关闭群收钱（Api_CloseGroupPay）
+新增API：获取登录二维码（Api_CreatQrCodeInfo）
+新增API：获取二维码登录状态（Api_GetQrCodeStatus）
+
+===== MyQQ_SDK_易语言_S1.zip :: MyQQ_SDK_╥╫╙∩╤╘_S1/UpdateLog.txt @ 182
+新增API：申请加群Ex（Api_JoinGroupEx）
+新增API：取短信详情（Api_GetJoinGroupMsg）
+新增API：提交短信验证（Api_CheckJoinGroupMsg）
+====================================
+[20210724] 2021年7月24日14:05:44
+修复了邀请入群参数写反的问题...卧槽了
+新增API：获取扫码登录QQ号（Api_GetQrQQNumber）
+====================================
+[20210722] 2021年7月22日01:13:24
+新增API：关闭群收钱（Api_CloseGroupPay）
+新增API：获取登录二维码（Api_CreatQrCodeInfo）
+新增API：获取二维码登录状态（Api_GetQrCodeStatus）
+新增API：获取二维码图片路径（Api_GetQrCodePath）
+
+===== MyQQ_SDK_易语言_S1.zip :: MyQQ_SDK_╥╫╙∩╤╘_S1/UpdateLog.txt @ 183
+新增API：取短信详情（Api_GetJoinGroupMsg）
+新增API：提交短信验证（Api_CheckJoinGroupMsg）
+====================================
+[20210724] 2021年7月24日14:05:44
+修复了邀请入群参数写反的问题...卧槽了
+新增API：获取扫码登录QQ号（Api_GetQrQQNumber）
+====================================
+[20210722] 2021年7月22日01:13:24
+新增API：关闭群收钱（Api_CloseGroupPay）
+新增API：获取登录二维码（Api_CreatQrCodeInfo）
+新增API：获取二维码登录状态（Api_GetQrCodeStatus）
+新增API：获取二维码图片路径（Api_GetQrCodePath）
+新增API：取消二维码登录（Api_CloseQrCode）
+
+===== MyQQ_SDK_易语言_S1.zip :: MyQQ_SDK_╥╫╙∩╤╘_S1/UpdateLog.txt @ 186
+[20210724] 2021年7月24日14:05:44
+修复了邀请入群参数写反的问题...卧槽了
+新增API：获取扫码登录QQ号（Api_GetQrQQNumber）
+====================================
+[20210722] 2021年7月22日01:13:24
+新增API：关闭群收钱（Api_CloseGroupPay）
+新增API：获取登录二维码（Api_CreatQrCodeInfo）
+新增API：获取二维码登录状态（Api_GetQrCodeStatus）
+新增API：获取二维码图片路径（Api_GetQrCodePath）
+新增API：取消二维码登录（Api_CloseQrCode）
+====================================
+[20210721] 2021年7月21日10:10:00
+新增API：取屏蔽状态（Api_GetShieldedState）
+
+===== MyQQ_SDK_易语言_S1.zip :: MyQQ_SDK_╥╫╙∩╤╘_S1/UpdateLog.txt @ 241
+对#消息类型_收到财付通转账做了修改，加入了是否已收款状态，具体请看SDK
+对一些API参数中的换行改为了英文逗号，例如邀请多个QQ加群
+新增API：发起群收钱（Api_CreateGroupPay）
+新增API：查询群收钱账单详情（Api_GetGroupPayDetail）
+新增API：群收钱账单是否已支付（Api_GroupPayIsOk）
+新增API：发送群收钱账单催收通知（Api_SendGroupPayMsg）
+新增API：发送好友文件（Api_UpFriendFile）
+新增API：置群名称（Api_SetGroupName）
+====================================
+[20210705] 2021年7月5日20:44:41
+新增API：取群成员信息（Api_GetGroupMemberInfo）
+====================================
+[20210628] 2021年6月28日17:04:01
+
+===== MyQQ_SDK_易语言_S1.zip :: MyQQ_SDK_╥╫╙∩╤╘_S1/UpdateLog.txt @ 263
+[20210613] 2021年6月13日14:00:00
+新增API：邀请别人群成员（Api_InviteGroup_other）
+====================================
+[20210613] 2021年6月13日12:00:00
+新增API：取是否支持匿名
+发送消息（Api_SendMsgEx）支持匿名发送了
+====================================
+[20210606] 2021年6月6日23:40:07
+新增API：取群列表（QQ空间接口）
+修复API：非管理员邀请入群
+修复API：取群公告（并且支持获取全部公告）
+新增数据类型：数_群公告，用于取群公告API中
+====================================
+
+===== MyQQ_SDK_易语言_S1.zip :: MyQQ_SDK_╥╫╙∩╤╘_S1/UpdateLog.txt @ 271
+新增API：取群列表（QQ空间接口）
+修复API：非管理员邀请入群
+修复API：取群公告（并且支持获取全部公告）
+新增数据类型：数_群公告，用于取群公告API中
+====================================
+[20210506] 2021年5月6日14:55:33
+新增了api：创建群聊、发起投票_单选、发起群投票_多选
+修改了部分常量的命名
+====================================
+[20210501] 2021年5月1日09:03:04
+新增了api：取群成员列表
+随机气泡已失效
+====================================
+
+===== MyQQ_SDK_易语言_S1.zip :: MyQQ_SDK_╥╫╙∩╤╘_S1/UpdateLog.txt @ 287
+[20210419] 2021年4月19日18:10:01
+新增了api：取QQ等级信息、取QQ等级、置管理员、取搜索群、邀请入群、发表说说、群礼物赠送、Mp3ToAmr
+====================================
+[20210416] 2021年4月16日17:32:08
+修改了模块内部分备注
+新增了全局变量：Text，可使用文本代码：随机表情、图片、秀图、闪照等
+修复了api：取群列表_B->无群主问题
+修复了api：发送消息->气泡ID参数恢复使用
+修改了api：上传语音、上传图片
+修改了api：置好友语音上传等
+====================================
+[20210408] 2021年04月08日14:00:00
+删除了api：取框架日志
+
+===== MyQQ_SDK_易语言_S1.zip :: MyQQ_SDK_╥╫╙∩╤╘_S1/UpdateLog.txt @ 302
+1.修复了api：取群管理、取群聊等级、取群验证方式、置禁言、置群公告、禁用插件自身
+2.删除了api：取QQ等级、取个人签名、取个人说明、取是否在线、取是否允许临时会话、取邮箱、群礼物抽取、群礼物查询、群礼物赠送、邀请入群、置管理员、置修改头像、置修改封面、置群签到
+3.修改了api：置窗口抖动改为戳一戳
+4.新增了api：置全群禁言
+5.新增了事件：#消息类型_某人已被邀请入群
+====================================
+[20210325] 2021年3月25日14:00:00
+首个版本发布
+====================================
+
+===== MyQQ_SDK_易语言_S1.zip :: MyQQ_SDK_╥╫╙∩╤╘_S1/UpdateLog.txt @ 305
+4.新增了api：置全群禁言
+5.新增了事件：#消息类型_某人已被邀请入群
+====================================
+[20210325] 2021年3月25日14:00:00
+首个版本发布
+====================================
+
+===== MyQQ_SDK_易语言_S2.zip :: MyQQ_SDK_╥╫╙∩╤╘_S2/UpdateLog.txt @ 5
+[20220405] 2022年4月5日13:31:49
+【新增】新增API：同意邀请入群请求（Api_HandleGroupMyEvent）
+【新增】新增API：取指定域名Cookies（Api_GetDomainCookies）
+=======================
+[20220112] 2022年1月12日21:38:06
+【修复】修复API：取QQ等级（Api_GetQQLevel）部分情况获取失败问题
+【优化】修改API：11个红包相关的API名称已经改为英文
+=======================
+[20220101] 2022年1月1日16:03:52
+【新增】新增API：删除说说（Api_DelSay）
+【新增】新增API：取插件列表（Api_GetPluginList）
+=======================
+[20211211] 2021年12月11日15:12:41
+
+===== MyQQ_SDK_易语言_S2.zip :: MyQQ_SDK_╥╫╙∩╤╘_S2/UpdateLog.txt @ 178
+4.新增API：取是否允许群成员发起群聊（Api_GetGroupLaunchNew）
+5.新增API：邀请别人群成员Ex，支持多群（Api_InviteGroup_otherEx）
+====================================
+[20210728] 2021年7月28日21:00:59
+新增API：申请加群Ex（Api_JoinGroupEx）
+新增API：取短信详情（Api_GetJoinGroupMsg）
+新增API：提交短信验证（Api_CheckJoinGroupMsg）
+====================================
+[20210724] 2021年7月24日14:05:44
+修复了邀请入群参数写反的问题...卧槽了
+新增API：获取扫码登录QQ号（Api_GetQrQQNumber）
+====================================
+[20210722] 2021年7月22日01:13:24
+
+===== MyQQ_SDK_易语言_S2.zip :: MyQQ_SDK_╥╫╙∩╤╘_S2/UpdateLog.txt @ 181
+[20210728] 2021年7月28日21:00:59
+新增API：申请加群Ex（Api_JoinGroupEx）
+新增API：取短信详情（Api_GetJoinGroupMsg）
+新增API：提交短信验证（Api_CheckJoinGroupMsg）
+====================================
+[20210724] 2021年7月24日14:05:44
+修复了邀请入群参数写反的问题...卧槽了
+新增API：获取扫码登录QQ号（Api_GetQrQQNumber）
+====================================
+[20210722] 2021年7月22日01:13:24
+新增API：关闭群收钱（Api_CloseGroupPay）
+新增API：获取登录二维码（Api_CreatQrCodeInfo）
+新增API：获取二维码登录状态（Api_GetQrCodeStatus）
+
+===== MyQQ_SDK_易语言_S2.zip :: MyQQ_SDK_╥╫╙∩╤╘_S2/UpdateLog.txt @ 182
+新增API：申请加群Ex（Api_JoinGroupEx）
+新增API：取短信详情（Api_GetJoinGroupMsg）
+新增API：提交短信验证（Api_CheckJoinGroupMsg）
+====================================
+[20210724] 2021年7月24日14:05:44
+修复了邀请入群参数写反的问题...卧槽了
+新增API：获取扫码登录QQ号（Api_GetQrQQNumber）
+====================================
+[20210722] 2021年7月22日01:13:24
+新增API：关闭群收钱（Api_CloseGroupPay）
+新增API：获取登录二维码（Api_CreatQrCodeInfo）
+新增API：获取二维码登录状态（Api_GetQrCodeStatus）
+新增API：获取二维码图片路径（Api_GetQrCodePath）
+
+===== MyQQ_SDK_易语言_S2.zip :: MyQQ_SDK_╥╫╙∩╤╘_S2/UpdateLog.txt @ 183
+新增API：取短信详情（Api_GetJoinGroupMsg）
+新增API：提交短信验证（Api_CheckJoinGroupMsg）
+====================================
+[20210724] 2021年7月24日14:05:44
+修复了邀请入群参数写反的问题...卧槽了
+新增API：获取扫码登录QQ号（Api_GetQrQQNumber）
+====================================
+[20210722] 2021年7月22日01:13:24
+新增API：关闭群收钱（Api_CloseGroupPay）
+新增API：获取登录二维码（Api_CreatQrCodeInfo）
+新增API：获取二维码登录状态（Api_GetQrCodeStatus）
+新增API：获取二维码图片路径（Api_GetQrCodePath）
+新增API：取消二维码登录（Api_CloseQrCode）
+
+===== MyQQ_SDK_易语言_S2.zip :: MyQQ_SDK_╥╫╙∩╤╘_S2/UpdateLog.txt @ 186
+[20210724] 2021年7月24日14:05:44
+修复了邀请入群参数写反的问题...卧槽了
+新增API：获取扫码登录QQ号（Api_GetQrQQNumber）
+====================================
+[20210722] 2021年7月22日01:13:24
+新增API：关闭群收钱（Api_CloseGroupPay）
+新增API：获取登录二维码（Api_CreatQrCodeInfo）
+新增API：获取二维码登录状态（Api_GetQrCodeStatus）
+新增API：获取二维码图片路径（Api_GetQrCodePath）
+新增API：取消二维码登录（Api_CloseQrCode）
+====================================
+[20210721] 2021年7月21日10:10:00
+新增API：取屏蔽状态（Api_GetShieldedState）
+
+===== MyQQ_SDK_易语言_S2.zip :: MyQQ_SDK_╥╫╙∩╤╘_S2/UpdateLog.txt @ 241
+对#消息类型_收到财付通转账做了修改，加入了是否已收款状态，具体请看SDK
+对一些API参数中的换行改为了英文逗号，例如邀请多个QQ加群
+新增API：发起群收钱（Api_CreateGroupPay）
+新增API：查询群收钱账单详情（Api_GetGroupPayDetail）
+新增API：群收钱账单是否已支付（Api_GroupPayIsOk）
+新增API：发送群收钱账单催收通知（Api_SendGroupPayMsg）
+新增API：发送好友文件（Api_UpFriendFile）
+新增API：置群名称（Api_SetGroupName）
+====================================
+[20210705] 2021年7月5日20:44:41
+新增API：取群成员信息（Api_GetGroupMemberInfo）
+====================================
+[20210628] 2021年6月28日17:04:01
+
+===== MyQQ_SDK_易语言_S2.zip :: MyQQ_SDK_╥╫╙∩╤╘_S2/UpdateLog.txt @ 263
+[20210613] 2021年6月13日14:00:00
+新增API：邀请别人群成员（Api_InviteGroup_other）
+====================================
+[20210613] 2021年6月13日12:00:00
+新增API：取是否支持匿名
+发送消息（Api_SendMsgEx）支持匿名发送了
+====================================
+[20210606] 2021年6月6日23:40:07
+新增API：取群列表（QQ空间接口）
+修复API：非管理员邀请入群
+修复API：取群公告（并且支持获取全部公告）
+新增数据类型：数_群公告，用于取群公告API中
+====================================
+
+===== MyQQ_SDK_易语言_S2.zip :: MyQQ_SDK_╥╫╙∩╤╘_S2/UpdateLog.txt @ 271
+新增API：取群列表（QQ空间接口）
+修复API：非管理员邀请入群
+修复API：取群公告（并且支持获取全部公告）
+新增数据类型：数_群公告，用于取群公告API中
+====================================
+[20210506] 2021年5月6日14:55:33
+新增了api：创建群聊、发起投票_单选、发起群投票_多选
+修改了部分常量的命名
+====================================
+[20210501] 2021年5月1日09:03:04
+新增了api：取群成员列表
+随机气泡已失效
+====================================
+
+===== MyQQ_SDK_易语言_S2.zip :: MyQQ_SDK_╥╫╙∩╤╘_S2/UpdateLog.txt @ 287
+[20210419] 2021年4月19日18:10:01
+新增了api：取QQ等级信息、取QQ等级、置管理员、取搜索群、邀请入群、发表说说、群礼物赠送、Mp3ToAmr
+====================================
+[20210416] 2021年4月16日17:32:08
+修改了模块内部分备注
+新增了全局变量：Text，可使用文本代码：随机表情、图片、秀图、闪照等
+修复了api：取群列表_B->无群主问题
+修复了api：发送消息->气泡ID参数恢复使用
+修改了api：上传语音、上传图片
+修改了api：置好友语音上传等
+====================================
+[20210408] 2021年04月08日14:00:00
+删除了api：取框架日志
+
+===== MyQQ_SDK_易语言_S2.zip :: MyQQ_SDK_╥╫╙∩╤╘_S2/UpdateLog.txt @ 302
+1.修复了api：取群管理、取群聊等级、取群验证方式、置禁言、置群公告、禁用插件自身
+2.删除了api：取QQ等级、取个人签名、取个人说明、取是否在线、取是否允许临时会话、取邮箱、群礼物抽取、群礼物查询、群礼物赠送、邀请入群、置管理员、置修改头像、置修改封面、置群签到
+3.修改了api：置窗口抖动改为戳一戳
+4.新增了api：置全群禁言
+5.新增了事件：#消息类型_某人已被邀请入群
+====================================
+[20210325] 2021年3月25日14:00:00
+首个版本发布
+====================================
+
+===== MyQQ_SDK_易语言_S2.zip :: MyQQ_SDK_╥╫╙∩╤╘_S2/UpdateLog.txt @ 305
+4.新增了api：置全群禁言
+5.新增了事件：#消息类型_某人已被邀请入群
+====================================
+[20210325] 2021年3月25日14:00:00
+首个版本发布
+====================================
