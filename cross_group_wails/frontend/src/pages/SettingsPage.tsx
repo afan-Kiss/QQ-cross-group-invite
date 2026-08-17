@@ -25,6 +25,7 @@ export function SettingsPage() {
 
   const save = async () => {
     persistSettings(settings);
+    if (settings.napcatWebuiToken) update({ napcatWebuiToken: "" });
     setConfig({
       batch_count: settings.defaultBatchCount,
       interval_ms: settings.defaultIntervalMs,
@@ -46,9 +47,9 @@ export function SettingsPage() {
           auto_clean_logs: settings.autoCleanLogs,
         } as never);
       }
-      toast("success", "ÉèÖÃÒÑ±£´æ");
+      toast("success", "è®¾ç½®å·²ä¿å­˜");
     } catch (e) {
-      toast("error", e instanceof Error ? e.message : "±£´æÊ§°Ü");
+      toast("error", e instanceof Error ? e.message : "ä¿å­˜å¤±è´¥");
     }
   };
 
@@ -61,13 +62,13 @@ export function SettingsPage() {
       const health = await wailsBridge.probeHealth().catch(() => null);
       setDiag([
         {
-          label: "±¾µØ·şÎñ",
-          value: health?.localService === "ready" ? "Õı³£" : health?.message || "Òì³£",
+          label: "æœ¬åœ°æœåŠ¡",
+          value: health?.localService === "ready" ? "æ­£å¸¸" : health?.message || "å¼‚å¸¸",
           ok: health?.localService === "ready",
         },
-        { label: "17888", value: health?.localService === "ready" ? "Õı³£" : "Òì³£", ok: health?.localService === "ready" },
-        { label: "NapCat", value: health?.napcatOnline ? "ÔÚÏß" : "ÀëÏß", ok: !!health?.napcatOnline },
-        { label: "·şÎñµØÖ·", value: "127.0.0.1:17888£¨ÄÚÖÃ·şÎñ£©", ok: true },
+        { label: "17888", value: health?.localService === "ready" ? "æ­£å¸¸" : "å¼‚å¸¸", ok: health?.localService === "ready" },
+        { label: "NapCat", value: health?.napcatOnline ? "åœ¨çº¿" : "ç¦»çº¿", ok: !!health?.napcatOnline },
+        { label: "æœåŠ¡åœ°å€", value: "127.0.0.1:17888ï¼ˆå†…ç½®æœåŠ¡ï¼‰", ok: true },
       ]);
     } finally {
       setDiagnosing(false);
@@ -83,9 +84,9 @@ export function SettingsPage() {
         napcat_webui_token: settings.napcatWebuiToken,
       } as never);
       await api.testConnection();
-      toast("success", "Á¬½Ó²âÊÔ³É¹¦");
+      toast("success", "è¿æ¥æµ‹è¯•æˆåŠŸ");
     } catch (e) {
-      toast("error", e instanceof Error ? e.message : "Á¬½Ó²âÊÔÊ§°Ü");
+      toast("error", e instanceof Error ? e.message : "è¿æ¥æµ‹è¯•å¤±è´¥");
     } finally {
       setTesting(false);
     }
@@ -94,76 +95,76 @@ export function SettingsPage() {
   return (
     <div className="flex h-full min-h-0 flex-col gap-4 overflow-auto">
       <div>
-        <h2 className="text-[20px] font-semibold text-[#242824]">ÏµÍ³ÉèÖÃ</h2>
+        <h2 className="text-[20px] font-semibold text-[#242824]">ç³»ç»Ÿè®¾ç½®</h2>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <SettingCard title="»ù´¡ÉèÖÃ">
-          <Field label="Ä¬ÈÏÅúÁ¿ÈËÊı" value={settings.defaultBatchCount} onChange={(v) => update({ defaultBatchCount: v })} />
-          <Field label="Ä¬ÈÏÑûÇë¼ä¸ô(ms)" value={settings.defaultIntervalMs} onChange={(v) => update({ defaultIntervalMs: v })} />
-          <Toggle label="Ä¬ÈÏ¹ıÂËÈºÖ÷/¹ÜÀíÔ±" checked={settings.defaultFilterStaff} onChange={(v) => update({ defaultFilterStaff: v })} />
-          <Toggle label="Æô¶¯ºó×Ô¶¯Á¬½Ó·şÎñ" checked={settings.autoConnectOnStart} onChange={(v) => update({ autoConnectOnStart: v })} />
+        <SettingCard title="åŸºç¡€è®¾ç½®">
+          <Field label="é»˜è®¤æ‰¹é‡äººæ•°" value={settings.defaultBatchCount} onChange={(v) => update({ defaultBatchCount: v })} />
+          <Field label="é»˜è®¤é‚€è¯·é—´éš”(ms)" value={settings.defaultIntervalMs} onChange={(v) => update({ defaultIntervalMs: v })} />
+          <Toggle label="é»˜è®¤è¿‡æ»¤ç¾¤ä¸»/ç®¡ç†å‘˜" checked={settings.defaultFilterStaff} onChange={(v) => update({ defaultFilterStaff: v })} />
+          <Toggle label="å¯åŠ¨åè‡ªåŠ¨è¿æ¥æœåŠ¡" checked={settings.autoConnectOnStart} onChange={(v) => update({ autoConnectOnStart: v })} />
           {!settings.autoConnectOnStart && (
             <button
               type="button"
               className="mt-2 rounded-[10px] bg-primary px-4 py-2 text-[13px] text-white"
               onClick={() => void ensureBackend()}
             >
-              Á¬½Ó·şÎñ
+              è¿æ¥æœåŠ¡
             </button>
           )}
         </SettingCard>
 
-        <SettingCard title="½çÃæÉèÖÃ">
+        <SettingCard title="ç•Œé¢è®¾ç½®">
           <SelectField
-            label="Ö÷Ìâ"
+            label="ä¸»é¢˜"
             value={settings.theme}
             options={[
-              { v: "light", l: "Ç³É«" },
-              { v: "system", l: "¸úËæÏµÍ³" },
+              { v: "light", l: "æµ…è‰²" },
+              { v: "system", l: "è·Ÿéšç³»ç»Ÿ" },
             ]}
             onChange={(v) => update({ theme: v as "light" | "system" })}
           />
           <SelectField
-            label="½çÃæËõ·Å"
+            label="ç•Œé¢ç¼©æ”¾"
             value={settings.uiScale}
             options={["90", "100", "110", "125"].map((v) => ({ v, l: `${v}%` }))}
             onChange={(v) => update({ uiScale: v })}
           />
-          <Toggle label="¶¯»­Ğ§¹û" checked={settings.animations} onChange={(v) => update({ animations: v })} />
-          <Toggle label="½ô´Õ±í¸ñ" checked={settings.compactTable} onChange={(v) => update({ compactTable: v })} />
+          <Toggle label="åŠ¨ç”»æ•ˆæœ" checked={settings.animations} onChange={(v) => update({ animations: v })} />
+          <Toggle label="ç´§å‡‘è¡¨æ ¼" checked={settings.compactTable} onChange={(v) => update({ compactTable: v })} />
         </SettingCard>
 
-        <SettingCard title="ÈÕÖ¾ÉèÖÃ">
+        <SettingCard title="æ—¥å¿—è®¾ç½®">
           <SelectField
-            label="ÈÕÖ¾¼¶±ğ"
+            label="æ—¥å¿—çº§åˆ«"
             value={settings.logLevel}
             options={["INFO", "WARN", "ERROR"].map((l) => ({ v: l, l }))}
             onChange={(v) => update({ logLevel: v })}
           />
-          <Field label="×î´óÈÕÖ¾ÎÄ¼ş(MB)" value={settings.maxLogFileSize} onChange={(v) => update({ maxLogFileSize: v })} />
-          <Field label="±£ÁôÌìÊı" value={settings.logRetentionDays} onChange={(v) => update({ logRetentionDays: v })} />
-          <Toggle label="×Ô¶¯ÇåÀí" checked={settings.autoCleanLogs} onChange={(v) => update({ autoCleanLogs: v })} />
-          <p className="text-[12px] text-muted-foreground">ÈÕÖ¾Ïà¹ØÉèÖÃÏÂ´ÎÆô¶¯ sidecar ºóÉúĞ§</p>
+          <Field label="æœ€å¤§æ—¥å¿—æ–‡ä»¶(MB)" value={settings.maxLogFileSize} onChange={(v) => update({ maxLogFileSize: v })} />
+          <Field label="ä¿ç•™å¤©æ•°" value={settings.logRetentionDays} onChange={(v) => update({ logRetentionDays: v })} />
+          <Toggle label="è‡ªåŠ¨æ¸…ç†" checked={settings.autoCleanLogs} onChange={(v) => update({ autoCleanLogs: v })} />
+          <p className="text-[12px] text-muted-foreground">æ—¥å¿—ç›¸å…³è®¾ç½®ä¸‹æ¬¡å¯åŠ¨ sidecar åç”Ÿæ•ˆ</p>
         </SettingCard>
 
-        <SettingCard title="Á¬½ÓÉèÖÃ">
+        <SettingCard title="è¿æ¥è®¾ç½®">
           <div className="text-[13px]">
-            <span className="text-muted-foreground">±¾µØ·şÎñµØÖ·</span>
-            <p className="mt-1 font-mono">127.0.0.1:17888£¨ÄÚÖÃ·şÎñ£©</p>
+            <span className="text-muted-foreground">æœ¬åœ°æœåŠ¡åœ°å€</span>
+            <p className="mt-1 font-mono">127.0.0.1:17888ï¼ˆå†…ç½®æœåŠ¡ï¼‰</p>
           </div>
           <div className="text-[13px]">
-            <span className="text-muted-foreground">NapCat ×´Ì¬</span>
-            <p className="mt-1">{napcatOnline ? "ÔÚÏß" : "ÀëÏß"} ¡¤ ±¾µØ·şÎñ {localService}</p>
+            <span className="text-muted-foreground">NapCat çŠ¶æ€</span>
+            <p className="mt-1">{napcatOnline ? "åœ¨çº¿" : "ç¦»çº¿"} Â· æœ¬åœ°æœåŠ¡ {localService}</p>
           </div>
-          <Field label="OneBot µØÖ·" value={settings.onebotUrl} onChange={(v) => update({ onebotUrl: v })} />
+          <Field label="OneBot åœ°å€" value={settings.onebotUrl} onChange={(v) => update({ onebotUrl: v })} />
           <div className="text-[13px]">
             <span className="text-muted-foreground">NapCat WebUI Token</span>
             <input
               type="password"
               value={settings.napcatWebuiToken}
               onChange={(e) => update({ napcatWebuiToken: e.target.value })}
-              placeholder="Áô¿Õ±íÊ¾²»ĞŞ¸ÄÒÑ±£´æ Token"
+              placeholder="ç•™ç©ºè¡¨ç¤ºä¸ä¿®æ”¹å·²ä¿å­˜ Token"
               className="mt-1 w-full rounded-[8px] border border-border px-3 py-2 text-[13px] outline-none focus:border-primary"
             />
           </div>
@@ -174,14 +175,14 @@ export function SettingsPage() {
             className="mt-2 flex items-center gap-2 rounded-[10px] border border-border px-4 py-2 text-[13px] hover:bg-[#f7faf5] disabled:opacity-50"
           >
             {testing && <Loader2 className="h-4 w-4 animate-spin" />}
-            ²âÊÔÁ¬½Ó
+            æµ‹è¯•è¿æ¥
           </button>
         </SettingCard>
       </div>
 
       <div className="rounded-[16px] border border-border bg-white p-5 shadow-[var(--shadow-card)]">
         <div className="flex items-center justify-between">
-          <h3 className="text-[15px] font-semibold">ÔËĞĞÕï¶Ï</h3>
+          <h3 className="text-[15px] font-semibold">è¿è¡Œè¯Šæ–­</h3>
           <div className="flex gap-2">
             <button
               type="button"
@@ -190,7 +191,7 @@ export function SettingsPage() {
               className="flex items-center gap-2 rounded-[10px] bg-primary px-4 py-2 text-[13px] text-white hover:bg-primary-hover disabled:opacity-60"
             >
               {diagnosing && <Loader2 className="h-4 w-4 animate-spin" />}
-              ÔËĞĞÕï¶Ï
+              è¿è¡Œè¯Šæ–­
             </button>
             {diag && (
               <button
@@ -200,10 +201,10 @@ export function SettingsPage() {
                   await navigator.clipboard.writeText(
                     diag.map((d) => `${d.label}: ${d.value}`).join("\n"),
                   );
-                  toast("success", "Õï¶Ï½á¹ûÒÑ¸´ÖÆ");
+                  toast("success", "è¯Šæ–­ç»“æœå·²å¤åˆ¶");
                 }}
               >
-                ¸´ÖÆÕï¶Ï½á¹û
+                å¤åˆ¶è¯Šæ–­ç»“æœ
               </button>
             )}
           </div>
@@ -228,7 +229,7 @@ export function SettingsPage() {
           onClick={() => void save()}
           className="rounded-[10px] bg-primary px-5 py-2.5 text-[14px] font-medium text-white hover:bg-primary-hover"
         >
-          ±£´æÉèÖÃ
+          ä¿å­˜è®¾ç½®
         </button>
       </div>
     </div>

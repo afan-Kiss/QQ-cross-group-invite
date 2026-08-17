@@ -16,6 +16,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 from cross_group_batch import (
+    TaskIdMismatch,
     clear_failed,
     clear_logs,
     clear_rate_limits,
@@ -25,6 +26,7 @@ from cross_group_batch import (
     get_task,
     list_tasks,
     load_source_members,
+    recover_stale_tasks,
     start_batch,
     stop_batch,
 )
@@ -38,26 +40,37 @@ SERVICE_VERSION = "1.0.0"
 HOST = "127.0.0.1"
 
 SESSION_ID = ""
+SESSION_REQUIRED = False
 _server: ThreadingHTTPServer | None = None
 logger = setup_service_logger()
 
 ALLOWED_ORIGINS = {
     "http://wails.localhost",
-    "http://wails.localhost:34115",
     "https://wails.localhost",
-    "http://localhost:34115",
-    "http://127.0.0.1:34115",
-    "null",
+    "http://wails.localhost:34115",
     "",
 }
+
+MUTATING_PATHS = frozenset(
+    {
+        "/config",
+        "/members/load",
+        "/invite/start",
+        "/invite/stop",
+        "/state/clear-logs",
+        "/state/clear-failed",
+        "/state/clear-rate-limits",
+        "/state/clear",
+        "/test-connection",
+        "/shutdown",
+    }
+)
 
 
 def _cors_headers(handler: BaseHTTPRequestHandler) -> dict[str, str]:
     origin = handler.headers.get("Origin") or ""
-    if origin in ALLOWED_ORIGINS or origin.startswith("http://wails.") or origin.startswith("https://wails."):
-        allow = origin if origin else "null"
-    elif not origin:
-        allow = "null"
+    if origin in ALLOWED_ORIGINS:
+        allow = origin
     else:
         allow = "http://wails.localhost"
     return {
@@ -110,13 +123,15 @@ def _file_response(handler: BaseHTTPRequestHandler, path: Path) -> bool:
 
 
 def _check_session(handler: BaseHTTPRequestHandler, required: bool = True) -> tuple[int, dict[str, Any]] | None:
+    header = handler.headers.get("X-App-Session") or ""
     if not SESSION_ID:
         return None
-    header = handler.headers.get("X-App-Session") or ""
     if header == SESSION_ID:
         return None
     if not required:
-        return None
+        # When ownership is optional: only reject if a wrong header was sent.
+        if not header:
+            return None
     return _error("UNAUTHORIZED", "会话校验失败，拒绝操作", 403)
 
 
@@ -127,6 +142,8 @@ def build_health_payload() -> dict[str, Any]:
         "service": SERVICE_ID,
         "version": SERVICE_VERSION,
         "session_id": SESSION_ID,
+        "session_required": SESSION_REQUIRED,
+        "owned": SESSION_REQUIRED,
         "pid": os.getpid(),
         "napcat_online": napcat_online,
         "napcat_message": napcat_message,
@@ -240,19 +257,26 @@ class Handler(BaseHTTPRequestHandler):
         path = urlparse(self.path).path
         data = self._read_json()
         try:
-            # Strict ownership only for shutdown; other writes optionally validate if header present.
             if path == "/shutdown":
-                denied = _check_session(self, required=True)
+                # Always validate when header present; require match when owned.
+                denied = _check_session(self, required=SESSION_REQUIRED)
                 if denied is not None:
                     code, body = denied
                     _json_response(self, code, body)
                     return
-            elif self.headers.get("X-App-Session"):
-                denied = _check_session(self, required=True)
-                if denied is not None:
-                    code, body = denied
-                    _json_response(self, code, body)
-                    return
+            elif path in MUTATING_PATHS:
+                if SESSION_REQUIRED:
+                    denied = _check_session(self, required=True)
+                    if denied is not None:
+                        code, body = denied
+                        _json_response(self, code, body)
+                        return
+                elif self.headers.get("X-App-Session"):
+                    denied = _check_session(self, required=True)
+                    if denied is not None:
+                        code, body = denied
+                        _json_response(self, code, body)
+                        return
 
             if path == "/config":
                 cfg = load_cfg()
@@ -349,6 +373,11 @@ class Handler(BaseHTTPRequestHandler):
                 return
 
             if path == "/invite/stop":
+                req_tid = data.get("task_id")
+                if req_tid is not None and req_tid != "":
+                    req_tid = str(req_tid)
+                else:
+                    req_tid = None
                 state = get_state()
                 if not state.get("running") and state.get("status") not in (
                     "preparing",
@@ -358,7 +387,16 @@ class Handler(BaseHTTPRequestHandler):
                     code, body = _error("TASK_NOT_RUNNING", "当前没有运行中的任务")
                     _json_response(self, code, body)
                     return
-                stop_batch()
+                try:
+                    stop_batch(task_id=req_tid)
+                except TaskIdMismatch:
+                    code, body = _error(
+                        "TASK_MISMATCH",
+                        "task_id 与当前运行任务不匹配",
+                    )
+                    body["ok"] = False
+                    _json_response(self, code, body)
+                    return
                 code, body = _ok()
                 _json_response(self, code, body)
                 return
@@ -469,8 +507,13 @@ def _start_parent_watchdog(parent_pid: int) -> None:
 
 
 def main(open_browser: bool = False, session_id: str = "", parent_pid: int = 0) -> None:
-    global SESSION_ID, _server, logger
-    SESSION_ID = session_id or str(uuid.uuid4())
+    global SESSION_ID, SESSION_REQUIRED, _server, logger
+    if session_id:
+        SESSION_ID = session_id
+        SESSION_REQUIRED = True
+    else:
+        SESSION_ID = str(uuid.uuid4())
+        SESSION_REQUIRED = False
     cfg = load_cfg()
     log_level = str(cfg.get("log_level") or "INFO")
     max_mb = int(cfg.get("max_log_file_mb") or 5)
@@ -481,13 +524,18 @@ def main(open_browser: bool = False, session_id: str = "", parent_pid: int = 0) 
         backup_count=max(1, retention),
     )
 
+    recovered = recover_stale_tasks()
+    if recovered:
+        logger.info("recovered %s stale task(s) as interrupted", recovered)
+
     _server = ThreadingHTTPServer((HOST, PORT), Handler)
     url = f"http://{HOST}:{PORT}/"
     logger.info(
-        "cross-group service started at %s (service=%s session=%s pid=%s parent=%s)",
+        "cross-group service started at %s (service=%s session=%s session_required=%s pid=%s parent=%s)",
         url,
         SERVICE_ID,
         SESSION_ID,
+        SESSION_REQUIRED,
         os.getpid(),
         parent_pid or "-",
     )

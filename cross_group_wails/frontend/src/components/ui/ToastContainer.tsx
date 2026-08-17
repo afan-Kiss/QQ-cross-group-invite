@@ -29,7 +29,7 @@ export function ToastContainer() {
             type="button"
             onClick={() => remove(t.id)}
             className="text-muted-foreground hover:text-[#242824]"
-            aria-label="¹Ø±Õ"
+            aria-label="å…³é—­"
           >
             <X className="h-4 w-4" />
           </button>

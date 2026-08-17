@@ -4,6 +4,8 @@ import { useLogStore } from "@/store/useLogStore";
 import { useInviteStore } from "@/store/useInviteStore";
 import { useServiceStore } from "@/store/useServiceStore";
 import { cn } from "@/lib/utils";
+import { wailsBridge } from "@/lib/wails-bridge";
+import { toast } from "@/store/useToastStore";
 
 const levelColors = {
   INFO: "bg-[#eef4fc] text-[#5c8fd8]",
@@ -28,21 +30,24 @@ export function LogsPage() {
     return true;
   });
 
-  const exportLogs = () => {
+  const exportLogs = async () => {
     const text = filtered.map((e) => `${e.time} [${e.level}] ${e.module} ${e.message}`).join("\n");
-    const blob = new Blob([text], { type: "text/plain" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `logs-${Date.now()}.txt`;
-    a.click();
-    URL.revokeObjectURL(url);
+    try {
+      const path = await wailsBridge.exportLogs(text);
+      if (!path) {
+        toast("info", "å·²å–æ¶ˆå¯¼å‡º");
+        return;
+      }
+      toast("success", `æ—¥å¿—å·²ä¿å­˜ï¼š${path}`);
+    } catch (e) {
+      toast("error", e instanceof Error ? e.message : "å¯¼å‡ºå¤±è´¥");
+    }
   };
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-4">
       <div>
-        <h2 className="text-[20px] font-semibold text-[#242824]">ÔËĞĞÈÕÖ¾</h2>
+        <h2 className="text-[20px] font-semibold text-[#242824]">è¿è¡Œæ—¥å¿—</h2>
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -56,12 +61,12 @@ export function LogsPage() {
               filter === f ? "bg-primary text-white" : "bg-white border border-border text-muted-foreground hover:bg-[#f7faf5]",
             )}
           >
-            {f === "all" ? "È«²¿" : f}
+            {f === "all" ? "å…¨éƒ¨" : f}
           </button>
         ))}
         <input
           type="text"
-          placeholder="ËÑË÷ÈÕÖ¾"
+          placeholder="æœç´¢æ—¥å¿—"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="rounded-[8px] border border-border px-3 py-1.5 text-[13px] outline-none focus:border-primary"
@@ -74,23 +79,23 @@ export function LogsPage() {
             autoScroll ? "border-primary text-primary" : "border-border text-muted-foreground",
           )}
         >
-          ×Ô¶¯¹ö¶¯
+          è‡ªåŠ¨æ»šåŠ¨
         </button>
         <button
           type="button"
           onClick={() => {
-            if (window.confirm("È·¶¨Çå¿ÕÈÕÖ¾£¿")) clearLogs();
+            if (window.confirm("ç¡®å®šæ¸…ç©ºæ—¥å¿—ï¼Ÿ")) void clearLogs();
           }}
           className="flex items-center gap-1 rounded-[8px] border border-border px-3 py-1.5 text-[12px] text-muted-foreground hover:bg-[#f7faf5]"
         >
-          <Trash2 className="h-3.5 w-3.5" /> Çå¿Õ
+          <Trash2 className="h-3.5 w-3.5" /> æ¸…ç©º
         </button>
         <button
           type="button"
-          onClick={exportLogs}
+          onClick={() => void exportLogs()}
           className="flex items-center gap-1 rounded-[8px] border border-border px-3 py-1.5 text-[12px] text-muted-foreground hover:bg-[#f7faf5]"
         >
-          <Download className="h-3.5 w-3.5" /> µ¼³ö
+          <Download className="h-3.5 w-3.5" /> å¯¼å‡º
         </button>
       </div>
 
@@ -99,13 +104,13 @@ export function LogsPage() {
           {filtered.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center py-12 text-muted-foreground">
               <FileText className="mb-2 h-8 w-8 opacity-40" />
-              <p>ÔİÎŞÈÕÖ¾</p>
+              <p>æš‚æ— æ—¥å¿—</p>
             </div>
           ) : (
             filtered.map((e) => (
               <div key={e.id} className="flex gap-3 border-b border-border/50 py-2 last:border-0">
                 <span className="shrink-0 text-muted-foreground">{e.time}</span>
-                <span className={cn("shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium", levelColors[e.level])}>
+                <span className={cn("shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium", levelColors[e.level as keyof typeof levelColors])}>
                   {e.level}
                 </span>
                 <span className="shrink-0 text-[#5c8fd8]">[{e.module}]</span>
@@ -116,28 +121,28 @@ export function LogsPage() {
         </div>
 
         <div className="rounded-[16px] border border-border bg-white p-4 shadow-[var(--shadow-card)]">
-          <h3 className="mb-3 text-[14px] font-semibold">ÊµÊ±×´Ì¬</h3>
+          <h3 className="mb-3 text-[14px] font-semibold">å®æ—¶çŠ¶æ€</h3>
           <ul className="space-y-2 text-[13px]">
             <li className="flex justify-between">
-              <span className="text-muted-foreground">±¾µØ·şÎñ</span>
+              <span className="text-muted-foreground">æœ¬åœ°æœåŠ¡</span>
               <span className={localService === "ready" ? "text-primary" : "text-danger"}>
-                {localService === "ready" ? "Õı³£" : "Òì³£"}
+                {localService === "ready" ? "æ­£å¸¸" : localService === "manual" ? "æ‰‹åŠ¨" : "å¼‚å¸¸"}
               </span>
             </li>
             <li className="flex justify-between">
               <span className="text-muted-foreground">NapCat</span>
               <span className={napcatOnline ? "text-primary" : "text-warning"}>
-                {napcatOnline ? "ÔÚÏß" : "ÀëÏß"}
+                {napcatOnline ? "åœ¨çº¿" : "ç¦»çº¿"}
               </span>
             </li>
             <li className="flex justify-between">
-              <span className="text-muted-foreground">ÈÕÖ¾ÌõÊı</span>
+              <span className="text-muted-foreground">æ—¥å¿—æ¡æ•°</span>
               <span>{entries.length}</span>
             </li>
             <li className="flex justify-between">
-              <span className="text-muted-foreground">×î½ü´íÎó</span>
+              <span className="text-muted-foreground">æœ€è¿‘é”™è¯¯</span>
               <span className="text-danger truncate max-w-[120px]">
-                {entries.find((e) => e.level === "ERROR")?.message ?? "¡ª"}
+                {entries.find((e) => e.level === "ERROR")?.message ?? "â€”"}
               </span>
             </li>
           </ul>

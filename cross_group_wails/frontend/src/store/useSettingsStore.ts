@@ -38,11 +38,13 @@ const defaults: AppSettings = {
 
 interface SettingsStore {
   settings: AppSettings;
+  hydrated: boolean;
   update: (patch: Partial<AppSettings>) => void;
   load: () => void;
 }
 
 function applyUiSettings(settings: AppSettings) {
+  if (typeof document === "undefined" || typeof window === "undefined") return;
   const root = document.documentElement;
   const scale = Number(settings.uiScale) || 100;
   root.style.fontSize = `${(16 * scale) / 100}px`;
@@ -55,8 +57,13 @@ function applyUiSettings(settings: AppSettings) {
   root.classList.toggle("theme-light", !dark);
 }
 
+function stripToken(settings: AppSettings): AppSettings {
+  return { ...settings, napcatWebuiToken: "" };
+}
+
 export const useSettingsStore = create<SettingsStore>((set) => ({
   settings: { ...defaults },
+  hydrated: false,
   update: (patch) =>
     set((s) => {
       const settings = { ...s.settings, ...patch };
@@ -68,26 +75,27 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
       const raw = localStorage.getItem("qq-cross-group-settings");
       if (raw) {
         const parsed = { ...defaults, ...JSON.parse(raw) } as AppSettings;
-        // migrate old keys
         const legacy = parsed as AppSettings & { onebotPort?: string; onebotPassword?: string };
         if (!parsed.onebotUrl && legacy.onebotPort) {
           parsed.onebotUrl = `http://127.0.0.1:${legacy.onebotPort}`;
         }
-        if (!parsed.napcatWebuiToken && legacy.onebotPassword) {
-          parsed.napcatWebuiToken = legacy.onebotPassword;
-        }
+        // Never keep token in localStorage (migrate away legacy copies).
+        parsed.napcatWebuiToken = "";
         applyUiSettings(parsed);
-        set({ settings: parsed });
+        localStorage.setItem("qq-cross-group-settings", JSON.stringify(stripToken(parsed)));
+        set({ settings: parsed, hydrated: true });
         return;
       }
     } catch {
       /* ignore */
     }
     applyUiSettings(defaults);
+    set({ hydrated: true });
   },
 }));
 
 export function persistSettings(settings: AppSettings) {
-  localStorage.setItem("qq-cross-group-settings", JSON.stringify(settings));
+  const safe = stripToken(settings);
+  localStorage.setItem("qq-cross-group-settings", JSON.stringify(safe));
   applyUiSettings(settings);
 }

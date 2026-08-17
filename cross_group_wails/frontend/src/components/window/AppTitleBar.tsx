@@ -1,13 +1,9 @@
 import { Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { WindowControls } from "./WindowControls";
-import { WindowToggleMaximise } from "../../../wailsjs/runtime/runtime";
+import { toggleMaximized } from "@/lib/window-state";
 
 export function AppTitleBar() {
-  const handleDoubleClick = () => {
-    void WindowToggleMaximise();
-  };
-
   return (
     <header
       className={cn(
@@ -15,7 +11,7 @@ export function AppTitleBar() {
         "bg-white/72 backdrop-blur-xl backdrop-saturate-150",
       )}
       style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
-      onDoubleClick={handleDoubleClick}
+      onDoubleClick={() => void toggleMaximized()}
     >
       <div className="flex items-center gap-3">
         <div className="flex h-8 w-8 items-center justify-center rounded-[10px] bg-primary text-white shadow-sm">

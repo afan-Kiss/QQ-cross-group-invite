@@ -320,27 +320,32 @@ export function MemberTable() {
             <ChevronLeft className="h-4 w-4" />
           </Button>
           <div className="flex items-center gap-1">
-            {Array.from({ length: Math.min(5, table.getPageCount()) }, (_, i) => {
-              const page = i + 1;
-              return (
-                <button
-                  key={page}
-                  type="button"
-                  onClick={() => table.setPageIndex(page - 1)}
-                  className={cn(
-                    "flex h-8 min-w-8 items-center justify-center rounded-[8px] px-2 text-[13px] transition-colors duration-150",
-                    table.getState().pagination.pageIndex === page - 1
-                      ? "bg-primary text-white"
-                      : "text-muted-foreground hover:bg-[#eef1eb]",
-                  )}
-                >
-                  {page}
-                </button>
-              );
-            })}
-            {table.getPageCount() > 5 && (
-              <span className="px-1 text-muted-foreground">… {table.getPageCount()}</span>
-            )}
+            {(() => {
+              const pageCount = table.getPageCount();
+              const current = table.getState().pagination.pageIndex;
+              const windowSize = 5;
+              let start = Math.max(0, current - Math.floor(windowSize / 2));
+              let end = Math.min(pageCount, start + windowSize);
+              start = Math.max(0, end - windowSize);
+              return Array.from({ length: Math.max(0, end - start) }, (_, i) => {
+                const page = start + i + 1;
+                return (
+                  <button
+                    key={page}
+                    type="button"
+                    onClick={() => table.setPageIndex(page - 1)}
+                    className={cn(
+                      "flex h-8 min-w-8 items-center justify-center rounded-[8px] px-2 text-[13px] transition-colors duration-150",
+                      current === page - 1
+                        ? "bg-primary text-white"
+                        : "text-muted-foreground hover:bg-[#eef1eb]",
+                    )}
+                  >
+                    {page}
+                  </button>
+                );
+              });
+            })()}
           </div>
           <Button
             variant="ghost"

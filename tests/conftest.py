@@ -32,9 +32,9 @@ def _reset_engine() -> None:
 
     with cgb._state_lock:
         cgb._state = BatchState()
-        cgb._members_cache = []
-        cgb._members_cache_key = None
         cgb._owned_task_id = None
+    with cgb._members_lock:
+        cgb._members_snapshot = None
 
 
 @pytest.fixture(autouse=True)

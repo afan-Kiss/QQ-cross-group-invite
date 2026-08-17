@@ -11,6 +11,7 @@ export function useBootstrap() {
   const loadConfig = useInviteStore((s) => s.loadConfig);
   const loadTasks = useInviteStore((s) => s.loadTasks);
   const autoConnect = useSettingsStore((s) => s.settings.autoConnectOnStart);
+  const hydrated = useSettingsStore((s) => s.hydrated);
   const loadSettings = useSettingsStore((s) => s.load);
   const healthInFlight = useRef(false);
 
@@ -19,22 +20,24 @@ export function useBootstrap() {
   }, [loadSettings]);
 
   useEffect(() => {
+    if (!hydrated) return;
     if (!autoConnect) {
       useServiceStore.setState({
-        localService: "error",
-        message: "已关闭自动连接，请点击连接服务",
-        bootstrapped: false,
+        localService: "manual",
+        message: "已关闭自动连接，可在设置中手动连接服务",
+        bootstrapped: true,
       });
       return;
     }
     void ensureBackend();
-  }, [ensureBackend, autoConnect]);
+  }, [ensureBackend, autoConnect, hydrated]);
 
   useEffect(() => {
     if (!bootstrapped) return;
+    if (localService !== "ready") return;
     void loadConfig();
     void loadTasks();
-  }, [bootstrapped, loadConfig, loadTasks]);
+  }, [bootstrapped, localService, loadConfig, loadTasks]);
 
   useEffect(() => {
     if (localService !== "ready") return;

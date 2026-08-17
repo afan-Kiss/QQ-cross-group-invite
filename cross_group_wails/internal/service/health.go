@@ -10,11 +10,13 @@ import (
 	"time"
 )
 
-const (
+const ServiceID = "cross-group-invite"
+
+// Overridable in tests via httptest.Server.
+var (
 	HealthURL   = "http://127.0.0.1:17888/health"
 	StopURL     = "http://127.0.0.1:17888/invite/stop"
 	ShutdownURL = "http://127.0.0.1:17888/shutdown"
-	ServiceID   = "cross-group-invite"
 )
 
 type healthPayload struct {
@@ -120,10 +122,19 @@ func ClassifyHealthBody(body []byte) HealthResult {
 	}
 }
 
-// PostStopInvite stops the invite batch. Prefer owning-session checks before calling.
-func PostStopInvite() {
+// PostStopInvite stops the invite batch. Requires X-App-Session; empty session skips.
+func PostStopInvite(sessionID string) {
+	if strings.TrimSpace(sessionID) == "" {
+		return
+	}
 	client := &http.Client{Timeout: 2 * time.Second}
-	resp, err := client.Post(StopURL, "application/json", bytes.NewBufferString("{}"))
+	req, err := http.NewRequest(http.MethodPost, StopURL, bytes.NewBufferString("{}"))
+	if err != nil {
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-App-Session", sessionID)
+	resp, err := client.Do(req)
 	if err != nil {
 		return
 	}

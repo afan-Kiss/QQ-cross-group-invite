@@ -15,18 +15,18 @@ export function GlobalStatusBar() {
         <span
           className={inviting ? "text-primary" : "text-primary"}
         >
-          ¡ñ {inviting ? "ÕıÔÚÑûÇë" : "¾ÍĞ÷"}
+          â— {inviting ? "æ­£åœ¨é‚€è¯·" : "å°±ç»ª"}
         </span>
       </div>
       <div className="flex items-center gap-4">
         <span>
-          ±¾µØ·şÎñ <span className={serviceOk ? "text-primary" : "text-danger"}>¡ñ</span>
+          æœ¬åœ°æœåŠ¡ <span className={serviceOk ? "text-primary" : "text-danger"}>â—</span>
         </span>
         <span>
-          NapCat <span className={napcatOk ? "text-primary" : "text-warning"}>¡ñ</span>
+          NapCat <span className={napcatOk ? "text-primary" : "text-warning"}>â—</span>
         </span>
       </div>
-      <div>°æ±¾ 1.0.0</div>
+      <div>ç‰ˆæœ¬ 1.0.0</div>
     </footer>
   );
 }

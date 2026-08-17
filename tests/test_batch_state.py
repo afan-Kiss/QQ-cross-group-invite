@@ -90,6 +90,7 @@ def test_task_run_status_values():
     assert TaskRunStatus.STOPPED.value == "stopped"
     assert TaskRunStatus.COMPLETED.value == "completed"
     assert TaskRunStatus.ERROR.value == "error"
+    assert TaskRunStatus.INTERRUPTED.value == "interrupted"
 
 
 def test_status_transition_helpers():

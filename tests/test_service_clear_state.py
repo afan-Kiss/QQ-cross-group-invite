@@ -14,20 +14,30 @@ def test_clear_logs():
 
 def test_clear_failed():
     with cgb._state_lock:
+        cgb._state.task_id = "t-clear"
+        cgb._state.success = 2
         cgb._state.errors.append(
             InviteRecord(qq=1, nickname="n", reason="fail")
         )
     cgb.clear_failed()
     assert cgb.get_state()["errors"] == []
+    persisted = {t["id"]: t for t in cgb._load_tasks()}
+    assert persisted["t-clear"]["failed"] == 0
+    assert persisted["t-clear"]["success"] == 2
 
 
 def test_clear_rate_limits():
     with cgb._state_lock:
+        cgb._state.task_id = "t-clear2"
+        cgb._state.success = 1
         cgb._state.frequent.append(
             InviteRecord(qq=2, nickname="f", reason="频繁")
         )
     cgb.clear_rate_limits()
     assert cgb.get_state()["frequent"] == []
+    persisted = {t["id"]: t for t in cgb._load_tasks()}
+    assert persisted["t-clear2"]["rate_limited"] == 0
+    assert persisted["t-clear2"]["success"] == 1
 
 
 def test_clear_state_all_kinds():

@@ -1,54 +1,70 @@
-import { CircleX } from "lucide-react";
+import { CircleX, Copy, Eye, RotateCcw } from "lucide-react";
 import { useInviteStore } from "@/store/useInviteStore";
+import { formatDateTime, toEpochMs } from "@/lib/utils";
+import { toast } from "@/store/useToastStore";
+import type { FailedRecord } from "@/lib/types";
 
 function reasonColor(reason: string) {
-  if (/È¨ÏŞ|permission/i.test(reason)) return "text-[#6b7a8a]";
+  if (/æƒé™|permission/i.test(reason)) return "text-[#6b7a8a]";
   if (/token/i.test(reason)) return "text-warning";
-  if (/·ç¿Ø|Æµ·±|limit/i.test(reason)) return "text-[#d4785a]";
-  if (/ÏµÍ³|system/i.test(reason)) return "text-danger";
+  if (/é£æ§|é¢‘ç¹|limit/i.test(reason)) return "text-[#d4785a]";
+  if (/ç³»ç»Ÿ|system/i.test(reason)) return "text-danger";
   return "text-muted-foreground";
+}
+
+async function copyText(text: string, label: string) {
+  await navigator.clipboard.writeText(text);
+  toast("success", `å·²å¤åˆ¶${label}`);
 }
 
 export function FailedPage() {
   const failedList = useInviteStore((s) => s.failedList);
-  const config = useInviteStore((s) => s.config);
   const clearFailed = useInviteStore((s) => s.clearFailed);
+  const setDetailMemberQq = useInviteStore((s) => s.setDetailMemberQq);
+  const requeueMember = useInviteStore((s) => s.requeueMember);
+  const getMember = useInviteStore((s) => s.getMember);
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const todayCount = failedList.filter((r) => r.at >= today.getTime()).length;
-  const permCount = failedList.filter((r) => /È¨ÏŞ/i.test(r.reason)).length;
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const todayMs = todayStart.getTime();
+  const todayCount = failedList.filter((r) => toEpochMs(r.at) >= todayMs).length;
+  const permCount = failedList.filter((r) => /æƒé™/i.test(r.reason)).length;
   const tokenCount = failedList.filter((r) => /token/i.test(r.reason)).length;
   const otherCount = failedList.length - permCount - tokenCount;
+
+  const canRequeue = (r: FailedRecord) => {
+    const m = getMember(r.qq);
+    return !!m && (m.status === "failed" || m.status === "rate_limited");
+  };
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-4">
       <div className="flex items-start justify-between">
         <div>
-          <h2 className="text-[20px] font-semibold text-[#242824]">ÑûÇëÊ§°Ü</h2>
+          <h2 className="text-[20px] font-semibold text-[#242824]">é‚€è¯·å¤±è´¥</h2>
           <p className="mt-1 text-[13px] text-muted-foreground">
-            ²é¿´ÑûÇëÊ§°Ü¼°Òì³£ĞÅÏ¢
+            æŸ¥çœ‹é‚€è¯·å¤±è´¥åŠå¼‚å¸¸ä¿¡æ¯
           </p>
         </div>
         {failedList.length > 0 && (
           <button
             type="button"
             onClick={() => {
-              if (window.confirm("È·¶¨Çå¿ÕÊ§°Ü¼ÇÂ¼£¿")) clearFailed();
+              if (window.confirm("ç¡®å®šæ¸…ç©ºå¤±è´¥è®°å½•ï¼Ÿ")) void clearFailed();
             }}
             className="rounded-[10px] border border-border px-3 py-1.5 text-[13px] text-muted-foreground hover:bg-[#f7faf5]"
           >
-            Çå¿Õ¼ÇÂ¼
+            æ¸…ç©ºè®°å½•
           </button>
         )}
       </div>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         {[
-          { label: "½ñÈÕÊ§°Ü", value: todayCount },
-          { label: "È¨ÏŞÎÊÌâ", value: permCount },
-          { label: "TokenÎÊÌâ", value: tokenCount },
-          { label: "ÆäËû´íÎó", value: otherCount },
+          { label: "ä»Šæ—¥å¤±è´¥", value: todayCount },
+          { label: "æƒé™é—®é¢˜", value: permCount },
+          { label: "Tokené—®é¢˜", value: tokenCount },
+          { label: "å…¶ä»–é”™è¯¯", value: otherCount },
         ].map((c) => (
           <div key={c.label} className="rounded-[14px] border border-border bg-white p-4 shadow-[var(--shadow-card)]">
             <div className="text-[12px] text-muted-foreground">{c.label}</div>
@@ -60,30 +76,56 @@ export function FailedPage() {
       {failedList.length === 0 ? (
         <div className="flex flex-1 flex-col items-center justify-center rounded-[16px] border border-border bg-white p-8 shadow-[var(--shadow-card)]">
           <CircleX className="mb-3 h-10 w-10 text-muted-foreground/40" />
-          <p className="text-[15px] font-medium">ÔİÎŞÑûÇëÊ§°Ü¼ÇÂ¼</p>
+          <p className="text-[15px] font-medium">æš‚æ— é‚€è¯·å¤±è´¥è®°å½•</p>
         </div>
       ) : (
         <div className="min-h-0 flex-1 overflow-auto rounded-[16px] border border-border bg-white shadow-[var(--shadow-card)]">
           <table className="w-full text-left text-sm">
             <thead className="sticky top-0 bg-[#f9faf8]">
               <tr className="border-b border-border text-[13px] text-muted-foreground">
-                <th className="px-4 py-3">QQºÅ</th>
-                <th className="px-4 py-3">êÇ³Æ</th>
-                <th className="px-4 py-3">Ä¿±êÈº</th>
-                <th className="px-4 py-3">Ê§°ÜÊ±¼ä</th>
-                <th className="px-4 py-3">Ê§°ÜÔ­Òò</th>
+                <th className="px-4 py-3">QQå·</th>
+                <th className="px-4 py-3">æ˜µç§°</th>
+                <th className="px-4 py-3">æ¥æºç¾¤</th>
+                <th className="px-4 py-3">ç›®æ ‡ç¾¤</th>
+                <th className="px-4 py-3">å¤±è´¥æ—¶é—´</th>
+                <th className="px-4 py-3">å¤±è´¥åŸå› </th>
+                <th className="px-4 py-3">æ“ä½œ</th>
               </tr>
             </thead>
             <tbody>
               {failedList.map((r) => (
-                <tr key={`${r.qq}-${r.at}`} className="border-b border-border/70 hover:bg-[#f7faf5]">
+                <tr key={`${r.qq}-${r.at}-${r.task_id ?? ""}`} className="border-b border-border/70 hover:bg-[#f7faf5]">
                   <td className="px-4 py-3 font-mono text-[13px]">{r.qq}</td>
                   <td className="px-4 py-3">{r.nickname}</td>
-                  <td className="px-4 py-3">{config.target_group_id}</td>
-                  <td className="px-4 py-3 text-[13px] text-muted-foreground">
-                    {new Date(r.at).toLocaleString("zh-CN")}
-                  </td>
+                  <td className="px-4 py-3">{r.source_group_id || "â€”"}</td>
+                  <td className="px-4 py-3">{r.target_group_id || "â€”"}</td>
+                  <td className="px-4 py-3 text-[13px] text-muted-foreground">{formatDateTime(r.at)}</td>
                   <td className={`px-4 py-3 text-[13px] ${reasonColor(r.reason)}`}>{r.reason}</td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-1">
+                      <button type="button" className="rounded p-1 hover:bg-[#eef1eb]" title="å¤åˆ¶QQ" onClick={() => void copyText(String(r.qq), "QQ")}>
+                        <Copy className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        className="rounded p-1 hover:bg-[#eef1eb] disabled:opacity-40"
+                        title="æŸ¥çœ‹"
+                        disabled={!getMember(r.qq)}
+                        onClick={() => setDetailMemberQq(r.qq)}
+                      >
+                        <Eye className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        className="rounded p-1 hover:bg-[#eef1eb] disabled:opacity-40"
+                        title="é‡æ–°å…¥é˜Ÿ"
+                        disabled={!canRequeue(r)}
+                        onClick={() => requeueMember(r.qq)}
+                      >
+                        <RotateCcw className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>

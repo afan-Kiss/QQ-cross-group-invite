@@ -15,7 +15,8 @@ export type TaskRunStatus =
   | "stopping"
   | "stopped"
   | "completed"
-  | "error";
+  | "error"
+  | "interrupted";
 
 export interface InviteConfig {
   target_group_id: string;
@@ -55,6 +56,9 @@ export interface RateLimitRecord {
   nickname: string;
   at: number;
   reason?: string;
+  source_group_id?: string;
+  target_group_id?: string;
+  task_id?: string;
 }
 
 export interface FailedRecord {
@@ -62,6 +66,9 @@ export interface FailedRecord {
   nickname: string;
   reason: string;
   at: number;
+  source_group_id?: string;
+  target_group_id?: string;
+  task_id?: string;
 }
 
 export interface InviteStats {
@@ -142,7 +149,7 @@ export interface HealthResponse {
 }
 
 export interface BootstrapStatus {
-  localService: "booting" | "ready" | "error" | "port_conflict";
+  localService: "booting" | "ready" | "error" | "port_conflict" | "manual";
   message: string;
   startedByUs: boolean;
   napcatOnline: boolean;

@@ -16,18 +16,18 @@ export function MembersPage() {
   return (
     <div className="flex h-full min-h-0 flex-col gap-4">
       <div>
-        <h2 className="text-[20px] font-semibold text-[#242824]">À´Ô´Èº³ÉÔ±</h2>
+        <h2 className="text-[20px] font-semibold text-[#242824]">æ¥æºç¾¤æˆå‘˜</h2>
         <p className="mt-1 text-[13px] text-muted-foreground">
-          ¹ÜÀíÒÑ¼ÓÔØ³ÉÔ±²¢É¸Ñ¡´ıÑûÇë¶ÔÏó
+          ç®¡ç†å·²åŠ è½½æˆå‘˜å¹¶ç­›é€‰å¾…é‚€è¯·å¯¹è±¡
         </p>
       </div>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         {[
-          { label: "×Ü³ÉÔ±", value: members.length, icon: Users },
-          { label: "ÆÕÍ¨³ÉÔ±", value: normalCount, icon: User },
-          { label: "¹ÜÀíÈËÔ±", value: staffCount, icon: Shield },
-          { label: "ÓĞĞ§Token", value: tokenCount, icon: Key },
+          { label: "æ€»æˆå‘˜", value: members.length, icon: Users },
+          { label: "æ™®é€šæˆå‘˜", value: normalCount, icon: User },
+          { label: "ç®¡ç†äººå‘˜", value: staffCount, icon: Shield },
+          { label: "æœ‰æ•ˆToken", value: tokenCount, icon: Key },
         ].map((c) => (
           <div
             key={c.label}
@@ -46,14 +46,14 @@ export function MembersPage() {
 
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-[13px] text-muted-foreground">
-          À´Ô´Èº£º{config.source_group_id || "Î´ÉèÖÃ"}
+          æ¥æºç¾¤ï¼š{config.source_group_id || "æœªè®¾ç½®"}
         </span>
         <button
           type="button"
           onClick={() => void loadMembers()}
           className="rounded-[10px] bg-primary-light px-3 py-1.5 text-[13px] text-primary hover:bg-primary/10"
         >
-          ÖØĞÂ¼ÓÔØ
+          é‡æ–°åŠ è½½
         </button>
       </div>
 
@@ -61,9 +61,9 @@ export function MembersPage() {
         {!membersLoaded && members.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center text-center">
             <Users className="mb-3 h-10 w-10 text-muted-foreground/40" />
-            <p className="text-[15px] font-medium text-[#242824]">ÔİÎŞ³ÉÔ±</p>
+            <p className="text-[15px] font-medium text-[#242824]">æš‚æ— æˆå‘˜</p>
             <p className="mt-1 text-[13px] text-muted-foreground">
-              ÇëÏÈÌîĞ´À´Ô´Èº²¢¼ÓÔØ³ÉÔ±
+              è¯·å…ˆå¡«å†™æ¥æºç¾¤å¹¶åŠ è½½æˆå‘˜
             </p>
           </div>
         ) : (

@@ -30,52 +30,54 @@ export function MemberContextMenu({ x, y, member, onClose }: Props) {
     };
   }, [onClose]);
 
+  const canQueue =
+    member.status === "waiting" ||
+    member.status === "failed" ||
+    member.status === "rate_limited";
+
   const items: Array<{
     label: string;
     disabled?: boolean;
     onClick: () => void;
   }> = [
     {
-      label: "²é¿´ÏêÇé",
+      label: "æŸ¥çœ‹è¯¦æƒ…",
       onClick: () => setDetailMemberQq(member.qq),
     },
     {
-      label: "¸´ÖÆ QQ",
+      label: "å¤åˆ¶ QQ",
       onClick: async () => {
         await navigator.clipboard.writeText(String(member.qq));
-        toast("success", "ÒÑ¸´ÖÆQQ");
+        toast("success", "å·²å¤åˆ¶QQ");
       },
     },
     {
-      label: "¸´ÖÆêÇ³Æ",
+      label: "å¤åˆ¶æ˜µç§°",
       onClick: async () => {
         await navigator.clipboard.writeText(member.nickname);
-        toast("success", "ÒÑ¸´ÖÆêÇ³Æ");
+        toast("success", "å·²å¤åˆ¶æ˜µç§°");
       },
     },
     {
-      label: "¸´ÖÆ Token",
+      label: "å¤åˆ¶ Token",
       disabled: !member.token,
       onClick: async () => {
         if (!member.token) return;
-        toast("warning", "Token ÊôÓÚÃô¸ÐÔËÐÐÊý¾Ý£¬ÇëÎðÐ¹Â¶");
+        toast("warning", "Token å±žäºŽæ•æ„Ÿè¿è¡Œæ•°æ®ï¼Œè¯·å‹¿æ³„éœ²");
         await navigator.clipboard.writeText(member.token);
-        toast("success", "ÒÑ¸´ÖÆToken");
+        toast("success", "å·²å¤åˆ¶Token");
       },
     },
     {
-      label: selectedQqs.has(member.qq) ? "ÒÆ³öÑûÇë¶ÓÁÐ" : "¼ÓÈëÑûÇë¶ÓÁÐ",
-      disabled:
-        member.status === "filtered" ||
-        member.status === "success" ||
-        member.status === "inviting",
+      label: selectedQqs.has(member.qq) ? "ç§»å‡ºé‚€è¯·é˜Ÿåˆ—" : "åŠ å…¥é‚€è¯·é˜Ÿåˆ—",
+      disabled: !canQueue,
       onClick: () => {
         if (selectedQqs.has(member.qq)) deselectQq(member.qq);
         else selectQq(member.qq);
       },
     },
     {
-      label: "ÖØÐÂÑûÇë",
+      label: "é‡æ–°é‚€è¯·",
       disabled: !(member.status === "failed" || member.status === "rate_limited"),
       onClick: () => requeueMember(member.qq),
     },

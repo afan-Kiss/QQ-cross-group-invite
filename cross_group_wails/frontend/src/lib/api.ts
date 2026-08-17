@@ -3,6 +3,7 @@ export const USE_MOCK_API = false;
 export const API_BASE_URL = "http://127.0.0.1:17888";
 export const SERVICE_ID = "cross-group-invite";
 
+import { toEpochMs } from "@/lib/utils";
 import type {
   AppStatus,
   HealthResponse,
@@ -133,18 +134,24 @@ export function normalizeStatus(
   const total = Number(raw.total ?? 0);
   const done = Number(raw.done ?? raw.completed ?? 0);
   const success = Number(raw.success ?? 0);
-  const frequent = (raw.frequent ?? raw.rate_limit_list ?? []) as Array<{
-    qq: number;
-    nickname: string;
-    reason?: string;
-    at: number;
-  }>;
-  const errors = (raw.errors ?? raw.failed_list ?? []) as Array<{
-    qq: number;
-    nickname: string;
-    reason: string;
-    at: number;
-  }>;
+  const frequent = ((raw.frequent ?? raw.rate_limit_list ?? []) as Array<Record<string, unknown>>).map((r) => ({
+    qq: Number(r.qq ?? 0),
+    nickname: String(r.nickname ?? ""),
+    reason: r.reason != null ? String(r.reason) : undefined,
+    at: toEpochMs(r.at as number),
+    source_group_id: r.source_group_id != null ? String(r.source_group_id) : undefined,
+    target_group_id: r.target_group_id != null ? String(r.target_group_id) : undefined,
+    task_id: r.task_id != null ? String(r.task_id) : undefined,
+  }));
+  const errors = ((raw.errors ?? raw.failed_list ?? []) as Array<Record<string, unknown>>).map((r) => ({
+    qq: Number(r.qq ?? 0),
+    nickname: String(r.nickname ?? ""),
+    reason: String(r.reason ?? ""),
+    at: toEpochMs(r.at as number),
+    source_group_id: r.source_group_id != null ? String(r.source_group_id) : undefined,
+    target_group_id: r.target_group_id != null ? String(r.target_group_id) : undefined,
+    task_id: r.task_id != null ? String(r.task_id) : undefined,
+  }));
   const results = ((raw.results ?? []) as InviteResult[]).map((r) => ({
     ...r,
     status: mapResultStatus(String(r.status)),
@@ -255,8 +262,9 @@ export const api = {
     });
   },
 
-  async stopInvite(): Promise<void> {
-    await request("/invite/stop", { method: "POST", body: JSON.stringify({}) });
+  async stopInvite(taskId?: string): Promise<void> {
+    const body = taskId ? { task_id: taskId } : {};
+    await request("/invite/stop", { method: "POST", body: JSON.stringify(body) });
   },
 
   async getStatus(members: Member[] = []): Promise<AppStatus> {

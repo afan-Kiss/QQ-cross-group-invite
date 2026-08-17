@@ -1,13 +1,23 @@
 import { Loader2 } from "lucide-react";
 import { useServiceStore } from "@/store/useServiceStore";
+import { useSettingsStore } from "@/store/useSettingsStore";
 
 export function BootstrapOverlay() {
   const localService = useServiceStore((s) => s.localService);
   const message = useServiceStore((s) => s.message);
   const bootstrapped = useServiceStore((s) => s.bootstrapped);
   const ensureBackend = useServiceStore((s) => s.ensureBackend);
+  const hydrated = useSettingsStore((s) => s.hydrated);
 
-  if (bootstrapped || localService === "ready") return null;
+  if (!hydrated) {
+    return (
+      <div className="absolute inset-0 z-50 flex items-center justify-center bg-[#f6f7f3]/90">
+        <Loader2 className="h-6 w-6 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (bootstrapped || localService === "ready" || localService === "manual") return null;
 
   const isError = localService === "error" || localService === "port_conflict";
   const isConflict = localService === "port_conflict";
@@ -36,13 +46,6 @@ export function BootstrapOverlay() {
             <p className={`mt-2 text-[13px] leading-6 ${isError ? "text-danger" : "text-muted-foreground"}`}>
               {isConflict ? `端口 17888 已被其他程序占用。${message}` : message}
             </p>
-            {!isError && (
-              <ul className="mt-3 space-y-1 text-[12px] text-muted-foreground">
-                <li>正在检测本地服务...</li>
-                <li>必要时启动 sidecar...</li>
-                <li>健康检查通过后进入控制台</li>
-              </ul>
-            )}
           </div>
         </div>
         {isError && (
@@ -52,7 +55,7 @@ export function BootstrapOverlay() {
               className="rounded-[10px] bg-primary px-4 py-2 text-[13px] text-white hover:bg-primary-hover"
               onClick={() => void ensureBackend()}
             >
-              重新检测
+              连接服务
             </button>
             {isConflict && (
               <button
@@ -63,6 +66,19 @@ export function BootstrapOverlay() {
                 复制诊断信息
               </button>
             )}
+            <button
+              type="button"
+              className="rounded-[10px] border border-border px-4 py-2 text-[13px] hover:bg-[#f7faf5]"
+              onClick={() =>
+                useServiceStore.setState({
+                  localService: "manual",
+                  bootstrapped: true,
+                  message: "已进入离线模式",
+                })
+              }
+            >
+              继续离线
+            </button>
           </div>
         )}
       </div>

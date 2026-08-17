@@ -131,8 +131,8 @@ func (m *Manager) ProbeHealthStatus() BootstrapStatus {
 	}
 }
 
-// Shutdown stops the sidecar only when we started it.
-// External services on 17888 are left alone.
+// Shutdown stops the sidecar only when we started it and still own the live session.
+// External services on 17888 are left alone (no stop/shutdown network calls).
 func (m *Manager) Shutdown() {
 	m.mu.Lock()
 	started := m.startedByUs
@@ -147,16 +147,37 @@ func (m *Manager) Shutdown() {
 		return
 	}
 
-	// Always attempt graceful shutdown with our session first.
-	PostStopInvite()
+	// Re-probe before any network side-effect: our process may have died and
+	// an external service may now own 17888.
+	health := ProbeHealth()
+	owned := health.Probe == ProbeReady && health.SessionID != "" && health.SessionID == session
+	if !owned {
+		applog.Info("shutdown skipped network/kill: session mismatch or not ready (ours=%s health=%s probe=%d)",
+			session, health.SessionID, health.Probe)
+		// Safest on mismatch: do not kill by PID (may be reused by external).
+		// Only drop our job handle and clear local ownership state.
+		if job != 0 {
+			_ = windows.CloseHandle(job)
+		}
+		m.mu.Lock()
+		m.cmd = nil
+		m.startedByUs = false
+		m.sessionID = ""
+		m.pid = 0
+		m.job = 0
+		m.mu.Unlock()
+		return
+	}
+
+	PostStopInvite(session)
 	if err := PostShutdown(session); err != nil {
 		applog.Warn("POST /shutdown failed: %v", err)
 	}
 
 	deadline := time.Now().Add(3 * time.Second)
 	for time.Now().Before(deadline) {
-		health := ProbeHealth()
-		if health.Probe != ProbeReady || health.SessionID != session {
+		h := ProbeHealth()
+		if h.Probe != ProbeReady || h.SessionID != session {
 			break
 		}
 		time.Sleep(150 * time.Millisecond)

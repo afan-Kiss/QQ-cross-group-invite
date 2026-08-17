@@ -34,7 +34,7 @@ type DiagnosticItemRaw = {
   ok: boolean;
 };
 
-const NOT_IN_WAILS = "µ±Ç°Î´ÔËĞĞÔÚ Wails ×ÀÃæ»·¾³ÖĞ";
+const NOT_IN_WAILS = "å½“å‰æœªè¿è¡Œåœ¨ Wails æ¡Œé¢ç¯å¢ƒä¸­";
 
 function mapBootstrap(raw: BootstrapStatusRaw): BootstrapStatus {
   const localService =
@@ -47,17 +47,17 @@ function mapBootstrap(raw: BootstrapStatusRaw): BootstrapStatus {
           : "booting";
 
   let message = raw.message;
-  if (message === "service ready") message = "·şÎñÒÑ¾ÍĞ÷";
+  if (message === "service ready") message = "æœåŠ¡å·²å°±ç»ª";
   else if (message === "service started, waiting for NapCat...")
-    message = "·şÎñÒÑÆô¶¯£¬ÕıÔÚµÈ´ı NapCat...";
-  else if (message === "connecting to local service...") message = "ÕıÔÚÁ¬½Ó±¾µØ·şÎñ...";
-  else if (message === "starting local service...") message = "ÕıÔÚÆô¶¯±¾µØ·şÎñ...";
-  else if (message === "backend not running") message = "ºó¶Ë·şÎñÎ´Æô¶¯";
+    message = "æœåŠ¡å·²å¯åŠ¨ï¼Œæ­£åœ¨ç­‰å¾… NapCat...";
+  else if (message === "connecting to local service...") message = "æ­£åœ¨è¿æ¥æœ¬åœ°æœåŠ¡...";
+  else if (message === "starting local service...") message = "æ­£åœ¨å¯åŠ¨æœ¬åœ°æœåŠ¡...";
+  else if (message === "backend not running") message = "åç«¯æœåŠ¡æœªå¯åŠ¨";
   else if (message.startsWith("port 17888") || message.includes("occupied"))
-    message = `¶Ë¿Ú 17888 ÒÑ±»ÆäËû³ÌĞòÕ¼ÓÃ£º${raw.message}`;
+    message = `ç«¯å£ 17888 å·²è¢«å…¶ä»–ç¨‹åºå ç”¨ï¼š${raw.message}`;
   else if (message.startsWith("local service startup timeout"))
-    message = "±¾µØ·şÎñÆô¶¯³¬Ê±£¬Çë¼ì²é 17888 ¶Ë¿Ú";
-  else if (message.startsWith("failed to start sidecar")) message = "±¾µØ·şÎñÆô¶¯Ê§°Ü";
+    message = "æœ¬åœ°æœåŠ¡å¯åŠ¨è¶…æ—¶ï¼Œè¯·æ£€æŸ¥ 17888 ç«¯å£";
+  else if (message.startsWith("failed to start sidecar")) message = "æœ¬åœ°æœåŠ¡å¯åŠ¨å¤±è´¥";
 
   return {
     localService,

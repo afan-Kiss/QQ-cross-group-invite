@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import secrets
@@ -13,6 +14,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 from capture_utils import (
     find_fe7_pagination_templates,
@@ -57,6 +60,18 @@ class TaskRunStatus(str, Enum):
     STOPPED = "stopped"
     COMPLETED = "completed"
     ERROR = "error"
+    INTERRUPTED = "interrupted"
+
+
+class TaskIdMismatch(Exception):
+    """Raised when stop_batch(task_id=...) does not match the live task."""
+
+    def __init__(self, requested: str, current: str) -> None:
+        self.requested = requested
+        self.current = current
+        super().__init__(
+            f"task_id mismatch: requested={requested!r} current={current!r}"
+        )
 
 
 class InviteResultStatus(str, Enum):
@@ -96,6 +111,9 @@ class InviteRecord:
     nickname: str
     reason: str
     at: float = field(default_factory=time.time)
+    source_group_id: int = 0
+    target_group_id: int = 0
+    task_id: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -103,7 +121,21 @@ class InviteRecord:
             "nickname": self.nickname,
             "reason": self.reason,
             "at": self.at,
+            "source_group_id": self.source_group_id,
+            "target_group_id": self.target_group_id,
+            "task_id": self.task_id,
         }
+
+
+@dataclass(frozen=True)
+class MembersCacheSnapshot:
+    source_group_id: int
+    filter_staff: bool
+    members: tuple[SourceMember, ...]
+
+    @property
+    def key(self) -> tuple[int, bool]:
+        return (self.source_group_id, self.filter_staff)
 
 
 @dataclass
@@ -220,9 +252,18 @@ class BatchState:
 
 _state = BatchState()
 _state_lock = threading.RLock()
-_members_cache: list[SourceMember] = []
-_members_cache_key: tuple[int, bool] | None = None
+_members_lock = threading.RLock()
+_members_snapshot: MembersCacheSnapshot | None = None
 _owned_task_id: str | None = None
+_tasks_io_lock = threading.Lock()
+_STALE_STATUSES = frozenset(
+    {
+        TaskRunStatus.PREPARING.value,
+        TaskRunStatus.RUNNING.value,
+        TaskRunStatus.STOPPING.value,
+    }
+)
+_STALE_MSG = "上次运行异常中断（进程退出）"
 
 
 def _now() -> float:
@@ -277,23 +318,130 @@ def _tasks_path() -> Path:
     return TASKS_FILE
 
 
+def _tasks_bak_path(path: Path | None = None) -> Path:
+    p = path or _tasks_path()
+    return p.with_name(p.name + ".bak")
+
+
+def _read_tasks_file(path: Path) -> list[dict[str, Any]]:
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    return raw if isinstance(raw, list) else []
+
+
 def _load_tasks() -> list[dict[str, Any]]:
     path = _tasks_path()
     if not path.is_file():
         return []
     try:
-        raw = json.loads(path.read_text(encoding="utf-8"))
-        return raw if isinstance(raw, list) else []
-    except (OSError, json.JSONDecodeError):
+        return _read_tasks_file(path)
+    except OSError as exc:
+        logger.warning("failed to read tasks.json: %s", exc)
+        return []
+    except json.JSONDecodeError as exc:
+        logger.warning("tasks.json corrupt (%s); trying .bak", exc)
+        bak = _tasks_bak_path(path)
+        if bak.is_file():
+            try:
+                return _read_tasks_file(bak)
+            except (OSError, json.JSONDecodeError) as bak_exc:
+                logger.error("tasks.json.bak also unreadable: %s", bak_exc)
+        else:
+            logger.error("tasks.json corrupt and no .bak available")
         return []
 
 
 def _save_tasks(tasks: list[dict[str, Any]]) -> None:
     path = _tasks_path()
-    path.write_text(
-        json.dumps(tasks[-200:], ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    payload = json.dumps(tasks[-200:], ensure_ascii=False, indent=2)
+    with _tasks_io_lock:
+        if path.is_file():
+            try:
+                _read_tasks_file(path)
+            except (OSError, json.JSONDecodeError):
+                pass
+            else:
+                try:
+                    bak = _tasks_bak_path(path)
+                    bak.write_text(path.read_text(encoding="utf-8"), encoding="utf-8")
+                except OSError as exc:
+                    logger.warning("failed to write tasks.json.bak: %s", exc)
+        tmp = path.with_name(path.name + ".tmp")
+        try:
+            with open(tmp, "w", encoding="utf-8") as fh:
+                fh.write(payload)
+                fh.flush()
+                os.fsync(fh.fileno())
+            os.replace(tmp, path)
+        except OSError as exc:
+            logger.error("atomic tasks.json write failed: %s", exc)
+            try:
+                if tmp.is_file():
+                    tmp.unlink()
+            except OSError:
+                pass
+            raise
+
+
+def recover_stale_tasks() -> int:
+    """Mark non-live preparing/running/stopping tasks as interrupted. Returns count."""
+    with _state_lock:
+        live_id = _state.task_id if _state.running else ""
+        live_status = _state.status.value if _state.running else ""
+        if live_status not in _STALE_STATUSES:
+            live_id = ""
+
+    with _tasks_io_lock:
+        # Re-read under io lock without nested _save_tasks lock deadlock:
+        path = _tasks_path()
+        if not path.is_file():
+            return 0
+        try:
+            tasks = _read_tasks_file(path)
+        except json.JSONDecodeError as exc:
+            logger.warning("recover_stale_tasks: corrupt tasks.json (%s); trying .bak", exc)
+            bak = _tasks_bak_path(path)
+            if not bak.is_file():
+                return 0
+            try:
+                tasks = _read_tasks_file(bak)
+            except (OSError, json.JSONDecodeError):
+                return 0
+        except OSError:
+            return 0
+
+        changed = 0
+        now = _now()
+        for item in tasks:
+            if not isinstance(item, dict):
+                continue
+            status = str(item.get("status") or "")
+            tid = str(item.get("id") or "")
+            if status in _STALE_STATUSES and tid and tid != live_id:
+                item["status"] = TaskRunStatus.INTERRUPTED.value
+                item["finished_at"] = now
+                item["error_message"] = _STALE_MSG
+                changed += 1
+        if changed:
+            # Inline atomic write (already hold _tasks_io_lock)
+            payload = json.dumps(tasks[-200:], ensure_ascii=False, indent=2)
+            if path.is_file():
+                try:
+                    _read_tasks_file(path)
+                except (OSError, json.JSONDecodeError):
+                    pass
+                else:
+                    try:
+                        bak = _tasks_bak_path(path)
+                        bak.write_text(path.read_text(encoding="utf-8"), encoding="utf-8")
+                    except OSError as exc:
+                        logger.warning("failed to write tasks.json.bak: %s", exc)
+            tmp = path.with_name(path.name + ".tmp")
+            with open(tmp, "w", encoding="utf-8") as fh:
+                fh.write(payload)
+                fh.flush()
+                os.fsync(fh.fileno())
+            os.replace(tmp, path)
+        return changed
 
 
 def _upsert_task_record(record: dict[str, Any]) -> None:
@@ -388,11 +536,17 @@ def clear_logs() -> None:
 def clear_failed() -> None:
     with _state_lock:
         _state.errors.clear()
+        tid = _state.task_id
+    if tid:
+        _persist_current_task()
 
 
 def clear_rate_limits() -> None:
     with _state_lock:
         _state.frequent.clear()
+        tid = _state.task_id
+    if tid:
+        _persist_current_task()
 
 
 def clear_state(kinds: list[str] | None = None) -> None:
@@ -487,7 +641,7 @@ def load_source_members(
     record_logs: bool = False,
 ) -> list[SourceMember]:
     """Load full member set. Staff are marked filtered when filter_staff=True."""
-    global _members_cache, _members_cache_key
+    global _members_snapshot
     cfg = load_cfg()
     cap = capture_dir or resolve_capture_dir(cfg)
 
@@ -555,19 +709,28 @@ def load_source_members(
             )
 
     members = sorted(by_qq.values(), key=lambda m: m.qq)
-    _members_cache = members
-    _members_cache_key = (int(source_group_id), bool(filter_staff))
+    snapshot = MembersCacheSnapshot(
+        source_group_id=int(source_group_id),
+        filter_staff=bool(filter_staff),
+        members=tuple(members),
+    )
+    with _members_lock:
+        _members_snapshot = snapshot
     eligible_count = sum(1 for m in members if m.eligible)
     filtered_count = len(members) - eligible_count
     log(
         f"已加载 {len(members)} 名成员（可邀请 {eligible_count}，已过滤 {filtered_count}，"
         f"过滤群主/管理员={filter_staff}）"
     )
-    return members
+    return list(members)
 
 
 def get_cached_members() -> list[SourceMember]:
-    return list(_members_cache)
+    with _members_lock:
+        snap = _members_snapshot
+    if snap is None:
+        return []
+    return list(snap.members)
 
 
 def get_state() -> dict[str, Any]:
@@ -575,8 +738,12 @@ def get_state() -> dict[str, Any]:
         return _state.to_dict()
 
 
-def stop_batch() -> None:
+def stop_batch(task_id: str | None = None) -> None:
     with _state_lock:
+        if task_id is not None:
+            current = _state.task_id or ""
+            if task_id != current:
+                raise TaskIdMismatch(task_id, current)
         if not _state.running and _state.status not in (
             TaskRunStatus.PREPARING,
             TaskRunStatus.RUNNING,
@@ -629,12 +796,20 @@ def _finish_member(
 ) -> None:
     finished = _now()
     duration = int(max(0, (finished - started_at) * 1000)) if started_at else 0
-    rec = InviteRecord(qq=member.qq, nickname=member.nickname, reason=reason)
     with _state_lock:
+        rec = InviteRecord(
+            qq=member.qq,
+            nickname=member.nickname,
+            reason=reason,
+            source_group_id=_state.source_group_id,
+            target_group_id=_state.target_group_id,
+            task_id=_state.task_id,
+        )
         _state.done += 1
         if _state.batch_size > 0:
-            _state.batch_done = ((_state.done - 1) % _state.batch_size) + 1
-            _state.batch_number = ((_state.done - 1) // _state.batch_size) + 1
+            _state.batch_done += 1
+            if _state.batch_number <= 0:
+                _state.batch_number = ((_state.done - 1) // _state.batch_size) + 1
         _update_result(
             member.qq,
             status=status,
@@ -741,8 +916,11 @@ def start_batch(
         cap = resolve_capture_dir(cfg)
         try:
             cache_key = (int(source_group_id), bool(filter_staff))
-            members = list(_members_cache)
-            if _members_cache_key != cache_key or not members:
+            with _members_lock:
+                snap = _members_snapshot
+            if snap is not None and snap.key == cache_key and snap.members:
+                members = list(snap.members)
+            else:
                 members = load_source_members(
                     source_group_id,
                     filter_staff=filter_staff,
@@ -800,8 +978,10 @@ def start_batch(
                 with _state_lock:
                     if idx % resolved_batch_size == 0:
                         batch_no = (idx // resolved_batch_size) + 1
+                        remaining = len(invite_members) - idx
                         _state.batch_number = batch_no
                         _state.batch_done = 0
+                        _state.batch_total_count = min(resolved_batch_size, remaining)
                         _append_timeline("batch_start", f"batch={batch_no}")
                     _state.current_qq = member.qq
                     _state.current_nickname = member.nickname
@@ -891,8 +1071,6 @@ def start_batch(
             final_message = str(exc)
             error_message = str(exc)
             _log(f"异常终止: {exc}")
-            with _state_lock:
-                _append_timeline("error", str(exc))
         finally:
             with _state_lock:
                 _state.running = False

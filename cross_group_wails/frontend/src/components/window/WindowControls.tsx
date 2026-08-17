@@ -1,22 +1,11 @@
 import { useEffect, useState } from "react";
-import {
-  Quit,
-  WindowIsMaximised,
-  WindowMinimise,
-  WindowToggleMaximise,
-} from "../../../wailsjs/runtime/runtime";
+import { Quit, WindowMinimise } from "../../../wailsjs/runtime/runtime";
+import { subscribeMaximized, toggleMaximized } from "@/lib/window-state";
 
 export function WindowControls() {
   const [maximized, setMaximized] = useState(false);
 
-  useEffect(() => {
-    void WindowIsMaximised().then(setMaximized);
-  }, []);
-
-  const toggleMaximize = async () => {
-    await WindowToggleMaximise();
-    setMaximized(await WindowIsMaximised());
-  };
+  useEffect(() => subscribeMaximized(setMaximized), []);
 
   const handleClose = async () => {
     const w = window as Window & { go?: { main?: { App?: { ShutdownBackend: () => Promise<void> } } } };
@@ -39,7 +28,7 @@ export function WindowControls() {
       </button>
       <button
         type="button"
-        onClick={() => void toggleMaximize()}
+        onClick={() => void toggleMaximized()}
         className="flex h-9 w-10 items-center justify-center rounded-[8px] text-[#5f665c] transition-colors duration-200 hover:bg-[#eaf5e7]"
         aria-label={maximized ? "还原" : "最大化"}
         title={maximized ? "还原" : "最大化"}

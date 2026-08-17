@@ -5,19 +5,19 @@ import { formatDateTime, formatDurationMs, maskToken } from "@/lib/utils";
 import { toast } from "@/store/useToastStore";
 import { useSettingsStore } from "@/store/useSettingsStore";
 
-const roleLabel = { owner: "???", admin: "?????", member: "???" } as const;
+const roleLabel = { owner: "群主", admin: "管理员", member: "成员" } as const;
 const statusLabel = {
-  success: "??????",
-  filtered: "?????",
-  rate_limited: "???????",
-  failed: "???????",
-  waiting: "?????",
-  inviting: "??????",
+  success: "邀请成功",
+  filtered: "已过滤",
+  rate_limited: "频繁限制",
+  failed: "邀请失败",
+  waiting: "等待中",
+  inviting: "邀请中",
 } as const;
 
 async function copyText(text: string, label: string) {
   await navigator.clipboard.writeText(text);
-  toast("success", `?????${label}`);
+  toast("success", `已复制${label}`);
 }
 
 export function MemberDetailDrawer() {
@@ -46,6 +46,14 @@ export function MemberDetailDrawer() {
     return () => window.removeEventListener("keydown", onKey);
   }, [open, setDetailMemberQq]);
 
+  const canSelect =
+    member &&
+    (member.status === "waiting" ||
+      member.status === "failed" ||
+      member.status === "rate_limited");
+  const canRequeue =
+    member && (member.status === "failed" || member.status === "rate_limited");
+
   return (
     <>
       <div
@@ -66,7 +74,7 @@ export function MemberDetailDrawer() {
         }}
       >
         <div className="flex items-center justify-between border-b border-border px-4 py-3">
-          <h3 className="text-[15px] font-semibold">???????</h3>
+          <h3 className="text-[15px] font-semibold">成员详情</h3>
           <button
             type="button"
             className="rounded-lg p-1.5 hover:bg-[#eef1eb]"
@@ -84,19 +92,19 @@ export function MemberDetailDrawer() {
               </div>
               <div>
                 <div className="text-[16px] font-semibold">{member.nickname}</div>
-                <div className="text-[13px] text-muted-foreground">{member.card || "??????"}</div>
+                <div className="text-[13px] text-muted-foreground">{member.card || "无群名片"}</div>
               </div>
             </div>
 
             <dl className="space-y-3 text-[13px]">
-              <Row label="QQ??" value={<span className="font-mono">{member.qq}</span>} />
-              <Row label="???" value={roleLabel[member.role]} />
-              <Row label="????" value={config.source_group_id || "??"} />
+              <Row label="QQ号" value={<span className="font-mono">{member.qq}</span>} />
+              <Row label="角色" value={roleLabel[member.role]} />
+              <Row label="来源群" value={member.sourceGroupId || config.source_group_id || "—"} />
               <Row
-                label="?????"
+                label="当前状态"
                 value={
                   member.status === "filtered" && member.filterReason
-                    ? `??????${member.filterReason}??`
+                    ? `已过滤（${member.filterReason}）`
                     : statusLabel[member.status]
                 }
               />
@@ -105,7 +113,7 @@ export function MemberDetailDrawer() {
                 value={
                   <div className="flex items-center gap-2">
                     <span className="font-mono">
-                      {showToken ? member.token || "??" : maskToken(member.token)}
+                      {showToken ? member.token || "—" : maskToken(member.token)}
                     </span>
                     <button
                       type="button"
@@ -117,39 +125,43 @@ export function MemberDetailDrawer() {
                   </div>
                 }
               />
-              <Row label="??????" value={member.failReason || "??"} />
-              <Row label="????????" value={formatDateTime(member.startedAt || 0)} />
-              <Row label="??????" value={formatDateTime(member.finishedAt || 0)} />
-              <Row label="???" value={formatDurationMs(member.durationMs || 0)} />
+              <Row label="失败原因" value={member.failReason || "—"} />
+              <Row label="邀请开始时间" value={formatDateTime(member.startedAt || 0)} />
+              <Row label="完成时间" value={formatDateTime(member.finishedAt || 0)} />
+              <Row label="耗时" value={formatDurationMs(member.durationMs || 0)} />
             </dl>
 
             <div className="mt-6 grid grid-cols-2 gap-2">
-              <Action
-                onClick={() => void copyText(String(member.qq), "QQ")}
-              >
-                ???? QQ
-              </Action>
+              <Action onClick={() => void copyText(String(member.qq), "QQ")}>复制 QQ</Action>
               <Action
                 onClick={() => {
                   if (!member.token) {
-                    toast("warning", "???????? Token");
+                    toast("warning", "该成员没有 Token");
                     return;
                   }
-                  toast("warning", "Token ????????????????????????");
+                  toast("warning", "Token 属于敏感运行数据，请勿泄露");
                   void copyText(member.token, "Token");
                 }}
               >
-                ???? Token
+                复制 Token
               </Action>
-              <Action onClick={() => requeueMember(member.qq)}>??????????</Action>
-              <Action
-                onClick={() => {
-                  if (selectedQqs.has(member.qq)) deselectQq(member.qq);
-                  else selectQq(member.qq);
-                }}
-              >
-                {selectedQqs.has(member.qq) ? "??????" : "???????"}
-              </Action>
+              {canRequeue ? (
+                <Action onClick={() => requeueMember(member.qq)}>重新加入队列</Action>
+              ) : (
+                <Action disabled>重新加入队列</Action>
+              )}
+              {canSelect ? (
+                <Action
+                  onClick={() => {
+                    if (selectedQqs.has(member.qq)) deselectQq(member.qq);
+                    else selectQq(member.qq);
+                  }}
+                >
+                  {selectedQqs.has(member.qq) ? "取消选择" : "加入选择"}
+                </Action>
+              ) : (
+                <Action disabled>不可选择</Action>
+              )}
             </div>
           </div>
         )}
@@ -170,15 +182,18 @@ function Row({ label, value }: { label: string; value: ReactNode }) {
 function Action({
   children,
   onClick,
+  disabled,
 }: {
   children: ReactNode;
-  onClick: () => void;
+  onClick?: () => void;
+  disabled?: boolean;
 }) {
   return (
     <button
       type="button"
+      disabled={disabled}
       onClick={onClick}
-      className="rounded-[10px] border border-border bg-[#f7faf5] px-3 py-2 text-[13px] hover:border-primary hover:text-primary"
+      className="rounded-[10px] border border-border bg-[#f7faf5] px-3 py-2 text-[13px] hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-40"
     >
       {children}
     </button>

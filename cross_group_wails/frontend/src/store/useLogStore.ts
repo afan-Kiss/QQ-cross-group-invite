@@ -18,15 +18,15 @@ function parseLogLine(line: string): LogEntry | null {
   const time = match?.[1] ?? new Date().toLocaleTimeString("zh-CN", { hour12: false });
   const body = match?.[2] ?? line;
   let level: LogLevel = "INFO";
-  if (/成功|SUCCESS/i.test(body)) level = "SUCCESS";
-  else if (/WARN|警告|频繁/i.test(body)) level = "WARN";
-  else if (/ERROR|失败|错误/i.test(body)) level = "ERROR";
+  if (/鎴愬姛|SUCCESS/i.test(body)) level = "SUCCESS";
+  else if (/WARN|璀﹀憡|棰戠箒/i.test(body)) level = "WARN";
+  else if (/ERROR|澶辫触|閿欒/i.test(body)) level = "ERROR";
   let module: LogModule = "SYSTEM";
   if (/NapCat|napcat/i.test(body)) module = "NAPCAT";
-  else if (/成员|member/i.test(body)) module = "MEMBERS";
-  else if (/邀请|invite/i.test(body)) module = "INVITE";
+  else if (/鎴愬憳|member/i.test(body)) module = "MEMBERS";
+  else if (/閭�璇穦invite/i.test(body)) module = "INVITE";
   else if (/token/i.test(body)) module = "TOKEN";
-  else if (/服务|service/i.test(body)) module = "SERVICE";
+  else if (/鏈嶅姟|service/i.test(body)) module = "SERVICE";
   return {
     id: `log-${++logId}`,
     time,

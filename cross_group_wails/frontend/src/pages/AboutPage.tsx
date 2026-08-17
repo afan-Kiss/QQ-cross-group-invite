@@ -21,7 +21,7 @@ export function AboutPage() {
           wailsVersion: raw.wailsVersion,
           goVersion: raw.goVersion,
           frontendVersion: raw.frontendVersion,
-          pythonServiceVersion: raw.pythonServiceVersion || "��",
+          pythonServiceVersion: raw.pythonServiceVersion || "—",
         });
       }
     });
@@ -33,16 +33,16 @@ export function AboutPage() {
         <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-[16px] bg-primary text-white">
           <Users className="h-8 w-8" />
         </div>
-        <h2 className="mt-4 text-[22px] font-semibold text-[#242824]">QQ��Ⱥ���빤��</h2>
-        <p className="mt-1 text-[14px] text-muted-foreground">�汾 {info.appVersion}</p>
+        <h2 className="mt-4 text-[22px] font-semibold text-[#242824]">QQ跨群邀请工具</h2>
+        <p className="mt-1 text-[14px] text-muted-foreground">版本 {info.appVersion}</p>
 
         <dl className="mt-6 space-y-3 text-left text-[13px]">
           {[
-            ["Wails �汾", info.wailsVersion],
-            ["Go �汾", info.goVersion || "��"],
-            ["ǰ�˰汾", info.frontendVersion],
-            ["Python ����汾", info.pythonServiceVersion],
-            ["NapCat ״̬", napcatOnline ? "����" : "����"],
+            ["Wails 版本", info.wailsVersion],
+            ["Go 版本", info.goVersion || "—"],
+            ["前端版本", info.frontendVersion],
+            ["Python 服务版本", info.pythonServiceVersion],
+            ["NapCat 状态", napcatOnline ? "在线" : "离线"],
           ].map(([k, v]) => (
             <div key={k} className="flex justify-between border-b border-border/50 py-2">
               <dt className="text-muted-foreground">{k}</dt>
@@ -57,7 +57,15 @@ export function AboutPage() {
             onClick={() => void wailsBridge.openLogsDir()}
             className="w-full rounded-[10px] border border-border py-2.5 text-[13px] hover:bg-[#f7faf5]"
           >
-            ����־Ŀ¼
+            打开日志目录
+          </button>
+          <button
+            type="button"
+            disabled
+            className="w-full rounded-[10px] border border-border py-2.5 text-[13px] text-muted-foreground opacity-60 cursor-not-allowed"
+            title="暂未开放"
+          >
+            检查更新（暂未开放）
           </button>
         </div>
       </div>

@@ -15,14 +15,14 @@ import { useNavigationStore, type AppPage } from "@/store/useNavigationStore";
 import { useServiceStore } from "@/store/useServiceStore";
 
 const navItems: { page: AppPage; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
-  { page: "dashboard", label: "¿ØÖÆÌ¨", icon: LayoutDashboard },
-  { page: "members", label: "³ÉÔ±ÁĞ±í", icon: Users },
-  { page: "tasks", label: "ÑûÇëÈÎÎñ", icon: Send },
-  { page: "rate-limit", label: "Æµ·±ÏŞÖÆ", icon: ShieldAlert },
-  { page: "failed", label: "Ê§°Ü¼ÇÂ¼", icon: CircleX },
-  { page: "logs", label: "ÔËĞĞÈÕÖ¾", icon: FileText },
-  { page: "settings", label: "ÏµÍ³ÉèÖÃ", icon: Settings },
-  { page: "about", label: "¹ØÓÚ", icon: Info },
+  { page: "dashboard", label: "æ§åˆ¶å°", icon: LayoutDashboard },
+  { page: "members", label: "æˆå‘˜åˆ—è¡¨", icon: Users },
+  { page: "tasks", label: "é‚€è¯·ä»»åŠ¡", icon: Send },
+  { page: "rate-limit", label: "é¢‘ç¹é™åˆ¶", icon: ShieldAlert },
+  { page: "failed", label: "å¤±è´¥è®°å½•", icon: CircleX },
+  { page: "logs", label: "è¿è¡Œæ—¥å¿—", icon: FileText },
+  { page: "settings", label: "ç³»ç»Ÿè®¾ç½®", icon: Settings },
+  { page: "about", label: "å…³äº", icon: Info },
 ];
 
 export function Sidebar() {
@@ -71,25 +71,25 @@ export function Sidebar() {
           type="button"
           onClick={toggleSidebar}
           className="mb-3 flex w-full items-center justify-center rounded-[8px] py-1.5 text-muted-foreground hover:bg-[#f7faf5]"
-          title={collapsed ? "Õ¹¿ª" : "ÊÕËõ"}
+          title={collapsed ? "å±•å¼€" : "æ”¶ç¼©"}
         >
           {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
         </button>
         {!collapsed && (
           <div className="space-y-2 text-[11px] text-muted-foreground">
             <div className="flex items-center justify-between">
-              <span>±¾µØ·şÎñ</span>
+              <span>æœ¬åœ°æœåŠ¡</span>
               <span className={localService === "ready" ? "text-primary" : "text-danger"}>
-                ¡ñ {localService === "ready" ? "Õı³£" : "Òì³£"}
+                â— {localService === "ready" ? "æ­£å¸¸" : "å¼‚å¸¸"}
               </span>
             </div>
             <div className="flex items-center justify-between">
               <span>NapCat</span>
               <span className={napcatOnline ? "text-primary" : "text-warning"}>
-                ¡ñ {napcatOnline ? "ÔÚÏß" : "ÀëÏß"}
+                â— {napcatOnline ? "åœ¨çº¿" : "ç¦»çº¿"}
               </span>
             </div>
-            <div className="text-[10px] text-muted-foreground/80">°æ±¾ 1.0.0</div>
+            <div className="text-[10px] text-muted-foreground/80">ç‰ˆæœ¬ 1.0.0</div>
           </div>
         )}
       </div>

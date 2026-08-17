@@ -2,10 +2,20 @@ import { useEffect, useState } from "react";
 import { ArrowLeft, Square } from "lucide-react";
 import { useInviteStore } from "@/store/useInviteStore";
 import { useNavigationStore } from "@/store/useNavigationStore";
-import { formatDateTime, formatNumber } from "@/lib/utils";
+import { formatDateTime, formatNumber, toEpochMs } from "@/lib/utils";
 import { Progress } from "@/components/ui/progress";
 import { api } from "@/lib/api";
 import type { PersistedTask } from "@/lib/types";
+
+const statusLabel: Record<string, string> = {
+  running: "è¿è¡Œä¸­",
+  preparing: "è¿è¡Œä¸­",
+  stopping: "è¿è¡Œä¸­",
+  stopped: "å·²åœæ­¢",
+  completed: "å·²å®Œæˆ",
+  error: "å¼‚å¸¸",
+  interrupted: "å¼‚å¸¸ä¸­æ–­",
+};
 
 export function TaskDetailPage() {
   const taskId = useNavigationStore((s) => s.taskId);
@@ -26,7 +36,7 @@ export function TaskDetailPage() {
   if (!task && !remote) {
     return (
       <div className="flex h-full items-center justify-center">
-        <p className="text-muted-foreground">ÈÎÎñ²»´æÔÚ</p>
+        <p className="text-muted-foreground">ä»»åŠ¡ä¸å­˜åœ¨</p>
       </div>
     );
   }
@@ -39,56 +49,49 @@ export function TaskDetailPage() {
   const failed = task?.failed ?? Number(remote?.failed || 0);
   const source = task?.sourceGroup ?? String(remote?.source_group_id || "");
   const target = task?.targetGroup ?? String(remote?.target_group_id || "");
-  const startRaw = task?.startTime ?? Number(remote?.started_at || 0);
-  const startTime = startRaw > 1e12 ? startRaw : startRaw * 1000;
-  const endRaw = task?.endTime ?? Number(remote?.finished_at || 0);
-  const endTime = endRaw ? (endRaw > 1e12 ? endRaw : endRaw * 1000) : 0;
-  const isRunning = status === "running" || status === "preparing" || status === "stopping";
-  const completed = isRunning ? stats.completed : success + frequent + failed;
+  const startTime = toEpochMs(task?.startTime ?? Number(remote?.started_at || 0));
+  const endTime = toEpochMs(task?.endTime ?? Number(remote?.finished_at || 0));
+  const isLive = Boolean(taskId && stats.task_id && taskId === stats.task_id && (stats.running || inviting));
+  const completed = isLive ? stats.completed : success + frequent + failed;
   const pct = total > 0 ? (completed / total) * 100 : 0;
-  const durationMs = endTime && startTime ? endTime - startTime : isRunning && startTime ? Date.now() - startTime : 0;
+  const durationMs = endTime && startTime ? endTime - startTime : isLive && startTime ? Date.now() - startTime : 0;
   const timeline = task?.timeline || remote?.timeline || [];
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-4 overflow-auto">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={backToTasks}
-            className="rounded-[8px] p-2 hover:bg-[#f7faf5]"
-            title="·µ»ØÁĞ±í"
-          >
+          <button type="button" onClick={backToTasks} className="rounded-[8px] p-2 hover:bg-[#f7faf5]" title="è¿”å›åˆ—è¡¨">
             <ArrowLeft className="h-4 w-4" />
           </button>
           <div>
             <h2 className="text-[20px] font-semibold text-[#242824]">
-              ÈÎÎñ {id}
-              <span className="ml-2 text-[14px] text-primary">{statusText(status)}</span>
+              ä»»åŠ¡ {id}
+              <span className="ml-2 text-[14px] text-primary">{statusLabel[status] || status}</span>
             </h2>
             <p className="mt-1 text-[13px] text-muted-foreground">
-              {source} ¡ú {target}
+              {source} â†’ {target}
             </p>
           </div>
         </div>
-        {inviting && isRunning && (
+        {isLive && (
           <button
             type="button"
-            onClick={() => void stopInvite()}
+            onClick={() => void stopInvite(id)}
             className="flex items-center gap-2 rounded-[10px] bg-[#fdeeee] px-4 py-2 text-[13px] text-danger hover:bg-danger/10"
           >
             <Square className="h-4 w-4" />
-            Í£Ö¹ÈÎÎñ
+            åœæ­¢ä»»åŠ¡
           </button>
         )}
       </div>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         {[
-          { label: "×ÜÈËÊı", value: total },
-          { label: "³É¹¦", value: isRunning ? stats.success : success },
-          { label: "Æµ·±", value: isRunning ? stats.rate_limited : frequent },
-          { label: "Ê§°Ü", value: isRunning ? stats.failed : failed },
+          { label: "æ€»äººæ•°", value: total },
+          { label: "æˆåŠŸ", value: isLive ? stats.success : success },
+          { label: "é¢‘ç¹", value: isLive ? stats.rate_limited : frequent },
+          { label: "å¤±è´¥", value: isLive ? stats.failed : failed },
         ].map((c) => (
           <div key={c.label} className="rounded-[14px] border border-border bg-white p-4 shadow-[var(--shadow-card)]">
             <div className="text-[12px] text-muted-foreground">{c.label}</div>
@@ -99,74 +102,34 @@ export function TaskDetailPage() {
 
       <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
         <div className="rounded-[16px] border border-border bg-white p-5 shadow-[var(--shadow-card)]">
-          <h3 className="mb-4 text-[15px] font-semibold">ÕûÌå½ø¶È</h3>
           <div className="mb-2 flex justify-between text-[13px]">
-            <span>
-              {completed} / {total}
-            </span>
-            <span>{pct.toFixed(2)}%</span>
+            <span>è¿›åº¦</span>
+            <span>{formatNumber(completed)} / {formatNumber(total)} ({pct.toFixed(1)}%)</span>
           </div>
           <Progress value={pct} />
-          <div className="mt-4 grid grid-cols-2 gap-3 text-[13px] text-muted-foreground">
-            <div>¿ªÊ¼Ê±¼ä£º{formatDateTime(startTime / 1000)}</div>
-            <div>½áÊøÊ±¼ä£º{endTime ? formatDateTime(endTime / 1000) : "¡ª"}</div>
-            <div>×ÜºÄÊ±£º{durationMs > 0 ? `${(durationMs / 1000).toFixed(1)} Ãë` : "¡ª"}</div>
-            <div>µ±Ç°³ÉÔ±£º{isRunning ? stats.current_nickname || "¡ª" : "¡ª"}</div>
+          <div className="mt-4 space-y-1 text-[13px] text-muted-foreground">
+            <div>å¼€å§‹æ—¶é—´ï¼š{formatDateTime(startTime)}</div>
+            <div>ç»“æŸæ—¶é—´ï¼š{endTime ? formatDateTime(endTime) : "â€”"}</div>
+            <div>è€—æ—¶ï¼š{durationMs ? `${(durationMs / 1000).toFixed(1)} ç§’` : "â€”"}</div>
+            {!isLive && <div className="text-[12px]">å†å²ä»»åŠ¡ä»…å±•ç¤ºæŒä¹…åŒ–æ•°æ®</div>}
           </div>
-          {(task?.errorMessage || remote?.error_message) && (
-            <p className="mt-3 text-[13px] text-danger">
-              {task?.errorMessage || remote?.error_message}
-            </p>
-          )}
         </div>
-
         <div className="rounded-[16px] border border-border bg-white p-5 shadow-[var(--shadow-card)]">
-          <h3 className="mb-4 text-[15px] font-semibold">Ê±¼äÏß</h3>
-          <ul className="space-y-3 text-[13px]">
+          <h3 className="mb-3 text-[14px] font-semibold">äº‹ä»¶æ—¶é—´çº¿</h3>
+          <div className="max-h-[280px] space-y-2 overflow-auto text-[12px]">
             {timeline.length === 0 ? (
-              <li className="text-muted-foreground">ÔİÎŞÊÂ¼ş</li>
+              <p className="text-muted-foreground">æš‚æ— äº‹ä»¶</p>
             ) : (
-              timeline.map((ev, i) => (
-                <li key={`${ev.at}-${i}`} className="flex gap-2">
-                  <span className="text-primary">¡ñ</span>
-                  <span>
-                    <span className="text-muted-foreground">{formatDateTime(ev.at)} </span>
-                    {eventLabel(ev.event)}
-                    {ev.detail ? ` - ${ev.detail}` : ""}
-                  </span>
-                </li>
+              timeline.map((ev, idx) => (
+                <div key={`${ev.at}-${idx}`} className="border-b border-border/50 pb-2">
+                  <span className="text-muted-foreground">{formatDateTime(ev.at)} </span>
+                  <span>{ev.detail || ev.event || ""}</span>
+                </div>
               ))
             )}
-          </ul>
+          </div>
         </div>
       </div>
     </div>
   );
-}
-
-function statusText(s: string) {
-  const map: Record<string, string> = {
-    stopped: "ÒÑÍ£Ö¹",
-    completed: "ÒÑÍê³É",
-    error: "Òì³£",
-    running: "ÔËĞĞÖĞ",
-    preparing: "×¼±¸ÖĞ",
-    stopping: "ÕıÔÚÍ£Ö¹",
-  };
-  return map[s] ?? s;
-}
-
-function eventLabel(event: string) {
-  const map: Record<string, string> = {
-    created: "ÈÎÎñ´´½¨",
-    members_loaded: "³ÉÔ±¼ÓÔØ",
-    started: "ÈÎÎñ¿ªÊ¼",
-    batch_start: "Åú´Î¿ªÊ¼",
-    rate_limited: "Æµ·±",
-    failed: "Ê§°Ü",
-    stopped: "ÈÎÎñÍ£Ö¹",
-    completed: "ÈÎÎñÍê³É",
-    error: "ÈÎÎñÒì³£",
-  };
-  return map[event] ?? event;
 }

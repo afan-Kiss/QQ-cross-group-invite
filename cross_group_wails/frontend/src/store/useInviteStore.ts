@@ -87,7 +87,7 @@ export interface InviteTask {
   success: number;
   frequent: number;
   failed: number;
-  status: "running" | "stopped" | "completed" | "error" | "preparing" | "stopping";
+  status: "running" | "stopped" | "completed" | "error" | "preparing" | "stopping" | "interrupted";
   errorMessage?: string;
   timeline?: Array<{ at: number; event: string; detail?: string }>;
 }
@@ -99,6 +99,7 @@ function mapPersistedTask(t: PersistedTask): InviteTask {
     status = statusRaw;
   } else if (statusRaw === "stopped") status = "stopped";
   else if (statusRaw === "error") status = "error";
+  else if (statusRaw === "interrupted") status = "interrupted";
   else if (statusRaw === "completed") status = "completed";
 
   return {
@@ -154,7 +155,7 @@ interface InviteStore {
   saveConfig: () => Promise<void>;
   loadMembers: () => Promise<void>;
   startInvite: () => Promise<void>;
-  stopInvite: () => Promise<void>;
+  stopInvite: (taskId?: string) => Promise<void>;
   refreshStatus: () => Promise<void>;
   loadTasks: () => Promise<void>;
   clearLogs: () => Promise<void>;
@@ -183,7 +184,26 @@ export const useInviteStore = create<InviteStore>((set, get) => ({
   currentTaskId: null,
   detailMemberQq: null,
 
-  setConfig: (patch) => set((s) => ({ config: { ...s.config, ...patch } })),
+  setConfig: (patch) =>
+    set((s) => {
+      const config = { ...s.config, ...patch };
+      const sourceChanged =
+        patch.source_group_id !== undefined && patch.source_group_id !== s.config.source_group_id;
+      const filterChanged =
+        patch.filter_staff !== undefined && patch.filter_staff !== s.config.filter_staff;
+      if (sourceChanged || filterChanged) {
+        return {
+          config,
+          members: [],
+          membersLoaded: false,
+          selectedQqs: new Set<number>(),
+          statusText: sourceChanged
+            ? "来源群已修改，请重新加载成员"
+            : "过滤规则已修改，请重新加载成员",
+        };
+      }
+      return { config };
+    }),
   setActiveTab: (tab) => set({ activeTab: tab }),
   setAutoScrollLogs: (value) => set({ autoScrollLogs: value }),
   setDetailMemberQq: (qq) => set({ detailMemberQq: qq }),
@@ -208,12 +228,20 @@ export const useInviteStore = create<InviteStore>((set, get) => ({
         const m = s.members.find((x) => x.qq === qq);
         return m && selectableStatus(m.status);
       });
-      const allSelected = selectable.every((qq) => s.selectedQqs.has(qq));
-      return { selectedQqs: allSelected ? new Set<number>() : new Set(selectable) };
+      const allSelected = selectable.length > 0 && selectable.every((qq) => s.selectedQqs.has(qq));
+      const next = new Set(s.selectedQqs);
+      if (allSelected) {
+        for (const qq of selectable) next.delete(qq);
+      } else {
+        for (const qq of selectable) next.add(qq);
+      }
+      return { selectedQqs: next };
     }),
 
   selectQq: (qq) =>
     set((s) => {
+      const m = s.members.find((x) => x.qq === qq);
+      if (!m || !selectableStatus(m.status)) return {};
       const next = new Set(s.selectedQqs);
       next.add(qq);
       return { selectedQqs: next };
@@ -228,10 +256,12 @@ export const useInviteStore = create<InviteStore>((set, get) => ({
 
   requeueMember: (qq) =>
     set((s) => {
+      const target = s.members.find((m) => m.qq === qq);
+      if (!target || (target.status !== "failed" && target.status !== "rate_limited")) {
+        return {};
+      }
       const members = s.members.map((m) =>
-        m.qq === qq && (m.status === "failed" || m.status === "rate_limited")
-          ? { ...m, status: "waiting" as const, failReason: undefined }
-          : m,
+        m.qq === qq ? { ...m, status: "waiting" as const, failReason: undefined } : m,
       );
       const next = new Set(s.selectedQqs);
       next.add(qq);
@@ -298,6 +328,10 @@ export const useInviteStore = create<InviteStore>((set, get) => ({
       const m = members.find((x) => x.qq === qq);
       return m && selectableStatus(m.status);
     });
+    if (!get().membersLoaded) {
+      toast("warning", "请先加载成员");
+      return;
+    }
     if (qqList.length === 0) {
       toast("warning", "请至少选择一名成员");
       return;
@@ -340,16 +374,16 @@ export const useInviteStore = create<InviteStore>((set, get) => ({
     }
   },
 
-  stopInvite: async () => {
+  stopInvite: async (taskId) => {
     guardServiceReady();
+    const activeId = taskId || get().stats.task_id || get().currentTaskId || undefined;
     try {
-      await api.stopInvite();
-      const taskId = get().currentTaskId;
+      await api.stopInvite(activeId || undefined);
       set((s) => ({
         inviting: false,
         statusText: "正在停止...",
         tasks: s.tasks.map((t) =>
-          t.id === taskId ? { ...t, status: "stopping" as const } : t,
+          activeId && t.id === activeId ? { ...t, status: "stopping" as const } : t,
         ),
       }));
       toast("warning", "已发送停止请求");
