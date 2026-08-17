@@ -4,6 +4,7 @@ import { wailsBridge } from "@/lib/wails-bridge";
 
 interface ServiceStore extends BootstrapStatus {
   bootstrapped: boolean;
+  appSession: string;
   setFromBootstrap: (status: BootstrapStatus) => void;
   setBootstrapping: (message: string) => void;
   setBootstrapped: (value: boolean) => void;
@@ -17,13 +18,19 @@ const initial: BootstrapStatus = {
   startedByUs: false,
   napcatOnline: false,
   napcatMessage: "",
+  appSession: "",
 };
 
 export const useServiceStore = create<ServiceStore>((set) => ({
   ...initial,
   bootstrapped: false,
+  appSession: "",
 
-  setFromBootstrap: (status) => set({ ...status }),
+  setFromBootstrap: (status) =>
+    set({
+      ...status,
+      appSession: status.startedByUs ? status.appSession || "" : "",
+    }),
   setBootstrapping: (message) =>
     set({ localService: "booting", message, bootstrapped: false }),
   setBootstrapped: (value) => set({ bootstrapped: value }),
@@ -32,12 +39,17 @@ export const useServiceStore = create<ServiceStore>((set) => ({
     set({ localService: "booting", message: "正在启动本地服务...", bootstrapped: false });
     try {
       const status = await wailsBridge.ensureBackend();
-      set({ ...status, bootstrapped: status.localService === "ready" });
+      set({
+        ...status,
+        appSession: status.startedByUs ? status.appSession || "" : "",
+        bootstrapped: status.localService === "ready",
+      });
     } catch (e) {
       set({
         localService: "error",
         message: e instanceof Error ? e.message : "本地服务启动失败",
         bootstrapped: false,
+        appSession: "",
       });
     }
   },
@@ -45,13 +57,18 @@ export const useServiceStore = create<ServiceStore>((set) => ({
   refreshHealth: async () => {
     try {
       const status = await wailsBridge.probeHealth();
-      set({ ...status, bootstrapped: status.localService === "ready" });
+      set({
+        ...status,
+        appSession: status.startedByUs ? status.appSession || "" : "",
+        bootstrapped: status.localService === "ready",
+      });
     } catch {
       set({
         localService: "error",
         message: "后端服务未连接",
         napcatOnline: false,
         bootstrapped: false,
+        appSession: "",
       });
     }
   },

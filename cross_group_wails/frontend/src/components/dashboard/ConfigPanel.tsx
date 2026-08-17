@@ -28,6 +28,7 @@ export function ConfigPanel() {
   const stopInvite = useInviteStore((s) => s.stopInvite);
   const loadingMembers = useInviteStore((s) => s.loadingMembers);
   const inviting = useInviteStore((s) => s.inviting);
+  const stats = useInviteStore((s) => s.stats);
   const serviceReady = useServiceStore((s) => s.localService === "ready");
   const napcatOnline = useServiceStore((s) => s.napcatOnline);
   const actionDisabled = !serviceReady || !napcatOnline;
@@ -179,7 +180,7 @@ export function ConfigPanel() {
           disabled={!serviceReady || !inviting}
         >
           <Square className="h-4 w-4" />
-          停止邀请
+          {stats.status === "stopping" ? "正在停止…" : "停止邀请"}
         </Button>
       </div>
     </div>

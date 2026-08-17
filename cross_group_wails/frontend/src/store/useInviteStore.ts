@@ -55,6 +55,8 @@ const emptyStats: AppStatus = {
   batch: emptyBatch,
 };
 
+let membersLoadGeneration = 0;
+
 const emptyConfig: InviteConfig = {
   target_group_id: "",
   source_group_id: "",
@@ -192,11 +194,13 @@ export const useInviteStore = create<InviteStore>((set, get) => ({
       const filterChanged =
         patch.filter_staff !== undefined && patch.filter_staff !== s.config.filter_staff;
       if (sourceChanged || filterChanged) {
+        membersLoadGeneration += 1;
         return {
           config,
           members: [],
           membersLoaded: false,
           selectedQqs: new Set<number>(),
+          loadingMembers: false,
           statusText: sourceChanged
             ? "来源群已修改，请重新加载成员"
             : "过滤规则已修改，请重新加载成员",
@@ -293,15 +297,26 @@ export const useInviteStore = create<InviteStore>((set, get) => ({
     guardServiceReady();
     guardNapcatOnline();
     const { config } = get();
+    const generation = ++membersLoadGeneration;
+    const sourceGroupId = config.source_group_id;
+    const filterStaff = config.filter_staff;
     set({ loadingMembers: true, statusText: "正在加载成员..." });
     try {
       const res = await api.loadMembers({
-        source_group_id: config.source_group_id,
-        filter_staff: config.filter_staff,
+        source_group_id: sourceGroupId,
+        filter_staff: filterStaff,
       });
-      const members = api.mapLoadedMembers(res.members, config.filter_staff);
+      const latest = get();
+      if (
+        generation !== membersLoadGeneration ||
+        latest.config.source_group_id !== sourceGroupId ||
+        latest.config.filter_staff !== filterStaff
+      ) {
+        return;
+      }
+      const members = api.mapLoadedMembers(res.members, filterStaff);
       const selected = new Set(
-        members.filter((m) => m.status === "waiting").map((m) => m.qq),
+        members.filter((x) => x.status === "waiting").map((x) => x.qq),
       );
       set({
         members,
@@ -312,11 +327,14 @@ export const useInviteStore = create<InviteStore>((set, get) => ({
       toast("success", "成员加载完成");
       await get().refreshStatus();
     } catch (e) {
+      if (generation !== membersLoadGeneration) return;
       const msg = e instanceof Error ? e.message : "加载失败";
       set({ statusText: msg });
       toast("error", msg);
     } finally {
-      set({ loadingMembers: false });
+      if (generation === membersLoadGeneration) {
+        set({ loadingMembers: false });
+      }
     }
   },
 
@@ -380,10 +398,10 @@ export const useInviteStore = create<InviteStore>((set, get) => ({
     try {
       await api.stopInvite(activeId || undefined);
       set((s) => ({
-        inviting: false,
+        inviting: true,
         statusText: "正在停止...",
-        tasks: s.tasks.map((t) =>
-          activeId && t.id === activeId ? { ...t, status: "stopping" as const } : t,
+        tasks: s.tasks.map((task) =>
+          activeId && task.id === activeId ? { ...task, status: "stopping" as const } : task,
         ),
       }));
       toast("warning", "已发送停止请求");
@@ -440,7 +458,7 @@ export const useInviteStore = create<InviteStore>((set, get) => ({
         rateLimitList: status.rate_limit_list,
         failedList: status.failed_list,
         rateSeries: status.rate_series,
-        inviting: status.running,
+        inviting: status.running || status.status === "stopping" || status.status === "preparing",
         currentTaskId: taskId,
         tasks: updatedTasks,
         statusText: status.running
@@ -464,9 +482,10 @@ export const useInviteStore = create<InviteStore>((set, get) => ({
       guardServiceReady();
       const list = await api.listTasks();
       const mapped = list.map(mapPersistedTask);
-      set({ tasks: mapped });
-      const running = mapped.find((t) => t.status === "running" || t.status === "preparing");
-      if (running) set({ currentTaskId: running.id });
+      const running = mapped.find(
+        (t) => t.status === "running" || t.status === "preparing" || t.status === "stopping",
+      );
+      set({ tasks: mapped, currentTaskId: running ? running.id : null });
     } catch {
       /* idle until service ready */
     }

@@ -20,7 +20,8 @@ export function RateLimitPage() {
   todayStart.setHours(0, 0, 0, 0);
   const todayMs = todayStart.getTime();
   const todayCount = rateLimitList.filter((r) => toEpochMs(r.at) >= todayMs).length;
-  const last = rateLimitList[0];
+  const sorted = [...rateLimitList].sort((a, b) => toEpochMs(b.at) - toEpochMs(a.at));
+  const last = sorted[0];
 
   const canRequeue = (r: RateLimitRecord) => {
     const m = getMember(r.qq);
@@ -85,7 +86,7 @@ export function RateLimitPage() {
               </tr>
             </thead>
             <tbody>
-              {rateLimitList.map((r) => (
+              {sorted.map((r) => (
                 <tr key={`${r.qq}-${r.at}-${r.task_id ?? ""}`} className="border-b border-border/70 hover:bg-[#f7faf5]">
                   <td className="px-4 py-3 font-mono text-[13px]">{r.qq}</td>
                   <td className="px-4 py-3">{r.nickname}</td>

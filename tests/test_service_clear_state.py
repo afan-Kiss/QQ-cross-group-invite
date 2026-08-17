@@ -12,31 +12,35 @@ def test_clear_logs():
     assert cgb.get_state()["logs"] == []
 
 
-def test_clear_failed():
+def test_clear_failed_keeps_task_counts(tmp_path, monkeypatch):
+    monkeypatch.setattr(cgb, "_tasks_path", lambda: tmp_path / "tasks.json")
     with cgb._state_lock:
         cgb._state.task_id = "t-clear"
         cgb._state.success = 2
-        cgb._state.errors.append(
-            InviteRecord(qq=1, nickname="n", reason="fail")
-        )
+        cgb._state.failed_count = 1
+        cgb._state.errors.append(InviteRecord(qq=1, nickname="n", reason="fail"))
+    cgb._persist_current_task()
     cgb.clear_failed()
     assert cgb.get_state()["errors"] == []
+    assert cgb.get_state()["failed"] == 1
     persisted = {t["id"]: t for t in cgb._load_tasks()}
-    assert persisted["t-clear"]["failed"] == 0
+    assert persisted["t-clear"]["failed"] == 1
     assert persisted["t-clear"]["success"] == 2
 
 
-def test_clear_rate_limits():
+def test_clear_rate_limits_keeps_task_counts(tmp_path, monkeypatch):
+    monkeypatch.setattr(cgb, "_tasks_path", lambda: tmp_path / "tasks.json")
     with cgb._state_lock:
         cgb._state.task_id = "t-clear2"
         cgb._state.success = 1
-        cgb._state.frequent.append(
-            InviteRecord(qq=2, nickname="f", reason="频繁")
-        )
+        cgb._state.rate_limited_count = 1
+        cgb._state.frequent.append(InviteRecord(qq=2, nickname="f", reason="rate"))
+    cgb._persist_current_task()
     cgb.clear_rate_limits()
     assert cgb.get_state()["frequent"] == []
+    assert cgb.get_state()["rate_limited"] == 1
     persisted = {t["id"]: t for t in cgb._load_tasks()}
-    assert persisted["t-clear2"]["rate_limited"] == 0
+    assert persisted["t-clear2"]["rate_limited"] == 1
     assert persisted["t-clear2"]["success"] == 1
 
 

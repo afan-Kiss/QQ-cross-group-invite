@@ -186,3 +186,15 @@ func TestPostStopInviteEmptySessionNoPost(t *testing.T) {
 		t.Fatalf("expected no posts for empty session, got %d", calls.Load())
 	}
 }
+
+func TestAppSessionOnlyWhenOwned(t *testing.T) {
+	if got := appSessionIfOwned(true, "abc"); got != "abc" {
+		t.Fatalf("owned: got %q", got)
+	}
+	if got := appSessionIfOwned(false, "abc"); got != "" {
+		t.Fatalf("not owned: got %q", got)
+	}
+	if got := appSessionIfOwned(true, ""); got != "" {
+		t.Fatalf("empty session: got %q", got)
+	}
+}

@@ -17,6 +17,7 @@ type BootstrapStatusRaw = {
   startedByUs: boolean;
   napcatOnline: boolean;
   napcatMessage: string;
+  appSession?: string;
 };
 
 type AppInfoRaw = {
@@ -44,7 +45,9 @@ function mapBootstrap(raw: BootstrapStatusRaw): BootstrapStatus {
         ? "port_conflict"
         : raw.localService === "error"
           ? "error"
-          : "booting";
+          : raw.localService === "manual"
+            ? "manual"
+            : "booting";
 
   let message = raw.message;
   if (message === "service ready") message = "服务已就绪";
@@ -65,6 +68,7 @@ function mapBootstrap(raw: BootstrapStatusRaw): BootstrapStatus {
     startedByUs: raw.startedByUs,
     napcatOnline: raw.napcatOnline,
     napcatMessage: raw.napcatMessage,
+    appSession: raw.startedByUs ? raw.appSession || "" : "",
   };
 }
 
@@ -101,9 +105,9 @@ export const wailsBridge = {
     await app.OpenLogsDir();
   },
 
-  async getAppInfo(): Promise<AppInfoRaw | null> {
+  async getAppInfo(): Promise<AppInfoRaw> {
     const app = getApp();
-    if (!app) return null;
+    if (!app) throw new Error(NOT_IN_WAILS);
     return app.GetAppInfo();
   },
 

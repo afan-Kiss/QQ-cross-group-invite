@@ -24,29 +24,36 @@ export function SettingsPage() {
   }, [load]);
 
   const save = async () => {
+    const token = settings.napcatWebuiToken;
     persistSettings(settings);
-    if (settings.napcatWebuiToken) update({ napcatWebuiToken: "" });
     setConfig({
       batch_count: settings.defaultBatchCount,
       interval_ms: settings.defaultIntervalMs,
       filter_staff: settings.defaultFilterStaff,
     });
-    try {
-      if (localService === "ready") {
-        await api.saveConfig({
-          target_group_id: useInviteStore.getState().config.target_group_id,
-          source_group_id: useInviteStore.getState().config.source_group_id,
-          batch_count: settings.defaultBatchCount,
-          interval_ms: settings.defaultIntervalMs,
-          filter_staff: settings.defaultFilterStaff,
-          onebot_url: settings.onebotUrl,
-          napcat_webui_token: settings.napcatWebuiToken,
-          log_level: settings.logLevel,
-          max_log_file_mb: settings.maxLogFileSize,
-          log_retention_days: settings.logRetentionDays,
-          auto_clean_logs: settings.autoCleanLogs,
-        } as never);
+    if (localService !== "ready") {
+      if (token) {
+        toast("warning", "服务未连接，Token 尚未保存");
+      } else {
+        toast("success", "本地设置已保存");
       }
+      return;
+    }
+    try {
+      await api.saveConfig({
+        target_group_id: useInviteStore.getState().config.target_group_id,
+        source_group_id: useInviteStore.getState().config.source_group_id,
+        batch_count: settings.defaultBatchCount,
+        interval_ms: settings.defaultIntervalMs,
+        filter_staff: settings.defaultFilterStaff,
+        onebot_url: settings.onebotUrl,
+        napcat_webui_token: token,
+        log_level: settings.logLevel,
+        max_log_file_mb: settings.maxLogFileSize,
+        log_retention_days: settings.logRetentionDays,
+        auto_clean_logs: settings.autoCleanLogs,
+      } as never);
+      if (token) update({ napcatWebuiToken: "" });
       toast("success", "设置已保存");
     } catch (e) {
       toast("error", e instanceof Error ? e.message : "保存失败");

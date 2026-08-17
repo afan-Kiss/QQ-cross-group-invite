@@ -21,6 +21,15 @@ type BootstrapStatus struct {
 	StartedByUs   bool   `json:"startedByUs"`
 	NapcatOnline  bool   `json:"napcatOnline"`
 	NapcatMessage string `json:"napcatMessage"`
+	// AppSession is the sidecar session for X-App-Session. Only set when we own the live service.
+	AppSession string `json:"appSession"`
+}
+
+func appSessionIfOwned(owned bool, session string) string {
+	if owned && session != "" {
+		return session
+	}
+	return ""
 }
 
 type Manager struct {
@@ -65,19 +74,22 @@ func (m *Manager) EnsureBackend() BootstrapStatus {
 	result := ProbeHealth()
 	switch result.Probe {
 	case ProbeReady:
-		owned := OwnsRunningService(m.StartedByUs(), m.SessionID(), result)
+		session := m.SessionID()
+		owned := OwnsRunningService(m.StartedByUs(), session, result)
 		return BootstrapStatus{
 			LocalService:  "ready",
 			Message:       "service ready",
 			StartedByUs:   owned,
 			NapcatOnline:  result.NapcatOnline,
 			NapcatMessage: result.NapcatMsg,
+			AppSession:    appSessionIfOwned(owned, session),
 		}
 	case ProbePortConflict:
 		return BootstrapStatus{
 			LocalService: "port_conflict",
 			Message:      result.ConflictMsg,
 			StartedByUs:  false,
+			AppSession:   "",
 		}
 	}
 
@@ -94,6 +106,7 @@ func (m *Manager) EnsureBackend() BootstrapStatus {
 			LocalService: "error",
 			Message:      fmt.Sprintf("failed to start sidecar: %v", err),
 			StartedByUs:  false,
+			AppSession:   "",
 		}
 	}
 
@@ -102,7 +115,8 @@ func (m *Manager) EnsureBackend() BootstrapStatus {
 
 func (m *Manager) ProbeHealthStatus() BootstrapStatus {
 	result := ProbeHealth()
-	owned := OwnsRunningService(m.StartedByUs(), m.SessionID(), result)
+	session := m.SessionID()
+	owned := OwnsRunningService(m.StartedByUs(), session, result)
 	switch result.Probe {
 	case ProbeReady:
 		msg := "service ready"
@@ -115,18 +129,21 @@ func (m *Manager) ProbeHealthStatus() BootstrapStatus {
 			StartedByUs:   owned,
 			NapcatOnline:  result.NapcatOnline,
 			NapcatMessage: result.NapcatMsg,
+			AppSession:    appSessionIfOwned(owned, session),
 		}
 	case ProbePortConflict:
 		return BootstrapStatus{
 			LocalService: "port_conflict",
 			Message:      result.ConflictMsg,
 			StartedByUs:  owned,
+			AppSession:   "",
 		}
 	default:
 		return BootstrapStatus{
 			LocalService: "error",
 			Message:      "backend not running",
 			StartedByUs:  m.StartedByUs(),
+			AppSession:   "",
 		}
 	}
 }
@@ -303,6 +320,7 @@ func (m *Manager) waitForHealth(initial string, startedByUs bool) BootstrapStatu
 					LocalService: "port_conflict",
 					Message:      "port 17888 occupied: session ownership mismatch",
 					StartedByUs:  false,
+					AppSession:   "",
 				}
 			}
 			if startedByUs && ourSession != "" && result.SessionID == "" {
@@ -321,12 +339,14 @@ func (m *Manager) waitForHealth(initial string, startedByUs bool) BootstrapStatu
 				StartedByUs:   owned,
 				NapcatOnline:  result.NapcatOnline,
 				NapcatMessage: result.NapcatMsg,
+				AppSession:    appSessionIfOwned(owned, ourSession),
 			}
 		case ProbePortConflict:
 			return BootstrapStatus{
 				LocalService: "port_conflict",
 				Message:      result.ConflictMsg,
 				StartedByUs:  startedByUs,
+				AppSession:   "",
 			}
 		default:
 			time.Sleep(400 * time.Millisecond)
@@ -337,6 +357,7 @@ func (m *Manager) waitForHealth(initial string, startedByUs bool) BootstrapStatu
 		LocalService: "error",
 		Message:      "local service startup timeout, check port 17888",
 		StartedByUs:  startedByUs,
+		AppSession:   "",
 	}
 }
 

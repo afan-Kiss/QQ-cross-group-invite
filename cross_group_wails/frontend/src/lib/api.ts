@@ -4,6 +4,7 @@ export const API_BASE_URL = "http://127.0.0.1:17888";
 export const SERVICE_ID = "cross-group-invite";
 
 import { toEpochMs } from "@/lib/utils";
+import { useServiceStore } from "@/store/useServiceStore";
 import type {
   AppStatus,
   HealthResponse,
@@ -48,12 +49,18 @@ export class ApiError extends Error {
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let res: Response;
   try {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      ...((init?.headers as Record<string, string> | undefined) ?? {}),
+    };
+    const method = String(init?.method || "GET").toUpperCase();
+    const session = useServiceStore.getState().appSession || "";
+    if (method !== "GET" && session) {
+      headers["X-App-Session"] = session;
+    }
     res = await fetch(`${API_BASE_URL}${path}`, {
       ...init,
-      headers: {
-        "Content-Type": "application/json",
-        ...(init?.headers ?? {}),
-      },
+      headers,
     });
   } catch {
     throw new ApiError("后端服务未连接，请确认本地服务已启动", "network");
@@ -185,8 +192,8 @@ export function normalizeStatus(
     total,
     completed: done,
     success,
-    rate_limited: frequent.length,
-    failed: errors.length,
+    rate_limited: Number(raw.rate_limited_count ?? raw.rate_limited ?? frequent.length),
+    failed: Number(raw.failed_count ?? raw.failed ?? errors.length),
     waiting: results.length ? waitingFromResults : Math.max(0, total - done),
     inviting: results.length ? invitingFromResults : running && currentQq > 0 ? 1 : 0,
     logs: (raw.logs as string[]) ?? [],

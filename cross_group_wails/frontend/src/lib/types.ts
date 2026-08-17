@@ -154,6 +154,7 @@ export interface BootstrapStatus {
   startedByUs: boolean;
   napcatOnline: boolean;
   napcatMessage: string;
+  appSession?: string;
 }
 
 export interface ChartPoint {

@@ -49,6 +49,7 @@ export namespace service {
 	    startedByUs: boolean;
 	    napcatOnline: boolean;
 	    napcatMessage: string;
+	    appSession: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new BootstrapStatus(source);
@@ -61,6 +62,7 @@ export namespace service {
 	        this.startedByUs = source["startedByUs"];
 	        this.napcatOnline = source["napcatOnline"];
 	        this.napcatMessage = source["napcatMessage"];
+	        this.appSession = source["appSession"];
 	    }
 	}
 

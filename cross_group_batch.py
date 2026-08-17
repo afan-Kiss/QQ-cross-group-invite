@@ -204,6 +204,8 @@ class BatchState:
     batch_done: int = 0
     total_batches: int = 0
     next_invite_at: float = 0.0
+    failed_count: int = 0
+    rate_limited_count: int = 0
     frequent: list[InviteRecord] = field(default_factory=list)
     errors: list[InviteRecord] = field(default_factory=list)
     results: list[InviteResult] = field(default_factory=list)
@@ -241,6 +243,10 @@ class BatchState:
             "total_batches": self.total_batches,
             "next_invite_at": self.next_invite_at,
             "interval_remaining_ms": remaining,
+            "rate_limited": self.rate_limited_count,
+            "failed": self.failed_count,
+            "rate_limited_count": self.rate_limited_count,
+            "failed_count": self.failed_count,
             "frequent": [x.to_dict() for x in self.frequent],
             "errors": [x.to_dict() for x in self.errors],
             "results": [x.to_dict() for x in self.results],
@@ -328,7 +334,7 @@ def _read_tasks_file(path: Path) -> list[dict[str, Any]]:
     return raw if isinstance(raw, list) else []
 
 
-def _load_tasks() -> list[dict[str, Any]]:
+def _load_tasks_unlocked() -> list[dict[str, Any]]:
     path = _tasks_path()
     if not path.is_file():
         return []
@@ -350,36 +356,45 @@ def _load_tasks() -> list[dict[str, Any]]:
         return []
 
 
-def _save_tasks(tasks: list[dict[str, Any]]) -> None:
+def _load_tasks() -> list[dict[str, Any]]:
+    with _tasks_io_lock:
+        return _load_tasks_unlocked()
+
+
+def _save_tasks_unlocked(tasks: list[dict[str, Any]]) -> None:
     path = _tasks_path()
     payload = json.dumps(tasks[-200:], ensure_ascii=False, indent=2)
-    with _tasks_io_lock:
-        if path.is_file():
-            try:
-                _read_tasks_file(path)
-            except (OSError, json.JSONDecodeError):
-                pass
-            else:
-                try:
-                    bak = _tasks_bak_path(path)
-                    bak.write_text(path.read_text(encoding="utf-8"), encoding="utf-8")
-                except OSError as exc:
-                    logger.warning("failed to write tasks.json.bak: %s", exc)
-        tmp = path.with_name(path.name + ".tmp")
+    if path.is_file():
         try:
-            with open(tmp, "w", encoding="utf-8") as fh:
-                fh.write(payload)
-                fh.flush()
-                os.fsync(fh.fileno())
-            os.replace(tmp, path)
-        except OSError as exc:
-            logger.error("atomic tasks.json write failed: %s", exc)
+            _read_tasks_file(path)
+        except (OSError, json.JSONDecodeError):
+            pass
+        else:
             try:
-                if tmp.is_file():
-                    tmp.unlink()
-            except OSError:
-                pass
-            raise
+                bak = _tasks_bak_path(path)
+                bak.write_text(path.read_text(encoding="utf-8"), encoding="utf-8")
+            except OSError as exc:
+                logger.warning("failed to write tasks.json.bak: %s", exc)
+    tmp = path.with_name(path.name + ".tmp")
+    try:
+        with open(tmp, "w", encoding="utf-8") as fh:
+            fh.write(payload)
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp, path)
+    except OSError as exc:
+        logger.error("atomic tasks.json write failed: %s", exc)
+        try:
+            if tmp.is_file():
+                tmp.unlink()
+        except OSError:
+            pass
+        raise
+
+
+def _save_tasks(tasks: list[dict[str, Any]]) -> None:
+    with _tasks_io_lock:
+        _save_tasks_unlocked(tasks)
 
 
 def recover_stale_tasks() -> int:
@@ -391,24 +406,9 @@ def recover_stale_tasks() -> int:
             live_id = ""
 
     with _tasks_io_lock:
-        # Re-read under io lock without nested _save_tasks lock deadlock:
-        path = _tasks_path()
-        if not path.is_file():
+        tasks = _load_tasks_unlocked()
+        if not tasks:
             return 0
-        try:
-            tasks = _read_tasks_file(path)
-        except json.JSONDecodeError as exc:
-            logger.warning("recover_stale_tasks: corrupt tasks.json (%s); trying .bak", exc)
-            bak = _tasks_bak_path(path)
-            if not bak.is_file():
-                return 0
-            try:
-                tasks = _read_tasks_file(bak)
-            except (OSError, json.JSONDecodeError):
-                return 0
-        except OSError:
-            return 0
-
         changed = 0
         now = _now()
         for item in tasks:
@@ -418,44 +418,28 @@ def recover_stale_tasks() -> int:
             tid = str(item.get("id") or "")
             if status in _STALE_STATUSES and tid and tid != live_id:
                 item["status"] = TaskRunStatus.INTERRUPTED.value
-                item["finished_at"] = now
+                item["finished_at"] = item.get("finished_at") or now
                 item["error_message"] = _STALE_MSG
+                item["stop_reason"] = "process_exit"
                 changed += 1
         if changed:
-            # Inline atomic write (already hold _tasks_io_lock)
-            payload = json.dumps(tasks[-200:], ensure_ascii=False, indent=2)
-            if path.is_file():
-                try:
-                    _read_tasks_file(path)
-                except (OSError, json.JSONDecodeError):
-                    pass
-                else:
-                    try:
-                        bak = _tasks_bak_path(path)
-                        bak.write_text(path.read_text(encoding="utf-8"), encoding="utf-8")
-                    except OSError as exc:
-                        logger.warning("failed to write tasks.json.bak: %s", exc)
-            tmp = path.with_name(path.name + ".tmp")
-            with open(tmp, "w", encoding="utf-8") as fh:
-                fh.write(payload)
-                fh.flush()
-                os.fsync(fh.fileno())
-            os.replace(tmp, path)
+            _save_tasks_unlocked(tasks)
         return changed
 
 
 def _upsert_task_record(record: dict[str, Any]) -> None:
-    tasks = _load_tasks()
-    tid = record.get("id")
-    replaced = False
-    for i, item in enumerate(tasks):
-        if item.get("id") == tid:
-            tasks[i] = {**item, **record}
-            replaced = True
-            break
-    if not replaced:
-        tasks.append(record)
-    _save_tasks(tasks)
+    with _tasks_io_lock:
+        tasks = _load_tasks_unlocked()
+        tid = record.get("id")
+        replaced = False
+        for i, item in enumerate(tasks):
+            if item.get("id") == tid:
+                tasks[i] = {**item, **record}
+                replaced = True
+                break
+        if not replaced:
+            tasks.append(record)
+        _save_tasks_unlocked(tasks)
 
 
 def list_tasks() -> list[dict[str, Any]]:
@@ -473,8 +457,8 @@ def list_tasks() -> list[dict[str, Any]]:
                 "selected_count": _state.total,
                 "total": _state.total,
                 "success": _state.success,
-                "rate_limited": len(_state.frequent),
-                "failed": len(_state.errors),
+                "rate_limited": _state.rate_limited_count,
+                "failed": _state.failed_count,
                 "batch_size": _state.batch_size,
                 "interval_ms": _state.interval_ms,
                 "stop_reason": "",
@@ -517,8 +501,8 @@ def _persist_current_task(**extra: Any) -> None:
             "selected_count": _state.total,
             "total": _state.total,
             "success": _state.success,
-            "rate_limited": len(_state.frequent),
-            "failed": len(_state.errors),
+            "rate_limited": _state.rate_limited_count,
+            "failed": _state.failed_count,
             "batch_size": _state.batch_size,
             "interval_ms": _state.interval_ms,
             "stop_reason": extra.get("stop_reason", ""),
@@ -536,17 +520,11 @@ def clear_logs() -> None:
 def clear_failed() -> None:
     with _state_lock:
         _state.errors.clear()
-        tid = _state.task_id
-    if tid:
-        _persist_current_task()
 
 
 def clear_rate_limits() -> None:
     with _state_lock:
         _state.frequent.clear()
-        tid = _state.task_id
-    if tid:
-        _persist_current_task()
 
 
 def clear_state(kinds: list[str] | None = None) -> None:
@@ -823,10 +801,12 @@ def _finish_member(
             _record_rate("success")
         elif status == InviteResultStatus.RATE_LIMITED:
             _state.frequent.append(rec)
+            _state.rate_limited_count += 1
             _record_rate("rate_limited")
             _append_timeline("rate_limited", f"{member.nickname}({member.qq})")
         elif status == InviteResultStatus.FAILED:
             _state.errors.append(rec)
+            _state.failed_count += 1
             _record_rate("failed")
             _append_timeline("failed", f"{member.nickname}({member.qq}): {reason}")
 
@@ -882,6 +862,8 @@ def start_batch(
         _state.total = 0
         _state.done = 0
         _state.success = 0
+        _state.failed_count = 0
+        _state.rate_limited_count = 0
         _state.current_qq = 0
         _state.current_nickname = ""
         _state.frequent.clear()

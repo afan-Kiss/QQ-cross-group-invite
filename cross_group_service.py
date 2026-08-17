@@ -185,8 +185,11 @@ class Handler(BaseHTTPRequestHandler):
         if req_path in ("", "/"):
             return _file_response(self, WEB_DIR / "index.html")
         rel = req_path.lstrip("/")
+        root = WEB_DIR.resolve()
         target = (WEB_DIR / rel).resolve()
-        if not str(target).startswith(str(WEB_DIR.resolve())):
+        try:
+            target.relative_to(root)
+        except ValueError:
             return False
         return _file_response(self, target)
 
