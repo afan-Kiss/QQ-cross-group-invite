@@ -1,6 +1,8 @@
 package service
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"os/exec"
@@ -23,6 +25,22 @@ type BootstrapStatus struct {
 	NapcatMessage string `json:"napcatMessage"`
 	// AppSession is the sidecar session for X-App-Session. Only set when we own the live service.
 	AppSession string `json:"appSession"`
+}
+
+func sessionFingerprint(session string) string {
+	if session == "" {
+		return ""
+	}
+	sum := sha256.Sum256([]byte(session))
+	return hex.EncodeToString(sum[:])[:8]
+}
+
+func (m *Manager) probeOwned() HealthResult {
+	session := m.SessionID()
+	if session == "" {
+		return ProbeHealth()
+	}
+	return ProbeHealthWithSession(session)
 }
 
 func appSessionIfOwned(owned bool, session string) string {
@@ -71,11 +89,16 @@ func (m *Manager) SnapshotOwnership() (startedByUs bool, sessionID string, pid i
 }
 
 func (m *Manager) EnsureBackend() BootstrapStatus {
-	result := ProbeHealth()
+	session := m.SessionID()
+	var result HealthResult
+	if session != "" {
+		result = ProbeHealthWithSession(session)
+	} else {
+		result = ProbeHealth()
+	}
 	switch result.Probe {
 	case ProbeReady:
-		session := m.SessionID()
-		owned := OwnsRunningService(m.StartedByUs(), session, result)
+		owned := OwnsRunningService(m.StartedByUs(), result)
 		return BootstrapStatus{
 			LocalService:  "ready",
 			Message:       "service ready",
@@ -114,9 +137,14 @@ func (m *Manager) EnsureBackend() BootstrapStatus {
 }
 
 func (m *Manager) ProbeHealthStatus() BootstrapStatus {
-	result := ProbeHealth()
 	session := m.SessionID()
-	owned := OwnsRunningService(m.StartedByUs(), session, result)
+	var result HealthResult
+	if session != "" {
+		result = ProbeHealthWithSession(session)
+	} else {
+		result = ProbeHealth()
+	}
+	owned := OwnsRunningService(m.StartedByUs(), result)
 	switch result.Probe {
 	case ProbeReady:
 		msg := "service ready"
@@ -166,11 +194,11 @@ func (m *Manager) Shutdown() {
 
 	// Re-probe before any network side-effect: our process may have died and
 	// an external service may now own 17888.
-	health := ProbeHealth()
-	owned := health.Probe == ProbeReady && health.SessionID != "" && health.SessionID == session
+	health := ProbeHealthWithSession(session)
+	owned := health.Probe == ProbeReady && health.SessionMatch
 	if !owned {
-		applog.Info("shutdown skipped network/kill: session mismatch or not ready (ours=%s health=%s probe=%d)",
-			session, health.SessionID, health.Probe)
+		applog.Info("shutdown skipped network/kill: session mismatch or not ready (fp=%s match=%v probe=%d)",
+			sessionFingerprint(session), health.SessionMatch, health.Probe)
 		// Safest on mismatch: do not kill by PID (may be reused by external).
 		// Only drop our job handle and clear local ownership state.
 		if job != 0 {
@@ -193,8 +221,8 @@ func (m *Manager) Shutdown() {
 
 	deadline := time.Now().Add(3 * time.Second)
 	for time.Now().Before(deadline) {
-		h := ProbeHealth()
-		if h.Probe != ProbeReady || h.SessionID != session {
+		h := ProbeHealthWithSession(session)
+		if h.Probe != ProbeReady || !h.SessionMatch {
 			break
 		}
 		time.Sleep(150 * time.Millisecond)
@@ -260,7 +288,7 @@ func (m *Manager) startSidecar() error {
 		applog.Info("sidecar assigned to kill-on-close job pid=%d", pid)
 	}
 
-	applog.Info("sidecar started pid=%d session=%s path=%s", pid, sessionID, path)
+	applog.Info("sidecar started pid=%d session_fp=%s path=%s", pid, sessionFingerprint(sessionID), path)
 
 	go m.reap(cmd, sessionID)
 	return nil
@@ -273,7 +301,7 @@ func (m *Manager) reap(cmd *exec.Cmd, session string) {
 	if m.cmd != cmd {
 		return
 	}
-	applog.Info("sidecar exited pid=%d session=%s", m.pid, session)
+	applog.Info("sidecar exited pid=%d session_fp=%s", m.pid, sessionFingerprint(session))
 	m.cmd = nil
 	m.startedByUs = false
 	m.pid = 0
@@ -312,19 +340,16 @@ func (m *Manager) waitForHealth(initial string, startedByUs bool) BootstrapStatu
 	ourSession := m.SessionID()
 
 	for time.Now().Before(deadline) {
-		result := ProbeHealth()
+		var result HealthResult
+		if ourSession != "" {
+			result = ProbeHealthWithSession(ourSession)
+		} else {
+			result = ProbeHealth()
+		}
 		switch result.Probe {
 		case ProbeReady:
-			if startedByUs && ourSession != "" && result.SessionID != "" && result.SessionID != ourSession {
-				return BootstrapStatus{
-					LocalService: "port_conflict",
-					Message:      "port 17888 occupied: session ownership mismatch",
-					StartedByUs:  false,
-					AppSession:   "",
-				}
-			}
-			if startedByUs && ourSession != "" && result.SessionID == "" {
-				// Wait a bit longer for session_id to appear on older payloads mid-boot.
+			if startedByUs && ourSession != "" && !result.SessionMatch {
+				// Mid-boot: wait until session_match is confirmed.
 				time.Sleep(400 * time.Millisecond)
 				continue
 			}
@@ -332,7 +357,7 @@ func (m *Manager) waitForHealth(initial string, startedByUs bool) BootstrapStatu
 			if !result.NapcatOnline {
 				msg = "service started, waiting for NapCat..."
 			}
-			owned := OwnsRunningService(startedByUs, ourSession, result)
+			owned := OwnsRunningService(startedByUs, result)
 			return BootstrapStatus{
 				LocalService:  "ready",
 				Message:       msg,

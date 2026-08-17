@@ -28,7 +28,11 @@ export function ConfigPanel() {
   const stopInvite = useInviteStore((s) => s.stopInvite);
   const loadingMembers = useInviteStore((s) => s.loadingMembers);
   const inviting = useInviteStore((s) => s.inviting);
+  const invitePhase = useInviteStore((s) => s.invitePhase);
   const stats = useInviteStore((s) => s.stats);
+  const phaseBusy = invitePhase !== "idle";
+  const canStop = invitePhase === "running";
+  const stopping = invitePhase === "stopping";
   const serviceReady = useServiceStore((s) => s.localService === "ready");
   const napcatOnline = useServiceStore((s) => s.napcatOnline);
   const actionDisabled = !serviceReady || !napcatOnline;
@@ -160,7 +164,7 @@ export function ConfigPanel() {
           variant="outline"
           className="w-full border-primary-light bg-primary-light text-primary hover:bg-primary/10"
           onClick={() => void loadMembers()}
-          disabled={Boolean(actionDisabled || loadingMembers || inviting || sameGroup)}
+          disabled={Boolean(actionDisabled || loadingMembers || phaseBusy || sameGroup)}
         >
           {loadingMembers ? <Loader2 className="h-4 w-4 animate-spin" /> : <Users className="h-4 w-4" />}
           加载成员
@@ -168,7 +172,7 @@ export function ConfigPanel() {
         <Button
           className="w-full"
           onClick={() => void startInvite()}
-          disabled={Boolean(actionDisabled || inviting || sameGroup)}
+          disabled={Boolean(actionDisabled || phaseBusy || sameGroup)}
         >
           <Play className="h-4 w-4" />
           开始邀请
@@ -177,10 +181,10 @@ export function ConfigPanel() {
           variant="warning"
           className="w-full"
           onClick={() => void stopInvite()}
-          disabled={!serviceReady || !inviting}
+          disabled={!serviceReady || !canStop}
         >
           <Square className="h-4 w-4" />
-          {stats.status === "stopping" ? "正在停止…" : "停止邀请"}
+          {stopping || stats.status === "stopping" ? "正在停止…" : "停止邀请"}
         </Button>
       </div>
     </div>

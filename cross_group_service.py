@@ -135,19 +135,31 @@ def _check_session(handler: BaseHTTPRequestHandler, required: bool = True) -> tu
     return _error("UNAUTHORIZED", "会话校验失败，拒绝操作", 403)
 
 
-def build_health_payload() -> dict[str, Any]:
+def _session_fingerprint(session: str) -> str:
+    if not session:
+        return ""
+    import hashlib
+    return hashlib.sha256(session.encode("utf-8")).hexdigest()[:8]
+
+
+def build_health_payload(caller_session: str = "") -> dict[str, Any]:
     napcat_online, napcat_message = check_napcat_online()
-    return {
+    payload = {
         "ok": True,
         "service": SERVICE_ID,
         "version": SERVICE_VERSION,
-        "session_id": SESSION_ID,
         "session_required": SESSION_REQUIRED,
         "owned": SESSION_REQUIRED,
         "pid": os.getpid(),
         "napcat_online": napcat_online,
         "napcat_message": napcat_message,
     }
+    # Never echo raw SESSION_ID. Callers prove ownership via X-App-Session.
+    if caller_session:
+        payload["session_match"] = bool(SESSION_ID) and caller_session == SESSION_ID
+    else:
+        payload["session_match"] = False
+    return payload
 
 
 def _validate_group_id(value: Any, label: str) -> int:
@@ -196,7 +208,8 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
         path = urlparse(self.path).path
         if path == "/health":
-            _json_response(self, 200, build_health_payload())
+            caller = self.headers.get("X-App-Session") or ""
+            _json_response(self, 200, build_health_payload(caller))
             return
         if path == "/config":
             cfg = load_cfg()
@@ -225,14 +238,27 @@ class Handler(BaseHTTPRequestHandler):
             _json_response(self, 200, state)
             return
         if path == "/members":
+            if SESSION_REQUIRED:
+                denied = _check_session(self, required=True)
+                if denied is not None:
+                    code, body = denied
+                    _json_response(self, code, body)
+                    return
             members = get_cached_members()
             eligible = sum(1 for m in members if m.eligible)
+            # Never expose raw tokens on GET /members.
+            safe = []
+            for m in members:
+                d = m.to_dict()
+                d["token"] = ""
+                d["has_token"] = bool(m.token)
+                safe.append(d)
             _json_response(
                 self,
                 200,
                 {
                     "ok": True,
-                    "members": [m.to_dict() for m in members],
+                    "members": safe,
                     "total": len(members),
                     "eligible": eligible,
                     "filtered": len(members) - eligible,
@@ -433,18 +459,20 @@ class Handler(BaseHTTPRequestHandler):
                 return
 
             if path == "/test-connection":
-                online, msg = check_napcat_online()
+                # Transient probe: use request body overrides, never save_cfg.
+                probe_url = str(data.get("onebot_url") or "").strip() or None
+                online, msg = check_napcat_online(onebot_url=probe_url)
                 if not online:
-                    code, body = _error("NAPCAT_OFFLINE", msg or "NapCat 未连接")
+                    code, body = _error("NAPCAT_OFFLINE", msg or "NapCat offline")
                     _json_response(self, code, body)
                     return
                 try:
-                    onebot_action("get_login_info", {})
+                    onebot_action("get_login_info", {}, api_url=probe_url)
                 except Exception as exc:
-                    code, body = _error("NAPCAT_OFFLINE", f"OneBot 调用失败: {exc}")
+                    code, body = _error("NAPCAT_OFFLINE", f"OneBot call failed: {exc}")
                     _json_response(self, code, body)
                     return
-                code, body = _ok({"message": "连接正常", "napcat_online": True})
+                code, body = _ok({"message": "ok", "napcat_online": True})
                 _json_response(self, code, body)
                 return
 
@@ -534,10 +562,10 @@ def main(open_browser: bool = False, session_id: str = "", parent_pid: int = 0) 
     _server = ThreadingHTTPServer((HOST, PORT), Handler)
     url = f"http://{HOST}:{PORT}/"
     logger.info(
-        "cross-group service started at %s (service=%s session=%s session_required=%s pid=%s parent=%s)",
+        "cross-group service started at %s (service=%s session_fp=%s session_required=%s pid=%s parent=%s)",
         url,
         SERVICE_ID,
-        SESSION_ID,
+        _session_fingerprint(SESSION_ID),
         SESSION_REQUIRED,
         os.getpid(),
         parent_pid or "-",

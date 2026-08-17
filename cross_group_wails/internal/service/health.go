@@ -20,13 +20,14 @@ var (
 )
 
 type healthPayload struct {
-	OK           bool   `json:"ok"`
-	Service      string `json:"service"`
-	Version      string `json:"version"`
-	SessionID    string `json:"session_id"`
-	PID          int    `json:"pid"`
-	NapcatOnline bool   `json:"napcat_online"`
-	NapcatMsg    string `json:"napcat_message"`
+	OK              bool   `json:"ok"`
+	Service         string `json:"service"`
+	Version         string `json:"version"`
+	SessionRequired bool   `json:"session_required"`
+	SessionMatch    bool   `json:"session_match"`
+	PID             int    `json:"pid"`
+	NapcatOnline    bool   `json:"napcat_online"`
+	NapcatMsg       string `json:"napcat_message"`
 }
 
 type HealthProbe int
@@ -38,19 +39,36 @@ const (
 )
 
 type HealthResult struct {
-	Probe        HealthProbe
-	NapcatOnline bool
-	NapcatMsg    string
-	ConflictMsg  string
-	SessionID    string
-	PID          int
-	Version      string
-	Service      string
+	Probe           HealthProbe
+	NapcatOnline    bool
+	NapcatMsg       string
+	ConflictMsg     string
+	SessionMatch    bool
+	SessionRequired bool
+	PID             int
+	Version         string
+	Service         string
 }
 
 func ProbeHealth() HealthResult {
+	return probeHealthWithSession("")
+}
+
+// ProbeHealthWithSession asks /health with X-App-Session; ownership is session_match only.
+func ProbeHealthWithSession(sessionID string) HealthResult {
+	return probeHealthWithSession(sessionID)
+}
+
+func probeHealthWithSession(sessionID string) HealthResult {
 	client := &http.Client{Timeout: 2 * time.Second}
-	resp, err := client.Get(HealthURL)
+	req, err := http.NewRequest(http.MethodGet, HealthURL, nil)
+	if err != nil {
+		return HealthResult{Probe: ProbeUnavailable}
+	}
+	if strings.TrimSpace(sessionID) != "" {
+		req.Header.Set("X-App-Session", sessionID)
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		return HealthResult{Probe: ProbeUnavailable}
 	}
@@ -68,8 +86,6 @@ func ProbeHealth() HealthResult {
 }
 
 // ClassifyHealthBody parses /health JSON and decides ready vs port conflict.
-// Port conflict when JSON is ok-shaped but service != cross-group-invite,
-// or the service field is missing (e.g. only {"ok":true}).
 func ClassifyHealthBody(body []byte) HealthResult {
 	var payload healthPayload
 	if err := json.Unmarshal(body, &payload); err != nil {
@@ -84,7 +100,6 @@ func ClassifyHealthBody(body []byte) HealthResult {
 		return HealthResult{
 			Probe:       ProbePortConflict,
 			ConflictMsg: "port 17888 occupied: missing service field",
-			SessionID:   payload.SessionID,
 			PID:         payload.PID,
 			Version:     payload.Version,
 		}
@@ -94,7 +109,6 @@ func ClassifyHealthBody(body []byte) HealthResult {
 			Probe:       ProbePortConflict,
 			ConflictMsg: fmt.Sprintf("port 17888 occupied: service=%s", service),
 			Service:     service,
-			SessionID:   payload.SessionID,
 			PID:         payload.PID,
 			Version:     payload.Version,
 		}
@@ -105,20 +119,20 @@ func ClassifyHealthBody(body []byte) HealthResult {
 			Probe:       ProbePortConflict,
 			ConflictMsg: "backend service unhealthy",
 			Service:     service,
-			SessionID:   payload.SessionID,
 			PID:         payload.PID,
 			Version:     payload.Version,
 		}
 	}
 
 	return HealthResult{
-		Probe:        ProbeReady,
-		NapcatOnline: payload.NapcatOnline,
-		NapcatMsg:    payload.NapcatMsg,
-		SessionID:    payload.SessionID,
-		PID:          payload.PID,
-		Version:      payload.Version,
-		Service:      service,
+		Probe:           ProbeReady,
+		NapcatOnline:    payload.NapcatOnline,
+		NapcatMsg:       payload.NapcatMsg,
+		SessionMatch:    payload.SessionMatch,
+		SessionRequired: payload.SessionRequired,
+		PID:             payload.PID,
+		Version:         payload.Version,
+		Service:         service,
 	}
 }
 
@@ -165,13 +179,13 @@ func PostShutdown(sessionID string) error {
 	return nil
 }
 
-// OwnsRunningService reports whether the local health response belongs to our session.
-func OwnsRunningService(startedByUs bool, ourSession string, health HealthResult) bool {
-	if !startedByUs || ourSession == "" {
+// OwnsRunningService reports whether the health probe confirmed our X-App-Session.
+func OwnsRunningService(startedByUs bool, health HealthResult) bool {
+	if !startedByUs {
 		return false
 	}
 	if health.Probe != ProbeReady {
 		return false
 	}
-	return health.SessionID != "" && health.SessionID == ourSession
+	return health.SessionMatch
 }

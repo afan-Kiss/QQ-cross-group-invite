@@ -180,7 +180,7 @@ export function normalizeStatus(
   );
   const status = String(raw.status ?? (running ? "running" : "idle")) as TaskRunStatus;
 
-  const mergedMembers = applyResultsToMembers(members, results);
+  // Do NOT merge results into members here. Ownership/task matching belongs in the store.
 
   const waitingFromResults = results.filter((r) => r.status === "waiting").length;
   const invitingFromResults = results.filter((r) => r.status === "inviting").length;
@@ -201,7 +201,7 @@ export function normalizeStatus(
     failed_list: errors,
     results,
     rate_series: rateSeries,
-    members: mergedMembers,
+    members,
     current_qq: running ? currentQq : 0,
     current_nickname: running ? String(raw.current_nickname ?? "") : "",
     message: String(raw.message ?? ""),
@@ -308,8 +308,14 @@ export const api = {
     }
   },
 
-  async testConnection(): Promise<void> {
-    await request("/test-connection", { method: "POST", body: "{}" });
+  async testConnection(payload?: {
+    onebot_url?: string;
+    napcat_webui_token?: string;
+  }): Promise<void> {
+    await request("/test-connection", {
+      method: "POST",
+      body: JSON.stringify(payload ?? {}),
+    });
   },
 
   mapLoadedMembers(

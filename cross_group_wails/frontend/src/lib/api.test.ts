@@ -125,3 +125,39 @@ describe("task state mapping", () => {
     expect(map("completed")).toBe("completed");
   });
 });
+
+
+describe("normalizeStatus ownership", () => {
+  it("does not merge results into members", () => {
+    const members: Member[] = [
+      { qq: 10001, nickname: "n", role: "member", status: "waiting" },
+    ];
+    const status = normalizeStatus(
+      {
+        running: false,
+        status: "completed",
+        task_id: "task-old",
+        total: 1,
+        done: 1,
+        success: 1,
+        results: [
+          {
+            qq: 10001,
+            nickname: "n",
+            status: "success",
+            reason: "",
+            started_at: 1,
+            finished_at: 2,
+            duration_ms: 1,
+          },
+        ],
+        frequent: [],
+        errors: [],
+        logs: [],
+      },
+      members,
+    );
+    expect(status.members[0].status).toBe("waiting");
+    expect(status.results[0].status).toBe("success");
+  });
+});

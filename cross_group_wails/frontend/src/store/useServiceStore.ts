@@ -32,11 +32,17 @@ export const useServiceStore = create<ServiceStore>((set) => ({
       appSession: status.startedByUs ? status.appSession || "" : "",
     }),
   setBootstrapping: (message) =>
-    set({ localService: "booting", message, bootstrapped: false }),
+    set({ localService: "booting", message, bootstrapped: false, appSession: "" }),
   setBootstrapped: (value) => set({ bootstrapped: value }),
 
   ensureBackend: async () => {
-    set({ localService: "booting", message: "正在启动本地服务...", bootstrapped: false });
+    set({
+      localService: "booting",
+      message: "正在启动本地服务...",
+      bootstrapped: false,
+      appSession: "",
+      startedByUs: false,
+    });
     try {
       const status = await wailsBridge.ensureBackend();
       set({

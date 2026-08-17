@@ -5,11 +5,11 @@ from __future__ import annotations
 def test_build_health_payload_service_id(monkeypatch):
     monkeypatch.setattr(
         "cross_group_service.check_napcat_online",
-        lambda: (True, "ok"),
+        lambda *a, **k: (True, "ok"),
     )
     import cross_group_service as svc
 
-    monkeypatch.setattr(svc, "SESSION_ID", "sess-test")
+    monkeypatch.setattr(svc, "SESSION_ID", "sess-test-secret")
     monkeypatch.setattr(svc, "SESSION_REQUIRED", True)
 
     payload = svc.build_health_payload()
@@ -18,11 +18,19 @@ def test_build_health_payload_service_id(monkeypatch):
     assert payload["service"] == svc.SERVICE_ID
     assert "version" in payload
     assert "pid" in payload
-    assert payload["pid"] == payload["pid"]
-    assert payload["session_id"] == "sess-test"
+    assert "session_id" not in payload
+    assert payload.get("session_match") is False
     assert payload["session_required"] is True
     assert payload["owned"] is True
     assert payload["napcat_online"] is True
+
+    matched = svc.build_health_payload("sess-test-secret")
+    assert matched["session_match"] is True
+    assert "session_id" not in matched
+    assert "sess-test-secret" not in str(matched)
+
+    wrong = svc.build_health_payload("other")
+    assert wrong["session_match"] is False
 
 
 def test_cors_exact_allowlist_only():
@@ -34,5 +42,4 @@ def test_cors_exact_allowlist_only():
     assert "http://wails.localhost" in ALLOWED_ORIGINS
     assert "https://wails.localhost" in ALLOWED_ORIGINS
     assert "http://wails.localhost:34115" in ALLOWED_ORIGINS
-    # no wildcard prefix matching — only exact entries
     assert not any(o.endswith(".*") for o in ALLOWED_ORIGINS)

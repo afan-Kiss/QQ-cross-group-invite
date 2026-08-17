@@ -470,15 +470,18 @@ def gid_to_group_no(robot_qq: str, gid: str, token: str | None = None) -> str:
     return call("Api_GIDTransGN", robot_qq, gid, token=token)
 
 
-def check_napcat_online(timeout: float = 3.0) -> tuple[bool, str]:
+def check_napcat_online(
+    timeout: float = 3.0, *,
+    onebot_url: str | None = None,
+) -> tuple[bool, str]:
     """Return (online, message) for NapCat OneBot HTTP."""
     try:
         cfg = load_cfg()
-        url = str(cfg.get("onebot_url") or "http://127.0.0.1:6099/api").rstrip("/")
+        url = str(onebot_url or cfg.get("onebot_url") or "http://127.0.0.1:6099/api").rstrip("/")
         host, port = parse_host_port(url)
         if not port_open(host, port, timeout=min(timeout, 1.5)):
             return False, f"NapCat 未连接（{host}:{port} 无响应）"
-        data = onebot_action("get_login_info", timeout=timeout)
+        data = onebot_action("get_login_info", timeout=timeout, api_url=url)
         if isinstance(data, dict):
             uid = str(data.get("user_id") or data.get("uin") or "")
             if uid:

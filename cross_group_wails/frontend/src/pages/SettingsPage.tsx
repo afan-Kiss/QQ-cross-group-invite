@@ -85,12 +85,10 @@ export function SettingsPage() {
   const testConnection = async () => {
     setTesting(true);
     try {
-      await api.saveConfig({
-        ...useInviteStore.getState().config,
+      await api.testConnection({
         onebot_url: settings.onebotUrl,
         napcat_webui_token: settings.napcatWebuiToken,
-      } as never);
-      await api.testConnection();
+      });
       toast("success", "连接测试成功");
     } catch (e) {
       toast("error", e instanceof Error ? e.message : "连接测试失败");

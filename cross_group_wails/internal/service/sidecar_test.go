@@ -10,25 +10,22 @@ import (
 )
 
 func TestOwnsRunningService(t *testing.T) {
-	ready := HealthResult{Probe: ProbeReady, SessionID: "sess-a"}
+	match := HealthResult{Probe: ProbeReady, SessionMatch: true}
 	cases := []struct {
 		name        string
 		startedByUs bool
-		ourSession  string
 		health      HealthResult
 		want        bool
 	}{
-		{"owned match", true, "sess-a", ready, true},
-		{"not started", false, "sess-a", ready, false},
-		{"empty our session", true, "", ready, false},
-		{"session mismatch", true, "sess-b", ready, false},
-		{"empty health session", true, "sess-a", HealthResult{Probe: ProbeReady, SessionID: ""}, false},
-		{"unavailable", true, "sess-a", HealthResult{Probe: ProbeUnavailable}, false},
-		{"port conflict", true, "sess-a", HealthResult{Probe: ProbePortConflict, SessionID: "sess-a"}, false},
+		{"owned match", true, match, true},
+		{"not started", false, match, false},
+		{"session mismatch", true, HealthResult{Probe: ProbeReady, SessionMatch: false}, false},
+		{"unavailable", true, HealthResult{Probe: ProbeUnavailable}, false},
+		{"port conflict", true, HealthResult{Probe: ProbePortConflict, SessionMatch: true}, false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := OwnsRunningService(tc.startedByUs, tc.ourSession, tc.health)
+			got := OwnsRunningService(tc.startedByUs, tc.health)
 			if got != tc.want {
 				t.Fatalf("got %v want %v", got, tc.want)
 			}
@@ -37,15 +34,13 @@ func TestOwnsRunningService(t *testing.T) {
 }
 
 func TestShouldAttemptShutdown(t *testing.T) {
-	// Mirrors Shutdown gate: only when startedByUs AND health session matches.
-	started, session := true, "s1"
-	health := HealthResult{Probe: ProbeReady, SessionID: "s1"}
-	if !OwnsRunningService(started, session, health) {
+	started := true
+	health := HealthResult{Probe: ProbeReady, SessionMatch: true}
+	if !OwnsRunningService(started, health) {
 		t.Fatal("expected ownership for shutdown")
 	}
-
-	health.SessionID = "other"
-	if OwnsRunningService(started, session, health) {
+	health.SessionMatch = false
+	if OwnsRunningService(started, health) {
 		t.Fatal("must not shutdown external/mismatched session")
 	}
 }
@@ -57,10 +52,10 @@ func TestShutdownSkipsNetworkOnSessionMismatch(t *testing.T) {
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{
-			"ok":            true,
-			"service":       ServiceID,
-			"session_id":    "session-B",
-			"napcat_online": true,
+			"ok":             true,
+			"service":        ServiceID,
+			"session_match":  false,
+			"napcat_online":  true,
 		})
 	})
 	mux.HandleFunc("/invite/stop", func(w http.ResponseWriter, r *http.Request) {
@@ -116,11 +111,12 @@ func TestShutdownPostsWhenSessionMatches(t *testing.T) {
 			http.Error(w, "gone", http.StatusServiceUnavailable)
 			return
 		}
+		match := r.Header.Get("X-App-Session") == "session-A"
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"ok":            true,
 			"service":       ServiceID,
-			"session_id":    "session-A",
+			"session_match": match,
 			"napcat_online": true,
 		})
 	})
@@ -150,7 +146,6 @@ func TestShutdownPostsWhenSessionMatches(t *testing.T) {
 	m := &Manager{
 		startedByUs: true,
 		sessionID:   "session-A",
-		// pid 0 avoids killProcessTree side effects in unit test
 	}
 	m.Shutdown()
 
@@ -196,5 +191,16 @@ func TestAppSessionOnlyWhenOwned(t *testing.T) {
 	}
 	if got := appSessionIfOwned(true, ""); got != "" {
 		t.Fatalf("empty session: got %q", got)
+	}
+}
+
+func TestSessionFingerprintNotRaw(t *testing.T) {
+	raw := "super-secret-session-value"
+	fp := sessionFingerprint(raw)
+	if fp == "" || fp == raw || len(fp) != 8 {
+		t.Fatalf("bad fingerprint %q", fp)
+	}
+	if sessionFingerprint("") != "" {
+		t.Fatal("empty should fingerprint empty")
 	}
 }
