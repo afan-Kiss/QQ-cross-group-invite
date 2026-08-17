@@ -320,6 +320,17 @@ export const api = {
     });
   },
 
+  async refreshNapcat(): Promise<{ napcat_online: boolean; napcat_message: string }> {
+    const data = await request<{ napcat_online?: boolean; napcat_message?: string }>("/napcat/refresh", {
+      method: "POST",
+      body: "{}",
+    });
+    return {
+      napcat_online: Boolean(data.napcat_online),
+      napcat_message: String(data.napcat_message ?? ""),
+    };
+  },
+
   mapLoadedMembers(
     rows: LoadMembersResponse["members"],
     filterStaff: boolean,

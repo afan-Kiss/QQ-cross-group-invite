@@ -10,12 +10,20 @@ vi.mock("@/lib/wails-bridge", () => ({
   },
 }));
 
+const refreshNapcatApi = vi.fn();
+vi.mock("@/lib/api", () => ({
+  api: {
+    refreshNapcat: (...a: unknown[]) => refreshNapcatApi(...a),
+  },
+}));
+
 import { applyBootstrap, useServiceStore } from "./useServiceStore";
 
 describe("service store request ordering + instance epoch", () => {
   beforeEach(() => {
     ensureMock.mockReset();
     probeMock.mockReset();
+    refreshNapcatApi.mockReset();
     useServiceStore.setState({
       localService: "ready",
       message: "ok",
@@ -29,6 +37,8 @@ describe("service store request ordering + instance epoch", () => {
       backendVersion: "1.0.0",
       serviceEpoch: 1,
       lifecycleGeneration: 1,
+      healthProbeGeneration: 1,
+      refreshingNapcat: false,
     });
   });
 
@@ -112,6 +122,58 @@ describe("service store request ordering + instance epoch", () => {
     });
     await a;
     expect(useServiceStore.getState().appSession).toBe("sess-B");
+  });
+
+  it("only latest refreshHealth probe wins", async () => {
+    let resolveA: (v: unknown) => void = () => undefined;
+    probeMock
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveA = resolve;
+          }),
+      )
+      .mockResolvedValueOnce({
+        localService: "ready",
+        message: "B",
+        startedByUs: true,
+        napcatOnline: true,
+        napcatMessage: "NapCat online",
+        appSession: "sess-B",
+        backendInstance: "cross-group-invite:1.0.0:2000",
+        backendPid: 2000,
+        backendVersion: "1.0.0",
+      });
+
+    const a = useServiceStore.getState().refreshHealth();
+    const b = useServiceStore.getState().refreshHealth();
+    await b;
+    expect(useServiceStore.getState().backendInstance).toBe("cross-group-invite:1.0.0:2000");
+    resolveA({
+      localService: "ready",
+      message: "A",
+      startedByUs: true,
+      napcatOnline: false,
+      napcatMessage: "old",
+      appSession: "sess-A",
+      backendInstance: "cross-group-invite:1.0.0:1000",
+      backendPid: 1000,
+      backendVersion: "1.0.0",
+    });
+    await a;
+    expect(useServiceStore.getState().backendInstance).toBe("cross-group-invite:1.0.0:2000");
+    expect(useServiceStore.getState().appSession).toBe("sess-B");
+  });
+
+  it("refreshNapcat updates store from API", async () => {
+    refreshNapcatApi.mockResolvedValueOnce({
+      napcat_online: true,
+      napcat_message: "NapCat online",
+    });
+    await useServiceStore.getState().refreshNapcat();
+    expect(useServiceStore.getState().napcatOnline).toBe(true);
+    expect(useServiceStore.getState().napcatMessage).toBe("NapCat online");
+    expect(useServiceStore.getState().refreshingNapcat).toBe(false);
   });
 
   it("bumps serviceEpoch when external backendInstance PID changes", () => {

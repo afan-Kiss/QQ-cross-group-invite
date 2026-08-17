@@ -40,7 +40,10 @@ def test_wails_release_smoke_uses_temp_port():
     )
     assert "TcpListener" in text
     assert "--port" in text
-    assert "taskkill" not in text.lower()
+    assert "taskkill /IM" not in text.lower()
+    assert "taskkill.exe /IM" not in text.lower()
     assert 'Invoke-RestMethod -Uri "http://127.0.0.1:17888/health"' not in text
     assert 'Uri "http://127.0.0.1:17888/shutdown"' not in text
     assert "smoke-test" not in text
+    assert "taskkill.exe /PID" in text or "taskkill /PID" in text.lower()
+    assert "VERSION file missing" in text

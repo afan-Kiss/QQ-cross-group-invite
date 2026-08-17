@@ -10,9 +10,16 @@ $ScriptExit = 1
 function Step([string]$Name, [scriptblock]$Action) {
     Write-Host ""
     Write-Host "==> $Name" -ForegroundColor Cyan
-    & $Action
-    if ($null -ne $LASTEXITCODE -and $LASTEXITCODE -ne 0) {
-        throw "Step failed: $Name (exit $LASTEXITCODE)"
+    # Native tools often write INFO to stderr; do not treat as terminating.
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        & $Action
+        if ($null -ne $LASTEXITCODE -and $LASTEXITCODE -ne 0) {
+            throw "Step failed: $Name (exit $LASTEXITCODE)"
+        }
+    } finally {
+        $ErrorActionPreference = $prevEap
     }
 }
 
@@ -77,8 +84,28 @@ function Invoke-OwnedSidecarSmoke([string]$SidecarPath) {
         Write-Host "  sidecar smoke OK (temp port)"
     }
     finally {
-        if ($null -ne $proc -and -not $proc.HasExited) {
-            try { Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue } catch {}
+        if ($null -ne $proc) {
+            $pidToKill = $proc.Id
+            # Prefer process-tree kill for this PID only (PyInstaller parent/child). Never /IM.
+            try {
+                & taskkill.exe /PID $pidToKill /T /F 2>$null | Out-Null
+            } catch {}
+            try {
+                if (-not $proc.HasExited) { Stop-Process -Id $pidToKill -Force -ErrorAction SilentlyContinue }
+            } catch {}
+            # Confirm temp port released (must not touch 17888).
+            $deadline = [DateTime]::UtcNow.AddSeconds(5)
+            while ([DateTime]::UtcNow -lt $deadline) {
+                $busy = $false
+                try {
+                    $c = New-Object System.Net.Sockets.TcpClient
+                    $c.Connect("127.0.0.1", $port)
+                    $c.Close()
+                    $busy = $true
+                } catch { $busy = $false }
+                if (-not $busy) { break }
+                Start-Sleep -Milliseconds 200
+            }
         }
     }
 }
@@ -175,8 +202,12 @@ print('mojibake scan OK')
         if (-not (Test-Path -LiteralPath $outDir)) { throw "build/bin missing" }
         Copy-Item -Force "$MyqqHttp\dist\$SidecarExeName" "$outDir\$SidecarExeName"
         $versionSrc = Join-Path $MyqqHttp "VERSION"
-        if (Test-Path -LiteralPath $versionSrc) {
-            Copy-Item -Force $versionSrc "$outDir\VERSION"
+        if (-not (Test-Path -LiteralPath $versionSrc)) {
+            throw "VERSION file missing at repo root"
+        }
+        Copy-Item -Force $versionSrc "$outDir\VERSION"
+        if (-not (Test-Path -LiteralPath (Join-Path $outDir "VERSION"))) {
+            throw "VERSION missing in release dir"
         }
 
         $mainExe = Join-Path $outDir $MainExeName

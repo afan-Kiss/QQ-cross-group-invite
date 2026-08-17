@@ -3,6 +3,7 @@ import {
   inviteConfigSchema,
   parseInviteConfigForm,
   parseInviteDefaults,
+  parseLogSettings,
   validateInviteBatchInterval,
 } from "./invite-config-schema";
 
@@ -62,5 +63,32 @@ describe("inviteConfigSchema shared", () => {
       expect(ok.batch).toBe(20);
       expect(ok.interval).toBe(1500);
     }
+  });
+
+  it("log settings share bounds used by SettingsPage", () => {
+    expect(
+      parseLogSettings({
+        logLevel: "INFO",
+        maxLogFileSize: "1",
+        logRetentionDays: "1",
+        autoCleanLogs: true,
+      }).success,
+    ).toBe(true);
+    expect(
+      parseLogSettings({
+        logLevel: "WARN",
+        maxLogFileSize: "abc",
+        logRetentionDays: "7",
+        autoCleanLogs: true,
+      }).success,
+    ).toBe(false);
+    expect(
+      parseLogSettings({
+        logLevel: "ERROR",
+        maxLogFileSize: "5",
+        logRetentionDays: "3651",
+        autoCleanLogs: false,
+      }).success,
+    ).toBe(false);
   });
 });

@@ -7,6 +7,14 @@ export const INVITE_LIMITS = {
   intervalMax: 600000,
 } as const;
 
+export const LOG_LIMITS = {
+  maxFileMbMin: 1,
+  maxFileMbMax: 1024,
+  retentionDaysMin: 1,
+  retentionDaysMax: 3650,
+  levels: ["INFO", "WARN", "ERROR"] as const,
+} as const;
+
 /** Positive decimal group id: no leading zeros, not zero. */
 const positiveGroupId = (label: string) =>
   z.string().regex(/^[1-9]\d*$/, label);
@@ -39,6 +47,23 @@ export const inviteDefaultsSchema = z.object({
   defaultIntervalMs: intervalMsField,
 });
 
+const logMaxFileMbField = z.string().refine((v) => {
+  const n = Number(v);
+  return Number.isInteger(n) && n >= LOG_LIMITS.maxFileMbMin && n <= LOG_LIMITS.maxFileMbMax;
+}, `\u6700\u5927\u65e5\u5fd7\u6587\u4ef6(MB)\u5fc5\u987b\u4e3a ${LOG_LIMITS.maxFileMbMin}\u2013${LOG_LIMITS.maxFileMbMax}`);
+
+const logRetentionDaysField = z.string().refine((v) => {
+  const n = Number(v);
+  return Number.isInteger(n) && n >= LOG_LIMITS.retentionDaysMin && n <= LOG_LIMITS.retentionDaysMax;
+}, `\u4fdd\u7559\u5929\u6570\u5fc5\u987b\u4e3a ${LOG_LIMITS.retentionDaysMin}\u2013${LOG_LIMITS.retentionDaysMax}`);
+
+export const logSettingsSchema = z.object({
+  logLevel: z.enum(["INFO", "WARN", "ERROR"]),
+  maxLogFileSize: logMaxFileMbField,
+  logRetentionDays: logRetentionDaysField,
+  autoCleanLogs: z.boolean(),
+});
+
 export type InviteConfigFormValues = z.infer<typeof inviteConfigSchema>;
 
 export function parseInviteConfigForm(values: unknown) {
@@ -47,6 +72,10 @@ export function parseInviteConfigForm(values: unknown) {
 
 export function parseInviteDefaults(values: unknown) {
   return inviteDefaultsSchema.safeParse(values);
+}
+
+export function parseLogSettings(values: unknown) {
+  return logSettingsSchema.safeParse(values);
 }
 
 export function validateInviteBatchInterval(

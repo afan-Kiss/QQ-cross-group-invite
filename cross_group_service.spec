@@ -16,6 +16,7 @@ a = Analysis(
         "pb_utils",
         "myqq_api",
         "napcat_health",
+        "log_settings",
         "service_logger",
     ],
     hookspath=[],

@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { BootstrapStatus } from "@/lib/types";
+import { api } from "@/lib/api";
 import { wailsBridge } from "@/lib/wails-bridge";
 
 interface ServiceStore extends BootstrapStatus {
@@ -10,11 +11,15 @@ interface ServiceStore extends BootstrapStatus {
   serviceEpoch: number;
   /** Invalidates in-flight ensureBackend / refreshHealth writers. */
   lifecycleGeneration: number;
+  /** Orders concurrent refreshHealth probes; only latest may write. */
+  healthProbeGeneration: number;
+  refreshingNapcat: boolean;
   setFromBootstrap: (status: BootstrapStatus) => void;
   setBootstrapping: (message: string) => void;
   setBootstrapped: (value: boolean) => void;
   bumpServiceEpoch: () => void;
   refreshHealth: () => Promise<void>;
+  refreshNapcat: () => Promise<void>;
   ensureBackend: () => Promise<void>;
 }
 
@@ -77,6 +82,8 @@ export const useServiceStore = create<ServiceStore>((set, get) => ({
   backendInstance: "",
   serviceEpoch: 0,
   lifecycleGeneration: 0,
+  healthProbeGeneration: 0,
+  refreshingNapcat: false,
 
   setFromBootstrap: (status) => set((s) => applyBootstrap(s, status)),
   setBootstrapping: (message) =>
@@ -89,6 +96,7 @@ export const useServiceStore = create<ServiceStore>((set, get) => ({
       backendInstance: "",
       serviceEpoch: nextEpoch(s.serviceEpoch),
       lifecycleGeneration: nextEpoch(s.lifecycleGeneration),
+      healthProbeGeneration: nextEpoch(s.healthProbeGeneration),
     })),
   setBootstrapped: (value) => set({ bootstrapped: value }),
   bumpServiceEpoch: () => set((s) => ({ serviceEpoch: nextEpoch(s.serviceEpoch) })),
@@ -104,6 +112,7 @@ export const useServiceStore = create<ServiceStore>((set, get) => ({
       backendInstance: "",
       serviceEpoch: nextEpoch(s.serviceEpoch),
       lifecycleGeneration: gen,
+      healthProbeGeneration: nextEpoch(s.healthProbeGeneration),
     }));
     try {
       const status = await wailsBridge.ensureBackend();
@@ -123,13 +132,17 @@ export const useServiceStore = create<ServiceStore>((set, get) => ({
   },
 
   refreshHealth: async () => {
-    const gen = get().lifecycleGeneration;
+    const lifecycle = get().lifecycleGeneration;
+    const probe = get().healthProbeGeneration + 1;
+    set({ healthProbeGeneration: probe });
     try {
       const status = await wailsBridge.probeHealth();
-      if (get().lifecycleGeneration !== gen) return;
+      if (get().lifecycleGeneration !== lifecycle) return;
+      if (get().healthProbeGeneration !== probe) return;
       set((s) => applyBootstrap(s, status));
     } catch {
-      if (get().lifecycleGeneration !== gen) return;
+      if (get().lifecycleGeneration !== lifecycle) return;
+      if (get().healthProbeGeneration !== probe) return;
       set((s) => ({
         localService: "error",
         message: "后端服务未连接",
@@ -139,6 +152,19 @@ export const useServiceStore = create<ServiceStore>((set, get) => ({
         backendInstance: "",
         serviceEpoch: nextEpoch(s.serviceEpoch),
       }));
+    }
+  },
+
+  refreshNapcat: async () => {
+    set({ refreshingNapcat: true });
+    try {
+      const res = await api.refreshNapcat();
+      set({
+        napcatOnline: Boolean(res.napcat_online),
+        napcatMessage: String(res.napcat_message || ""),
+      });
+    } finally {
+      set({ refreshingNapcat: false });
     }
   },
 }));

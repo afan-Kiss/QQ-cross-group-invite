@@ -5,11 +5,15 @@ from __future__ import annotations
 import logging
 import os
 import re
+import time
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 LOG_DIR = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "QQCrossGroupInvite" / "logs"
 LOG_FILE = LOG_DIR / "service.log"
+
+# Only delete matching app log files; never recurse into unrelated trees.
+_LOG_NAME_RE = re.compile(r"^(service|app)\.log(\.\d+)?$", re.IGNORECASE)
 
 _SENSITIVE_PATTERNS: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"(?i)(token\s*[:=]\s*)(\S+)"), r"\1***"),
@@ -45,21 +49,73 @@ def sanitize_text(text: str) -> str:
     return out
 
 
+def cleanup_old_logs(
+    log_dir: Path | None = None,
+    *,
+    retention_days: int,
+    auto_clean: bool,
+    now: float | None = None,
+) -> list[str]:
+    """Delete expired app log files by mtime when auto_clean is enabled.
+
+    Returns list of deleted file names (not full paths with secrets).
+    """
+    if not auto_clean:
+        return []
+    days = max(1, int(retention_days))
+    root = Path(log_dir) if log_dir is not None else LOG_DIR
+    if not root.is_dir():
+        return []
+    cutoff = (now if now is not None else time.time()) - days * 86400
+    deleted: list[str] = []
+    try:
+        for entry in root.iterdir():
+            if not entry.is_file():
+                continue
+            if not _LOG_NAME_RE.match(entry.name):
+                continue
+            try:
+                mtime = entry.stat().st_mtime
+            except OSError:
+                continue
+            if mtime < cutoff:
+                try:
+                    entry.unlink()
+                    deleted.append(entry.name)
+                except OSError:
+                    continue
+    except OSError:
+        return deleted
+    return deleted
+
+
 def setup_service_logger(
     name: str = "cross-group-service",
     *,
     level: str = "INFO",
     max_bytes: int = 5 * 1024 * 1024,
     backup_count: int = 5,
+    retention_days: int = 7,
+    auto_clean_logs: bool = True,
 ) -> logging.Logger:
     LOG_DIR.mkdir(parents=True, exist_ok=True)
+
+    # backupCount is rotation depth, independent of retention_days.
+    cleanup_old_logs(
+        LOG_DIR,
+        retention_days=retention_days,
+        auto_clean=auto_clean_logs,
+    )
 
     logger = logging.getLogger(name)
     for h in list(logger.handlers):
         logger.removeHandler(h)
         h.close()
 
-    logger.setLevel(getattr(logging, str(level).upper(), logging.INFO))
+    level_name = str(level).upper()
+    if level_name == "WARN":
+        level_name = "WARNING"
+    logger.setLevel(getattr(logging, level_name, logging.INFO))
     handler = RotatingFileHandler(
         LOG_FILE,
         maxBytes=max(1024 * 1024, int(max_bytes)),

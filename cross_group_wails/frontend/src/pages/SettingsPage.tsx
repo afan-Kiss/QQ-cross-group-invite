@@ -5,7 +5,7 @@ import { useServiceStore } from "@/store/useServiceStore";
 import { useInviteStore } from "@/store/useInviteStore";
 import { api } from "@/lib/api";
 import { wailsBridge } from "@/lib/wails-bridge";
-import { parseInviteDefaults } from "@/lib/invite-config-schema";
+import { parseInviteDefaults, parseLogSettings, LOG_LIMITS } from "@/lib/invite-config-schema";
 import { toast } from "@/store/useToastStore";
 
 export function SettingsPage() {
@@ -24,31 +24,52 @@ export function SettingsPage() {
     load();
   }, [load]);
 
+  const [logErrors, setLogErrors] = useState<{ maxLogFileSize?: string; logRetentionDays?: string }>({});
+  const [saving, setSaving] = useState(false);
+
   const save = async () => {
     const parsed = parseInviteDefaults({
       defaultBatchCount: settings.defaultBatchCount,
       defaultIntervalMs: settings.defaultIntervalMs,
     });
     if (!parsed.success) {
-      const msg = parsed.error.issues[0]?.message || "参数无效";
+      const msg = parsed.error.issues[0]?.message || "\u53c2\u6570\u65e0\u6548";
       toast("error", msg);
       return;
     }
-    const token = settings.napcatWebuiToken;
-    persistSettings(settings);
-    setConfig({
-      batch_count: settings.defaultBatchCount,
-      interval_ms: settings.defaultIntervalMs,
-      filter_staff: settings.defaultFilterStaff,
+    const logParsed = parseLogSettings({
+      logLevel: settings.logLevel === "WARNING" ? "WARN" : settings.logLevel,
+      maxLogFileSize: settings.maxLogFileSize,
+      logRetentionDays: settings.logRetentionDays,
+      autoCleanLogs: settings.autoCleanLogs,
     });
+    if (!logParsed.success) {
+      const errs: { maxLogFileSize?: string; logRetentionDays?: string } = {};
+      for (const issue of logParsed.error.issues) {
+        const key = String(issue.path[0] || "");
+        if (key === "maxLogFileSize" || key === "logRetentionDays") errs[key] = issue.message;
+      }
+      setLogErrors(errs);
+      toast("error", logParsed.error.issues[0]?.message || "\u65e5\u5fd7\u53c2\u6570\u65e0\u6548");
+      return;
+    }
+    setLogErrors({});
+    const token = settings.napcatWebuiToken;
     if (localService !== "ready") {
+      persistSettings(settings);
+      setConfig({
+        batch_count: settings.defaultBatchCount,
+        interval_ms: settings.defaultIntervalMs,
+        filter_staff: settings.defaultFilterStaff,
+      });
       if (token) {
-        toast("warning", "服务未连接，Token 尚未保存");
+        toast("warning", "\u670d\u52a1\u672a\u8fde\u63a5\uff0cToken \u6682\u672a\u4fdd\u5b58");
       } else {
-        toast("success", "本地设置已保存");
+        toast("success", "\u672c\u5730\u8bbe\u7f6e\u5df2\u4fdd\u5b58");
       }
       return;
     }
+    setSaving(true);
     try {
       await api.saveConfig({
         target_group_id: useInviteStore.getState().config.target_group_id,
@@ -63,10 +84,18 @@ export function SettingsPage() {
         log_retention_days: settings.logRetentionDays,
         auto_clean_logs: settings.autoCleanLogs,
       } as never);
+      persistSettings(settings);
+      setConfig({
+        batch_count: settings.defaultBatchCount,
+        interval_ms: settings.defaultIntervalMs,
+        filter_staff: settings.defaultFilterStaff,
+      });
       if (token) update({ napcatWebuiToken: "" });
-      toast("success", "设置已保存");
+      toast("success", "\u8bbe\u7f6e\u5df2\u4fdd\u5b58");
     } catch (e) {
-      toast("error", e instanceof Error ? e.message : "保存失败");
+      toast("error", e instanceof Error ? e.message : "\u4fdd\u5b58\u5931\u8d25");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -157,8 +186,8 @@ export function SettingsPage() {
             options={["INFO", "WARN", "ERROR"].map((l) => ({ v: l, l }))}
             onChange={(v) => update({ logLevel: v })}
           />
-          <Field label="最大日志文件(MB)" value={settings.maxLogFileSize} onChange={(v) => update({ maxLogFileSize: v })} />
-          <Field label="保留天数" value={settings.logRetentionDays} onChange={(v) => update({ logRetentionDays: v })} />
+          <Field label="最大日志文件(MB)" value={settings.maxLogFileSize} type="number" min={LOG_LIMITS.maxFileMbMin} max={LOG_LIMITS.maxFileMbMax} onChange={(v) => update({ maxLogFileSize: v })} error={logErrors.maxLogFileSize} />
+          <Field label="保留天数" value={settings.logRetentionDays} type="number" min={LOG_LIMITS.retentionDaysMin} max={LOG_LIMITS.retentionDaysMax} onChange={(v) => update({ logRetentionDays: v })} error={logErrors.logRetentionDays} />
           <Toggle label="自动清理" checked={settings.autoCleanLogs} onChange={(v) => update({ autoCleanLogs: v })} />
           <p className="text-[12px] text-muted-foreground">日志相关设置下次启动 sidecar 后生效</p>
         </SettingCard>
@@ -241,7 +270,7 @@ export function SettingsPage() {
       <div className="flex justify-end">
         <button
           type="button"
-          onClick={() => void save()}
+          disabled={saving} onClick={() => void save()}
           className="rounded-[10px] bg-primary px-5 py-2.5 text-[14px] font-medium text-white hover:bg-primary-hover"
         >
           保存设置
@@ -264,19 +293,31 @@ function Field({
   label,
   value,
   onChange,
+  type = "text",
+  min,
+  max,
+  error,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
+  type?: string;
+  min?: number;
+  max?: number;
+  error?: string;
 }) {
   return (
     <label className="block text-[13px]">
       <span className="text-muted-foreground">{label}</span>
       <input
+        type={type}
+        min={min}
+        max={max}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="mt-1 w-full rounded-[8px] border border-border px-3 py-2 outline-none focus:border-primary"
+        className="mt-1 w-full rounded-[10px] border border-border bg-white px-3 py-2 outline-none focus:border-primary"
       />
+      {error ? <p className="mt-1 text-[12px] text-danger">{error}</p> : null}
     </label>
   );
 }

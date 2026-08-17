@@ -30,6 +30,8 @@ export function ConfigPanel() {
   const stopping = invitePhase === "stopping";
   const serviceReady = useServiceStore((s) => s.localService === "ready");
   const napcatOnline = useServiceStore((s) => s.napcatOnline);
+  const refreshingNapcat = useServiceStore((s) => s.refreshingNapcat);
+  const refreshNapcat = useServiceStore((s) => s.refreshNapcat);
   const actionDisabled = !serviceReady || !napcatOnline;
 
   const sameGroup =
@@ -89,10 +91,11 @@ export function ConfigPanel() {
           <p>NapCat 未连接，请启动 NapCat 后再加载成员或开始邀请。</p>
           <button
             type="button"
-            className="mt-2 rounded-[8px] border border-[#e0c56a] bg-white px-3 py-1 text-[12px] hover:bg-[#fff8e6]"
-            onClick={() => void useServiceStore.getState().refreshHealth()}
+            className="mt-2 rounded-[8px] border border-[#e0c56a] bg-white px-3 py-1 text-[12px] hover:bg-[#fff8e6] disabled:opacity-60"
+            disabled={refreshingNapcat}
+            onClick={() => void refreshNapcat()}
           >
-            重新检测
+            {refreshingNapcat ? "检测中..." : "重新检测"}
           </button>
         </div>
       )}

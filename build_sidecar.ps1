@@ -6,9 +6,16 @@ $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $Root
 
 Write-Host "==> Building cross-group-service.exe with PyInstaller"
-python -m PyInstaller --noconfirm --clean cross_group_service.spec
-if ($LASTEXITCODE -ne 0) {
-    throw "PyInstaller failed with exit code $LASTEXITCODE"
+# PyInstaller writes INFO lines to stderr; do not treat as terminating under Stop.
+$prevEap = $ErrorActionPreference
+$ErrorActionPreference = "Continue"
+try {
+    python -m PyInstaller --noconfirm --clean cross_group_service.spec
+    if ($null -ne $LASTEXITCODE -and $LASTEXITCODE -ne 0) {
+        throw "PyInstaller failed with exit code $LASTEXITCODE"
+    }
+} finally {
+    $ErrorActionPreference = $prevEap
 }
 
 $Built = Join-Path $Root "dist\cross-group-service.exe"

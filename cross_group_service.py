@@ -31,7 +31,8 @@ from cross_group_batch import (
     stop_batch,
 )
 from myqq_api import check_napcat_online, load_cfg, onebot_action, save_cfg, test_napcat_connection
-from napcat_health import get_napcat_cache, refresh_napcat_cache, start_napcat_health_refresh
+from napcat_health import get_napcat_cache, refresh_napcat_cache, start_napcat_health_refresh, stop_napcat_health_refresh
+from log_settings import parse_log_settings, validate_log_settings_payload
 from service_logger import setup_service_logger
 
 WEB_DIR = Path(__file__).resolve().parent / "web"
@@ -76,6 +77,14 @@ SENSITIVE_GET_PATHS = frozenset(
         "/tasks",
     }
 )
+
+
+def _is_sensitive_get(path: str) -> bool:
+    if path in SENSITIVE_GET_PATHS:
+        return True
+    if path.startswith("/tasks/"):
+        return True
+    return False
 
 
 def _cors_headers(handler: BaseHTTPRequestHandler) -> dict[str, str]:
@@ -244,9 +253,10 @@ class Handler(BaseHTTPRequestHandler):
             caller = self.headers.get("X-App-Session") or ""
             _json_response(self, 200, build_health_payload(caller))
             return
-        if path == "/config":
+        if _is_sensitive_get(path):
             if _require_owned_read(self):
                 return
+        if path == "/config":
             cfg = load_cfg()
             _json_response(
                 self,
@@ -265,8 +275,6 @@ class Handler(BaseHTTPRequestHandler):
             )
             return
         if path == "/status":
-            if _require_owned_read(self):
-                return
             state = get_state()
             napcat_online, napcat_message, _checked = get_napcat_cache()
             state["ok"] = True
@@ -275,8 +283,6 @@ class Handler(BaseHTTPRequestHandler):
             _json_response(self, 200, state)
             return
         if path == "/members":
-            if _require_owned_read(self):
-                return
             members = get_cached_members()
             eligible = sum(1 for m in members if m.eligible)
             safe = [_member_public_dict(m) for m in members]
@@ -293,13 +299,9 @@ class Handler(BaseHTTPRequestHandler):
             )
             return
         if path == "/tasks":
-            if _require_owned_read(self):
-                return
             _json_response(self, 200, {"ok": True, "tasks": list_tasks()})
             return
         if path.startswith("/tasks/"):
-            if _require_owned_read(self):
-                return
             tid = path[len("/tasks/") :]
             task = get_task(tid)
             if not task:
@@ -339,6 +341,7 @@ class Handler(BaseHTTPRequestHandler):
                         return
 
             if path == "/config":
+                validate_log_settings_payload(data)
                 cfg = load_cfg()
                 for k in (
                     "target_group_id",
@@ -526,7 +529,7 @@ class Handler(BaseHTTPRequestHandler):
                 return
 
             if path == "/napcat/refresh":
-                online, message = refresh_napcat_cache()
+                online, message = refresh_napcat_cache(wait_if_busy=True)
                 code, body = _ok({"napcat_online": online, "napcat_message": message})
                 _json_response(self, code, body)
                 return
@@ -609,14 +612,18 @@ def main(
         SESSION_ID = str(uuid.uuid4())
         SESSION_REQUIRED = False
     cfg = load_cfg()
-    log_level = str(cfg.get("log_level") or "INFO")
-    max_mb = int(cfg.get("max_log_file_mb") or 5)
-    retention = int(cfg.get("log_retention_days") or 7)
-    logger = setup_service_logger(
-        level=log_level,
-        max_bytes=max_mb * 1024 * 1024,
-        backup_count=max(1, retention),
-    )
+    log_cfg = parse_log_settings(cfg)
+    try:
+        logger = setup_service_logger(
+            level=log_cfg["log_level"],
+            max_bytes=log_cfg["max_log_file_mb"] * 1024 * 1024,
+            backup_count=log_cfg["backup_count"],
+            retention_days=log_cfg["log_retention_days"],
+            auto_clean_logs=log_cfg["auto_clean_logs"],
+        )
+    except Exception:
+        logger = setup_service_logger()
+        logger.warning("log settings invalid or unusable; using defaults")
 
     recovered = recover_stale_tasks()
     if recovered:
@@ -660,6 +667,7 @@ def main(
         logger.info("service interrupted")
     finally:
         stop_batch()
+        stop_napcat_health_refresh()
         if _server is not None:
             _server.server_close()
         logger.info("service stopped")

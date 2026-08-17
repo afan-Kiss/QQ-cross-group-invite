@@ -29,6 +29,8 @@ describe("appSession cleared on bootstrap", () => {
       backendVersion: "1.0.0",
       serviceEpoch: 1,
       lifecycleGeneration: 1,
+      healthProbeGeneration: 1,
+      refreshingNapcat: false,
     });
   });
 
