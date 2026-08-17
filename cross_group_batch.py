@@ -826,10 +826,8 @@ def start_batch(
     """
     global _owned_task_id
     resolved_batch_size = int(batch_size if batch_size is not None else (count or 20))
-    if resolved_batch_size < 1:
-        resolved_batch_size = 20
-    if resolved_batch_size > 1000:
-        raise ValueError("每批人数必须在 1-1000 之间")
+    if resolved_batch_size < 1 or resolved_batch_size > 1000:
+        raise ValueError("batch_count must be 1-1000")
     if interval_ms < 100 or interval_ms > 600000:
         raise ValueError("邀请间隔必须在 100-600000 毫秒之间")
     if target_group_id <= 0 or source_group_id <= 0:

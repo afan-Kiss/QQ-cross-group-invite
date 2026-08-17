@@ -105,6 +105,8 @@ export interface AppStatus extends InviteStats {
   running: boolean;
   status: TaskRunStatus;
   task_id: string;
+  source_group_id?: string;
+  target_group_id?: string;
   logs: string[];
   rate_limit_list: RateLimitRecord[];
   failed_list: FailedRecord[];
@@ -142,7 +144,8 @@ export interface HealthResponse {
   ok: boolean;
   service: string;
   version?: string;
-  session_id?: string;
+  session_required?: boolean;
+  session_match?: boolean;
   pid?: number;
   napcat_online: boolean;
   napcat_message: string;

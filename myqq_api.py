@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import threading
 import json
 import os
 import shutil
@@ -53,14 +54,52 @@ GROUP_ADD_MODE = {
 }
 
 
+_cfg_io_lock = threading.RLock()
+
+
+def _cfg_bak_path(path: Path) -> Path:
+    return path.with_name(path.name + ".bak")
+
+
 def load_cfg() -> dict[str, Any]:
     path = cfg_path()
-    return json.loads(path.read_text(encoding="utf-8"))
+    with _cfg_io_lock:
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            return {}
+        except json.JSONDecodeError as exc:
+            bak = _cfg_bak_path(path)
+            if bak.is_file():
+                try:
+                    data = json.loads(bak.read_text(encoding="utf-8"))
+                    # Restore primary from backup without logging secrets.
+                    save_cfg(data)
+                    return data
+                except Exception as bak_exc:
+                    raise RuntimeError(
+                        f"config.json corrupt and backup unreadable: {exc}"
+                    ) from bak_exc
+            raise RuntimeError(f"config.json corrupt and no backup: {exc}") from exc
 
 
 def save_cfg(cfg: dict[str, Any]) -> None:
     path = cfg_path()
-    path.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = json.dumps(cfg, ensure_ascii=False, indent=2) + "\n"
+    tmp = path.with_name(path.name + ".tmp")
+    with _cfg_io_lock:
+        bak = _cfg_bak_path(path)
+        if path.is_file():
+            try:
+                shutil.copy2(path, bak)
+            except OSError:
+                pass
+        with open(tmp, "w", encoding="utf-8", newline="\n") as fh:
+            fh.write(payload)
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp, path)
 
 
 def parse_host_port(base_url: str) -> tuple[str, int]:
@@ -470,6 +509,50 @@ def gid_to_group_no(robot_qq: str, gid: str, token: str | None = None) -> str:
     return call("Api_GIDTransGN", robot_qq, gid, token=token)
 
 
+def _onebot_full_response(
+    action: str,
+    params: dict | None = None,
+    *,
+    api_url: str | None = None,
+    timeout: float = 15,
+) -> dict[str, Any]:
+    """Call OneBot HTTP and return the full JSON object (not only data)."""
+    cfg = load_cfg()
+    url = (api_url or cfg.get("onebot_url") or "http://127.0.0.1:6099/api").rstrip("/")
+    tok = str(cfg.get("onebot_token") or "")
+    payload = {"action": action, "params": params or {}}
+    headers = {"Content-Type": "application/json; charset=utf-8"}
+    if tok:
+        headers["Authorization"] = f"Bearer {tok}"
+    req = urllib.request.Request(
+        url,
+        data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+        method="POST",
+        headers=headers,
+    )
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        obj = json.loads(r.read().decode("utf-8", errors="replace"))
+    return obj if isinstance(obj, dict) else {"raw": obj}
+
+
+def _extract_login_identity(payload: dict[str, Any]) -> str:
+    status = str(payload.get("status") or "").lower()
+    if status in {"failed", "error"}:
+        raise RuntimeError(f"OneBot get_login_info failed: status={status}")
+    retcode = payload.get("retcode")
+    if retcode is not None and str(retcode) not in {"0", "ok"}:
+        raise RuntimeError(f"OneBot get_login_info retcode={retcode}")
+    data = payload.get("data") if isinstance(payload.get("data"), dict) else payload
+    if not isinstance(data, dict):
+        raise RuntimeError("OneBot get_login_info returned no data")
+    if data.get("error") or data.get("message") in {"failed", "error"}:
+        raise RuntimeError(f"OneBot get_login_info error-shaped: {data.get('error') or data.get('message')}")
+    uid = str(data.get("user_id") or data.get("uin") or "").strip()
+    if not uid:
+        raise RuntimeError("OneBot get_login_info missing user_id/uin")
+    return uid
+
+
 def check_napcat_online(
     timeout: float = 3.0, *,
     onebot_url: str | None = None,
@@ -480,12 +563,52 @@ def check_napcat_online(
         url = str(onebot_url or cfg.get("onebot_url") or "http://127.0.0.1:6099/api").rstrip("/")
         host, port = parse_host_port(url)
         if not port_open(host, port, timeout=min(timeout, 1.5)):
-            return False, f"NapCat 未连接（{host}:{port} 无响应）"
-        data = onebot_action("get_login_info", timeout=timeout, api_url=url)
-        if isinstance(data, dict):
-            uid = str(data.get("user_id") or data.get("uin") or "")
-            if uid:
-                return True, f"NapCat 在线（QQ {uid}）"
-        return True, "NapCat 在线"
+            return False, f"NapCat offline ({host}:{port} no response)"
+        payload = _onebot_full_response("get_login_info", timeout=timeout, api_url=url)
+        uid = _extract_login_identity(payload)
+        return True, f"NapCat online (QQ {uid})"
     except Exception as exc:
-        return False, f"NapCat 未连接：{exc}"
+        return False, f"NapCat offline: {exc}"
+
+
+def test_napcat_connection(
+    *,
+    onebot_url: str | None = None,
+    napcat_webui_token: str | None = None,
+    timeout: float = 8.0,
+) -> tuple[bool, str, str]:
+    """Probe invite-critical connectivity without save_cfg.
+
+    Returns (ok, message, error_code).
+    error_code examples: PORT_UNREACHABLE, ONEBOT_UNAVAILABLE, WEBUI_TOKEN_INVALID,
+    WEBUI_TOKEN_MISSING, NOT_LOGGED_IN, NAPCAT_OFFLINE.
+    """
+    cfg = load_cfg()
+    url = str(onebot_url or "").strip() or str(cfg.get("onebot_url") or "http://127.0.0.1:6099/api").rstrip("/")
+    url = url.rstrip("/")
+    req_tok = str(napcat_webui_token or "").strip()
+    token = req_tok if req_tok else str(cfg.get("napcat_webui_token") or cfg.get("onebot_token") or "")
+
+    host, port = parse_host_port(url)
+    if not port_open(host, port, timeout=min(timeout, 1.5)):
+        return False, f"NapCat port unreachable ({host}:{port})", "PORT_UNREACHABLE"
+
+    try:
+        payload = _onebot_full_response("get_login_info", timeout=timeout, api_url=url)
+        uid = _extract_login_identity(payload)
+    except Exception as exc:
+        msg = str(exc)
+        if "missing user_id" in msg or "NOT_LOGGED" in msg.upper():
+            return False, f"QQ not logged in: {exc}", "NOT_LOGGED_IN"
+        return False, f"OneBot API unavailable: {exc}", "ONEBOT_UNAVAILABLE"
+
+    if not token:
+        return False, "NapCat WebUI token missing", "WEBUI_TOKEN_MISSING"
+
+    try:
+        napcat_webui_login(token, api_url=url, timeout=min(timeout, 10), force=True)
+    except Exception as exc:
+        # Never include raw token in message.
+        return False, f"NapCat WebUI token invalid: {exc}", "WEBUI_TOKEN_INVALID"
+
+    return True, f"NapCat connection ok (QQ {uid})", "OK"

@@ -10,17 +10,19 @@ export function useBootstrap() {
   const localService = useServiceStore((s) => s.localService);
   const loadConfig = useInviteStore((s) => s.loadConfig);
   const loadTasks = useInviteStore((s) => s.loadTasks);
-  const autoConnect = useSettingsStore((s) => s.settings.autoConnectOnStart);
   const hydrated = useSettingsStore((s) => s.hydrated);
   const loadSettings = useSettingsStore((s) => s.load);
   const healthInFlight = useRef(false);
+  const bootDecisionDone = useRef(false);
 
   useEffect(() => {
     loadSettings();
   }, [loadSettings]);
 
   useEffect(() => {
-    if (!hydrated) return;
+    if (!hydrated || bootDecisionDone.current) return;
+    bootDecisionDone.current = true;
+    const autoConnect = useSettingsStore.getState().settings.autoConnectOnStart;
     if (!autoConnect) {
       useServiceStore.setState({
         localService: "manual",
@@ -30,7 +32,7 @@ export function useBootstrap() {
       return;
     }
     void ensureBackend();
-  }, [ensureBackend, autoConnect, hydrated]);
+  }, [ensureBackend, hydrated]);
 
   useEffect(() => {
     if (!bootstrapped) return;

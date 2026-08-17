@@ -27,6 +27,58 @@ type BootstrapStatus struct {
 	AppSession string `json:"appSession"`
 }
 
+var (
+	WaitHealthTimeout  = 45 * time.Second
+	WaitHealthInterval = 400 * time.Millisecond
+)
+
+const lockedServiceMsg = "port 17888 occupied by a protected cross-group-invite service without session access"
+
+func classifyReadyService(startedByUs bool, session string, result HealthResult) BootstrapStatus {
+	if result.Probe != ProbeReady {
+		return BootstrapStatus{LocalService: "error", Message: "backend not running", StartedByUs: startedByUs, AppSession: ""}
+	}
+	owned := OwnsRunningService(startedByUs, result)
+	if owned {
+		msg := "service ready"
+		if !result.NapcatOnline {
+			msg = "service started, waiting for NapCat..."
+		}
+		return BootstrapStatus{
+			LocalService:  "ready",
+			Message:       msg,
+			StartedByUs:   true,
+			NapcatOnline:  result.NapcatOnline,
+			NapcatMessage: result.NapcatMsg,
+			AppSession:    appSessionIfOwned(true, session),
+		}
+	}
+	// External unlocked services remain usable without X-App-Session.
+	if !result.SessionRequired {
+		msg := "service ready"
+		if !result.NapcatOnline {
+			msg = "service started, waiting for NapCat..."
+		}
+		return BootstrapStatus{
+			LocalService:  "ready",
+			Message:       msg,
+			StartedByUs:   false,
+			NapcatOnline:  result.NapcatOnline,
+			NapcatMessage: result.NapcatMsg,
+			AppSession:    "",
+		}
+	}
+	// Protected external service: never pretend ready without session.
+	return BootstrapStatus{
+		LocalService:  "port_conflict",
+		Message:       lockedServiceMsg,
+		StartedByUs:   false,
+		NapcatOnline:  result.NapcatOnline,
+		NapcatMessage: result.NapcatMsg,
+		AppSession:    "",
+	}
+}
+
 func sessionFingerprint(session string) string {
 	if session == "" {
 		return ""
@@ -98,15 +150,7 @@ func (m *Manager) EnsureBackend() BootstrapStatus {
 	}
 	switch result.Probe {
 	case ProbeReady:
-		owned := OwnsRunningService(m.StartedByUs(), result)
-		return BootstrapStatus{
-			LocalService:  "ready",
-			Message:       "service ready",
-			StartedByUs:   owned,
-			NapcatOnline:  result.NapcatOnline,
-			NapcatMessage: result.NapcatMsg,
-			AppSession:    appSessionIfOwned(owned, session),
-		}
+		return classifyReadyService(m.StartedByUs(), session, result)
 	case ProbePortConflict:
 		return BootstrapStatus{
 			LocalService: "port_conflict",
@@ -144,26 +188,14 @@ func (m *Manager) ProbeHealthStatus() BootstrapStatus {
 	} else {
 		result = ProbeHealth()
 	}
-	owned := OwnsRunningService(m.StartedByUs(), result)
 	switch result.Probe {
 	case ProbeReady:
-		msg := "service ready"
-		if !result.NapcatOnline {
-			msg = "service started, waiting for NapCat..."
-		}
-		return BootstrapStatus{
-			LocalService:  "ready",
-			Message:       msg,
-			StartedByUs:   owned,
-			NapcatOnline:  result.NapcatOnline,
-			NapcatMessage: result.NapcatMsg,
-			AppSession:    appSessionIfOwned(owned, session),
-		}
+		return classifyReadyService(m.StartedByUs(), session, result)
 	case ProbePortConflict:
 		return BootstrapStatus{
 			LocalService: "port_conflict",
 			Message:      result.ConflictMsg,
-			StartedByUs:  owned,
+			StartedByUs:  false,
 			AppSession:   "",
 		}
 	default:
@@ -336,8 +368,9 @@ func (m *Manager) clearLocalStateIfDead() {
 
 func (m *Manager) waitForHealth(initial string, startedByUs bool) BootstrapStatus {
 	_ = initial
-	deadline := time.Now().Add(45 * time.Second)
+	deadline := time.Now().Add(WaitHealthTimeout)
 	ourSession := m.SessionID()
+	mismatchSince := time.Time{}
 
 	for time.Now().Before(deadline) {
 		var result HealthResult
@@ -349,32 +382,54 @@ func (m *Manager) waitForHealth(initial string, startedByUs bool) BootstrapStatu
 		switch result.Probe {
 		case ProbeReady:
 			if startedByUs && ourSession != "" && !result.SessionMatch {
-				// Mid-boot: wait until session_match is confirmed.
-				time.Sleep(400 * time.Millisecond)
+				// Our child may still be booting; allow a short grace window.
+				alive := false
+				m.mu.Lock()
+				if m.cmd != nil && m.sessionID == ourSession {
+					alive = true
+				}
+				m.mu.Unlock()
+				if !alive {
+					return BootstrapStatus{
+						LocalService: "port_conflict",
+						Message:      lockedServiceMsg,
+						StartedByUs:  false,
+						AppSession:   "",
+					}
+				}
+				if mismatchSince.IsZero() {
+					mismatchSince = time.Now()
+				} else if time.Since(mismatchSince) > 3*time.Second {
+					// Child still "alive" but never matches: treat as ownership conflict.
+					return BootstrapStatus{
+						LocalService: "port_conflict",
+						Message:      lockedServiceMsg,
+						StartedByUs:  false,
+						AppSession:   "",
+					}
+				}
+				time.Sleep(WaitHealthInterval)
 				continue
 			}
-			msg := "service ready"
-			if !result.NapcatOnline {
-				msg = "service started, waiting for NapCat..."
-			}
-			owned := OwnsRunningService(startedByUs, result)
-			return BootstrapStatus{
-				LocalService:  "ready",
-				Message:       msg,
-				StartedByUs:   owned,
-				NapcatOnline:  result.NapcatOnline,
-				NapcatMessage: result.NapcatMsg,
-				AppSession:    appSessionIfOwned(owned, ourSession),
-			}
+			return classifyReadyService(startedByUs, ourSession, result)
 		case ProbePortConflict:
 			return BootstrapStatus{
 				LocalService: "port_conflict",
 				Message:      result.ConflictMsg,
-				StartedByUs:  startedByUs,
+				StartedByUs:  false,
 				AppSession:   "",
 			}
 		default:
-			time.Sleep(400 * time.Millisecond)
+			// If our process already exited while port is still down/unavailable, keep waiting briefly.
+			m.mu.Lock()
+			childGone := startedByUs && ourSession != "" && (m.cmd == nil || m.sessionID != ourSession)
+			m.mu.Unlock()
+			if childGone {
+				// Port may still be coming up for an external service; one more probe cycle handled above.
+				time.Sleep(WaitHealthInterval)
+				continue
+			}
+			time.Sleep(WaitHealthInterval)
 		}
 	}
 

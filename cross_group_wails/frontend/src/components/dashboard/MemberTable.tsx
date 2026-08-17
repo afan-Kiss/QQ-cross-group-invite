@@ -44,6 +44,7 @@ function canSelect(status: MemberStatus) {
 
 export function MemberTable() {
   const members = useInviteStore((s) => s.members);
+  const membersRevision = useInviteStore((s) => s.membersRevision);
   const membersLoaded = useInviteStore((s) => s.membersLoaded);
   const selectedQqs = useInviteStore((s) => s.selectedQqs);
   const toggleSelect = useInviteStore((s) => s.toggleSelect);
@@ -56,6 +57,10 @@ export function MemberTable() {
   const [globalFilter, setGlobalFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [revealedTokens, setRevealedTokens] = useState<Set<number>>(new Set());
+
+  useEffect(() => {
+    setRevealedTokens(new Set());
+  }, [membersRevision]);
   const [menu, setMenu] = useState<{ x: number; y: number; member: Member } | null>(null);
 
   const filteredMembers = useMemo(() => {

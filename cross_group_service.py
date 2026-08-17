@@ -30,7 +30,7 @@ from cross_group_batch import (
     start_batch,
     stop_batch,
 )
-from myqq_api import check_napcat_online, load_cfg, onebot_action, save_cfg
+from myqq_api import check_napcat_online, load_cfg, onebot_action, save_cfg, test_napcat_connection
 from service_logger import setup_service_logger
 
 WEB_DIR = Path(__file__).resolve().parent / "web"
@@ -368,6 +368,14 @@ class Handler(BaseHTTPRequestHandler):
                     return
                 batch_size = int(data.get("batch_count") or data.get("batch_size") or data.get("count") or 20)
                 interval_ms = int(data.get("interval_ms") or 1500)
+                if batch_size < 1 or batch_size > 1000:
+                    code, body = _error("INVALID_ARGUMENT", "batch_count must be 1-1000")
+                    _json_response(self, code, body)
+                    return
+                if interval_ms < 100 or interval_ms > 600000:
+                    code, body = _error("INVALID_ARGUMENT", "interval_ms must be 100-600000")
+                    _json_response(self, code, body)
+                    return
                 filter_staff = bool(data.get("filter_staff", True))
                 qq_list = data.get("qq_list")
                 if qq_list is None:
@@ -459,20 +467,29 @@ class Handler(BaseHTTPRequestHandler):
                 return
 
             if path == "/test-connection":
-                # Transient probe: use request body overrides, never save_cfg.
+                # Transient probe: never save_cfg. Validates OneBot + WebUI token.
                 probe_url = str(data.get("onebot_url") or "").strip() or None
-                online, msg = check_napcat_online(onebot_url=probe_url)
-                if not online:
-                    code, body = _error("NAPCAT_OFFLINE", msg or "NapCat offline")
+                probe_token = data.get("napcat_webui_token")
+                if probe_token is not None:
+                    probe_token = str(probe_token)
+                else:
+                    probe_token = None
+                ok, msg, err = test_napcat_connection(
+                    onebot_url=probe_url,
+                    napcat_webui_token=probe_token,
+                )
+                if not ok:
+                    code_name = err if err in {
+                        "PORT_UNREACHABLE",
+                        "ONEBOT_UNAVAILABLE",
+                        "WEBUI_TOKEN_INVALID",
+                        "WEBUI_TOKEN_MISSING",
+                        "NOT_LOGGED_IN",
+                    } else "NAPCAT_OFFLINE"
+                    code, body = _error(code_name, msg or "NapCat connection failed")
                     _json_response(self, code, body)
                     return
-                try:
-                    onebot_action("get_login_info", {}, api_url=probe_url)
-                except Exception as exc:
-                    code, body = _error("NAPCAT_OFFLINE", f"OneBot call failed: {exc}")
-                    _json_response(self, code, body)
-                    return
-                code, body = _ok({"message": "ok", "napcat_online": True})
+                code, body = _ok({"message": msg, "napcat_online": True})
                 _json_response(self, code, body)
                 return
 

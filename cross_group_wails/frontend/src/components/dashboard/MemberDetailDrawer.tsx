@@ -22,6 +22,7 @@ async function copyText(text: string, label: string) {
 
 export function MemberDetailDrawer() {
   const qq = useInviteStore((s) => s.detailMemberQq);
+  const membersRevision = useInviteStore((s) => s.membersRevision);
   const member = useInviteStore((s) => (qq == null ? undefined : s.getMember(qq)));
   const setDetailMemberQq = useInviteStore((s) => s.setDetailMemberQq);
   const selectQq = useInviteStore((s) => s.selectQq);
@@ -35,7 +36,7 @@ export function MemberDetailDrawer() {
 
   useEffect(() => {
     setShowToken(false);
-  }, [qq]);
+  }, [qq, membersRevision, member?.token]);
 
   useEffect(() => {
     if (!open) return;

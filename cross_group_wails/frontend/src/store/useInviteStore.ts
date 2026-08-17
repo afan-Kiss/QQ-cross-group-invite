@@ -57,6 +57,8 @@ const emptyStats: AppStatus = {
 };
 
 let membersLoadGeneration = 0;
+let membersMutationGeneration = 0;
+let statusRequestGeneration = 0;
 
 const emptyConfig: InviteConfig = {
   target_group_id: "",
@@ -125,12 +127,50 @@ function selectableStatus(status: MemberStatus): boolean {
   return status === "waiting" || status === "failed" || status === "rate_limited";
 }
 
+function reconcileSelectedQqs(members: Member[], selected: Set<number>, onlyWaiting = false): Set<number> {
+  const next = new Set<number>();
+  for (const qq of selected) {
+    const m = members.find((x) => x.qq === qq);
+    if (!m) continue;
+    if (onlyWaiting) {
+      if (m.status === "waiting") next.add(qq);
+    } else if (selectableStatus(m.status)) {
+      next.add(qq);
+    }
+  }
+  return next;
+}
+
+function configNeedsMemberInvalidation(prev: InviteConfig, next: InviteConfig): boolean {
+  return (
+    prev.source_group_id !== next.source_group_id ||
+    prev.filter_staff !== next.filter_staff
+  );
+}
+
+function memberInvalidationPatch(s: { membersRevision: number }): Record<string, unknown> {
+  membersLoadGeneration += 1;
+  membersMutationGeneration += 1;
+  return {
+    members: [],
+    membersRevision: s.membersRevision + 1,
+    membersMutationGeneration,
+    memberResultTaskId: null,
+    membersLoaded: false,
+    selectedQqs: new Set<number>(),
+    loadingMembers: false,
+    detailMemberQq: null,
+  };
+}
+
+
 export type InvitePhase = "idle" | "starting" | "running" | "stopping";
 
 interface InviteStore {
   config: InviteConfig;
   members: Member[];
   membersRevision: number;
+  membersMutationGeneration: number;
   memberResultTaskId: string | null;
   membersLoaded: boolean;
   loadingMembers: boolean;
@@ -175,6 +215,7 @@ export const useInviteStore = create<InviteStore>((set, get) => ({
   config: { ...emptyConfig },
   members: [],
   membersRevision: 0,
+  membersMutationGeneration: 0,
   memberResultTaskId: null,
   membersLoaded: false,
   loadingMembers: false,
@@ -196,20 +237,11 @@ export const useInviteStore = create<InviteStore>((set, get) => ({
   setConfig: (patch) =>
     set((s) => {
       const config = { ...s.config, ...patch };
-      const sourceChanged =
-        patch.source_group_id !== undefined && patch.source_group_id !== s.config.source_group_id;
-      const filterChanged =
-        patch.filter_staff !== undefined && patch.filter_staff !== s.config.filter_staff;
-      if (sourceChanged || filterChanged) {
-        membersLoadGeneration += 1;
+      if (configNeedsMemberInvalidation(s.config, config)) {
+        const sourceChanged = config.source_group_id !== s.config.source_group_id;
         return {
           config,
-          members: [],
-          membersRevision: s.membersRevision + 1,
-          memberResultTaskId: null,
-          membersLoaded: false,
-          selectedQqs: new Set<number>(),
-          loadingMembers: false,
+          ...memberInvalidationPatch(s),
           statusText: sourceChanged
             ? "来源群已修改，请重新加载成员"
             : "过滤规则已修改，请重新加载成员",
@@ -217,6 +249,7 @@ export const useInviteStore = create<InviteStore>((set, get) => ({
       }
       return { config };
     }),
+
   setActiveTab: (tab) => set({ activeTab: tab }),
   setAutoScrollLogs: (value) => set({ autoScrollLogs: value }),
   setDetailMemberQq: (qq) => set({ detailMemberQq: qq }),
@@ -273,27 +306,40 @@ export const useInviteStore = create<InviteStore>((set, get) => ({
       if (!target || (target.status !== "failed" && target.status !== "rate_limited")) {
         return {};
       }
+      membersMutationGeneration += 1;
       const members = s.members.map((m) =>
         m.qq === qq ? { ...m, status: "waiting" as const, failReason: undefined } : m,
       );
       const next = new Set(s.selectedQqs);
       next.add(qq);
       toast("info", "已重新加入邀请队列");
-      return { members, selectedQqs: next };
+      return {
+        members,
+        selectedQqs: next,
+        memberResultTaskId: null,
+        membersMutationGeneration,
+      };
     }),
 
   loadConfig: async () => {
     guardServiceReady();
-    const config = await api.getConfig();
+    const remote = await api.getConfig();
     const settings = useSettingsStore.getState().settings;
-    set({
-      config: {
-        ...config,
-        batch_count: config.batch_count || settings.defaultBatchCount,
-        interval_ms: config.interval_ms || settings.defaultIntervalMs,
-        filter_staff: config.filter_staff ?? settings.defaultFilterStaff,
-      },
-      statusText: "就绪",
+    const nextConfig: InviteConfig = {
+      ...remote,
+      batch_count: remote.batch_count || settings.defaultBatchCount,
+      interval_ms: remote.interval_ms || settings.defaultIntervalMs,
+      filter_staff: remote.filter_staff ?? settings.defaultFilterStaff,
+    };
+    set((s) => {
+      if (configNeedsMemberInvalidation(s.config, nextConfig)) {
+        return {
+          config: nextConfig,
+          ...memberInvalidationPatch(s),
+          statusText: "就绪",
+        };
+      }
+      return { config: nextConfig, statusText: "就绪" };
     });
   },
 
@@ -327,9 +373,11 @@ export const useInviteStore = create<InviteStore>((set, get) => ({
       const selected = new Set(
         members.filter((x) => x.status === "waiting").map((x) => x.qq),
       );
+      membersMutationGeneration += 1;
       set((s) => ({
         members,
         membersRevision: s.membersRevision + 1,
+        membersMutationGeneration,
         memberResultTaskId: null,
         membersLoaded: true,
         selectedQqs: selected,
@@ -454,42 +502,72 @@ export const useInviteStore = create<InviteStore>((set, get) => ({
   refreshStatus: async () => {
     const service = useServiceStore.getState();
     if (service.localService !== "ready") return;
+    const seq = ++statusRequestGeneration;
     const snap = get();
     const rev = snap.membersRevision;
+    const mut = snap.membersMutationGeneration;
     const sourceGroupId = snap.config.source_group_id;
     const filterStaff = snap.config.filter_staff;
-    const resultTaskId = snap.memberResultTaskId;
-    const membersAtStart = snap.members;
     try {
       const status = await api.getStatus();
+      if (seq !== statusRequestGeneration) return;
+
       useServiceStore.setState({
         napcatOnline: Boolean(status.napcat_online),
         napcatMessage: status.napcat_message ?? "",
       });
 
       const latest = get();
+      if (seq !== statusRequestGeneration) return;
+
       const configChanged =
         latest.membersRevision !== rev ||
         latest.config.source_group_id !== sourceGroupId ||
         latest.config.filter_staff !== filterStaff;
+      const mutationChanged = latest.membersMutationGeneration !== mut;
 
-      // Always refresh global/service-facing fields; never revive stale members.
       useLogStore.getState().setFromRaw(status.logs);
 
-      let nextMembers = latest.members;
-      if (!configChanged) {
-        const canApply =
-          Boolean(resultTaskId) &&
-          Boolean(status.task_id) &&
-          status.task_id === resultTaskId &&
-          latest.memberResultTaskId === resultTaskId;
-        if (canApply) {
-          nextMembers = applyResultsToMembers(membersAtStart, status.results);
+      let memberResultTaskId = latest.memberResultTaskId;
+      let adopted = false;
+      if (
+        !memberResultTaskId &&
+        status.task_id &&
+        latest.membersLoaded &&
+        !configChanged &&
+        !mutationChanged &&
+        (status.running ||
+          status.status === "preparing" ||
+          status.status === "running" ||
+          status.status === "stopping")
+      ) {
+        const src = String(status.source_group_id || "");
+        const tgt = String(status.target_group_id || "");
+        if (src === latest.config.source_group_id && tgt === latest.config.target_group_id) {
+          memberResultTaskId = status.task_id;
+          adopted = true;
+        } else if (src && src !== latest.config.source_group_id) {
+          toast(
+            "warning",
+            "后台存在其他来源群任务，未套用到当前成员",
+          );
         }
       }
 
-      const ownedTask =
-        Boolean(latest.memberResultTaskId) && status.task_id === latest.memberResultTaskId;
+      let nextMembers = latest.members;
+      if (!configChanged && !mutationChanged) {
+        const activeResultId = memberResultTaskId;
+        const canApply =
+          Boolean(activeResultId) &&
+          Boolean(status.task_id) &&
+          status.task_id === activeResultId &&
+          (latest.memberResultTaskId === activeResultId || adopted);
+        if (canApply) {
+          nextMembers = applyResultsToMembers(latest.members, status.results);
+        }
+      }
+
+      const ownedTask = Boolean(memberResultTaskId) && status.task_id === memberResultTaskId;
       const taskIdForUi = ownedTask
         ? status.task_id
         : latest.invitePhase === "running" || latest.invitePhase === "stopping"
@@ -506,7 +584,7 @@ export const useInviteStore = create<InviteStore>((set, get) => ({
       else if (status.status === "completed") mappedStatus = "completed";
       else if (status.running) mappedStatus = "running";
 
-      const updatedTasks = latest.tasks.map((task) => {
+      let updatedTasks = latest.tasks.map((task) => {
         if (!taskIdForUi || task.id !== taskIdForUi) return task;
         if (!ownedTask && latest.invitePhase === "starting") return task;
         return {
@@ -521,11 +599,28 @@ export const useInviteStore = create<InviteStore>((set, get) => ({
           errorMessage: status.error_message || task.errorMessage,
         };
       });
+      if (ownedTask && taskIdForUi && !updatedTasks.some((x) => x.id === taskIdForUi)) {
+        updatedTasks = [
+          {
+            id: taskIdForUi,
+            sourceGroup: String(status.source_group_id || latest.config.source_group_id),
+            targetGroup: String(status.target_group_id || latest.config.target_group_id),
+            startTime: toEpochMs(status.started_at) || Date.now(),
+            total: status.total,
+            success: status.success,
+            frequent: status.rate_limited,
+            failed: status.failed,
+            status: mappedStatus,
+            endTime: status.finished_at ? toEpochMs(status.finished_at) : undefined,
+            errorMessage: status.error_message,
+          },
+          ...updatedTasks,
+        ];
+      }
 
       let invitePhase = latest.invitePhase;
       let inviting = latest.inviting;
-      if (latest.invitePhase === "starting") {
-        // Keep starting until startInvite resolves with task_id.
+      if (latest.invitePhase === "starting" && !adopted) {
         invitePhase = "starting";
         inviting = true;
       } else if (ownedTask) {
@@ -547,7 +642,6 @@ export const useInviteStore = create<InviteStore>((set, get) => ({
           inviting = false;
         }
       } else if (latest.invitePhase === "running" || latest.invitePhase === "stopping") {
-        // Stale/empty status must not demote an owned local phase mid-flight.
         invitePhase = latest.invitePhase;
         inviting = true;
       } else if (status.running || status.status === "preparing") {
@@ -561,9 +655,25 @@ export const useInviteStore = create<InviteStore>((set, get) => ({
         inviting = false;
       }
 
+      const terminalOwned =
+        ownedTask &&
+        !status.running &&
+        (status.status === "completed" ||
+          status.status === "stopped" ||
+          status.status === "error" ||
+          status.status === "idle" ||
+          status.status === "interrupted");
+      const selectedQqs = reconcileSelectedQqs(
+        configChanged || mutationChanged ? latest.members : nextMembers,
+        latest.selectedQqs,
+        terminalOwned,
+      );
+
       set({
         stats: status,
-        members: configChanged ? latest.members : nextMembers,
+        members: configChanged || mutationChanged ? latest.members : nextMembers,
+        selectedQqs,
+        memberResultTaskId,
         logs: status.logs,
         rateLimitList: status.rate_limit_list,
         failedList: status.failed_list,
@@ -576,20 +686,23 @@ export const useInviteStore = create<InviteStore>((set, get) => ({
             : taskIdForUi || latest.currentTaskId,
         tasks: updatedTasks,
         statusText: inviting
-          ? status.message || "\u9080\u8bf7\u8fd0\u884c\u4e2d"
-          : status.message || "\u5c31\u7eea",
+          ? status.message || "邀请运行中"
+          : status.message || "就绪",
       });
     } catch (e) {
+      if (seq !== statusRequestGeneration) return;
       if (e instanceof ApiError && (e.code === "port_conflict" || e.code === "PORT_CONFLICT")) {
         useServiceStore.setState({
           localService: "port_conflict",
           message: e.message,
           bootstrapped: false,
+          appSession: "",
         });
       }
-      set({ statusText: e instanceof Error ? e.message : "\u72b6\u6001\u5237\u65b0\u5931\u8d25" });
+      set({ statusText: e instanceof Error ? e.message : "状态刷新失败" });
     }
   },
+
   loadTasks: async () => {
     try {
       guardServiceReady();

@@ -189,6 +189,8 @@ export function normalizeStatus(
     running,
     status,
     task_id: String(raw.task_id ?? ""),
+    source_group_id: raw.source_group_id != null ? String(raw.source_group_id) : "",
+    target_group_id: raw.target_group_id != null ? String(raw.target_group_id) : "",
     total,
     completed: done,
     success,

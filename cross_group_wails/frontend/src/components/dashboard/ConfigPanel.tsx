@@ -10,13 +10,24 @@ import { useInviteStore } from "@/store/useInviteStore";
 import { useServiceStore } from "@/store/useServiceStore";
 import { cn } from "@/lib/utils";
 
-const schema = z.object({
-  target_group_id: z.string(),
-  source_group_id: z.string(),
-  batch_count: z.string(),
-  interval_ms: z.string(),
-  filter_staff: z.boolean(),
-});
+const schema = z
+  .object({
+    target_group_id: z.string().regex(/^\d+$/, "target group must be digits"),
+    source_group_id: z.string().regex(/^\d+$/, "source group must be digits"),
+    batch_count: z.string().refine((v) => {
+      const n = Number(v);
+      return Number.isInteger(n) && n >= 1 && n <= 1000;
+    }, "batch must be 1-1000"),
+    interval_ms: z.string().refine((v) => {
+      const n = Number(v);
+      return Number.isInteger(n) && n >= 100 && n <= 600000;
+    }, "interval must be 100-600000"),
+    filter_staff: z.boolean(),
+  })
+  .refine((v) => v.target_group_id !== v.source_group_id, {
+    message: "target and source must differ",
+    path: ["target_group_id"],
+  });
 
 type FormValues = z.infer<typeof schema>;
 
@@ -42,13 +53,30 @@ export function ConfigPanel() {
     config.source_group_id &&
     config.target_group_id === config.source_group_id;
 
-  const { register, watch, setValue } = useForm<FormValues>({
+  const { register, watch, setValue, formState, trigger } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: config,
     values: config,
+    mode: "onChange",
   });
 
   const filterStaff = watch("filter_staff");
+  const errors = formState.errors;
+  const configInvalid = Boolean(
+    errors.target_group_id || errors.source_group_id || errors.batch_count || errors.interval_ms,
+  );
+
+  const onLoadMembers = async () => {
+    const ok = await trigger(["source_group_id"]);
+    if (!ok) return;
+    await loadMembers();
+  };
+
+  const onStartInvite = async () => {
+    const ok = await trigger();
+    if (!ok) return;
+    await startInvite();
+  };
 
   return (
     <div className="animate-fade-up flex h-full flex-col rounded-[16px] border border-border bg-white p-5 shadow-[var(--shadow-card)]">
@@ -110,6 +138,9 @@ export function ConfigPanel() {
               onChange: (e) => setConfig({ source_group_id: e.target.value.replace(/\D/g, "") }),
             })}
           />
+          {errors.source_group_id && (
+            <p className="text-[12px] text-danger">{String(errors.source_group_id.message || "")}</p>
+          )}
           {sameGroup && (
             <p className="text-[12px] text-danger">目标群不能与来源群相同</p>
           )}
@@ -128,6 +159,9 @@ export function ConfigPanel() {
             })}
           />
           <p className="text-[12px] text-muted-foreground">每批处理人数（1-1000），总人数以所选成员为准</p>
+          {errors.batch_count && (
+            <p className="text-[12px] text-danger">{String(errors.batch_count.message || "")}</p>
+          )}
         </div>
 
         <div className="space-y-2">
@@ -163,16 +197,16 @@ export function ConfigPanel() {
         <Button
           variant="outline"
           className="w-full border-primary-light bg-primary-light text-primary hover:bg-primary/10"
-          onClick={() => void loadMembers()}
-          disabled={Boolean(actionDisabled || loadingMembers || phaseBusy || sameGroup)}
+          onClick={() => void onLoadMembers()}
+          disabled={Boolean(actionDisabled || loadingMembers || phaseBusy || sameGroup || Boolean(errors.source_group_id))}
         >
           {loadingMembers ? <Loader2 className="h-4 w-4 animate-spin" /> : <Users className="h-4 w-4" />}
           加载成员
         </Button>
         <Button
           className="w-full"
-          onClick={() => void startInvite()}
-          disabled={Boolean(actionDisabled || phaseBusy || sameGroup)}
+          onClick={() => void onStartInvite()}
+          disabled={Boolean(actionDisabled || phaseBusy || sameGroup || configInvalid)}
         >
           <Play className="h-4 w-4" />
           开始邀请
