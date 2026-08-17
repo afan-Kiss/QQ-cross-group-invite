@@ -10,6 +10,7 @@ const badgeVariants = cva(
         owner: "bg-[#fff1e6] text-[#c76b1d]",
         admin: "bg-[#e8f0ff] text-[#3b6fc7]",
         member: "bg-primary-light text-primary-hover",
+        unknown: "bg-[#eef0ec] text-[#7a8276]",
         success: "bg-primary-light text-primary-hover",
         filtered: "bg-[#eef0ec] text-[#7a8276]",
         waiting: "bg-[#eef0ec] text-[#7a8276]",

@@ -227,8 +227,8 @@ describe("start/stop phase task-id race", () => {
     getStatusMock.mockResolvedValue(baseStatus());
     useInviteStore.setState({
       config: {
-        target_group_id: "9",
-        source_group_id: "A",
+        target_group_id: "200",
+        source_group_id: "100",
         batch_count: "20",
         interval_ms: "1500",
         filter_staff: true,

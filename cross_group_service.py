@@ -214,6 +214,54 @@ def _validate_group_id(value: Any, label: str) -> int:
     return gid
 
 
+
+def _optional_group_id_field(value: Any, label: str) -> str:
+    """Allow empty; non-empty must be positive integer decimal string."""
+    if value is None:
+        return ""
+    s = str(value).strip()
+    if s == "":
+        return ""
+    if not s.isdigit() or s.startswith("0"):
+        raise ValueError(f"{label}必须为正整数")
+    gid = int(s)
+    if gid <= 0:
+        raise ValueError(f"{label}必须大于 0")
+    return str(gid)
+
+
+def _validate_invite_config_payload(data: dict[str, Any]) -> None:
+    """Validate invite fields present in POST /config payload (no silent write)."""
+    if "source_group_id" in data:
+        src = _optional_group_id_field(data.get("source_group_id"), "来源群号")
+    else:
+        src = None
+    if "target_group_id" in data:
+        tgt = _optional_group_id_field(data.get("target_group_id"), "目标群号")
+    else:
+        tgt = None
+    if src is not None and tgt is not None and src and tgt and src == tgt:
+        raise ValueError("目标群和来源群不能相同")
+
+    if "batch_count" in data:
+        try:
+            batch = int(data.get("batch_count"))
+        except (TypeError, ValueError):
+            raise ValueError("batch_count must be 1-1000") from None
+        if batch < 1 or batch > 1000:
+            raise ValueError("batch_count must be 1-1000")
+
+    if "interval_ms" in data:
+        try:
+            interval = int(data.get("interval_ms"))
+        except (TypeError, ValueError):
+            raise ValueError("interval_ms must be 100-600000") from None
+        if interval < 100 or interval > 600000:
+            raise ValueError("interval_ms must be 100-600000")
+
+    if "filter_staff" in data and not isinstance(data.get("filter_staff"), bool):
+        raise ValueError("filter_staff must be boolean")
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt: str, *args: Any) -> None:
         pass
@@ -266,7 +314,7 @@ class Handler(BaseHTTPRequestHandler):
                     "target_group_id": str(cfg.get("target_group_id") or ""),
                     "source_group_id": str(cfg.get("source_group_id") or ""),
                     "batch_count": str(cfg.get("batch_count") or "20"),
-                    "interval_ms": str(cfg.get("interval_ms") or "2000"),
+                    "interval_ms": str(cfg.get("interval_ms") or "1500"),
                     "filter_staff": bool(cfg.get("filter_staff", True)),
                     "onebot_url": str(cfg.get("onebot_url") or ""),
                     "napcat_webui_token": "",
@@ -342,6 +390,7 @@ class Handler(BaseHTTPRequestHandler):
 
             if path == "/config":
                 validate_log_settings_payload(data)
+                _validate_invite_config_payload(data)
                 cfg = load_cfg()
                 for k in (
                     "target_group_id",
@@ -427,13 +476,37 @@ class Handler(BaseHTTPRequestHandler):
                     code, body = _error("INVALID_ARGUMENT", "interval_ms must be 100-600000")
                     _json_response(self, code, body)
                     return
-                filter_staff = bool(data.get("filter_staff", True))
+                if "filter_staff" in data:
+                    if not isinstance(data.get("filter_staff"), bool):
+                        code, body = _error("INVALID_ARGUMENT", "filter_staff must be boolean")
+                        _json_response(self, code, body)
+                        return
+                    filter_staff = bool(data.get("filter_staff"))
+                else:
+                    filter_staff = True
                 qq_list = data.get("qq_list")
                 if qq_list is None:
                     code, body = _error("INVALID_ARGUMENT", "请至少选择一名成员")
                     _json_response(self, code, body)
                     return
-                qq_list = [int(x) for x in qq_list]
+                if not isinstance(qq_list, list):
+                    code, body = _error("INVALID_ARGUMENT", "qq_list must be an array")
+                    _json_response(self, code, body)
+                    return
+                parsed_qqs: list[int] = []
+                for x in qq_list:
+                    try:
+                        q = int(x)
+                    except (TypeError, ValueError):
+                        code, body = _error("INVALID_ARGUMENT", "qq_list contains invalid QQ")
+                        _json_response(self, code, body)
+                        return
+                    if q <= 0:
+                        code, body = _error("INVALID_ARGUMENT", "qq_list contains invalid QQ")
+                        _json_response(self, code, body)
+                        return
+                    parsed_qqs.append(q)
+                qq_list = parsed_qqs
                 if not qq_list:
                     code, body = _error("INVALID_ARGUMENT", "请至少选择一名成员")
                     _json_response(self, code, body)

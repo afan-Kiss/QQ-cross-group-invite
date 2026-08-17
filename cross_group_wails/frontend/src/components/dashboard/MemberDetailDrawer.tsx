@@ -5,7 +5,7 @@ import { formatDateTime, formatDurationMs } from "@/lib/utils";
 import { toast } from "@/store/useToastStore";
 import { useSettingsStore } from "@/store/useSettingsStore";
 
-const roleLabel = { owner: "群主", admin: "管理员", member: "成员" } as const;
+const roleLabel = { owner: "群主", admin: "管理员", member: "成员", unknown: "未知" } as const;
 const statusLabel = {
   success: "邀请成功",
   filtered: "已过滤",
@@ -42,11 +42,7 @@ export function MemberDetailDrawer() {
     return () => window.removeEventListener("keydown", onKey);
   }, [open, setDetailMemberQq]);
 
-  const canSelect =
-    member &&
-    (member.status === "waiting" ||
-      member.status === "failed" ||
-      member.status === "rate_limited");
+  const canSelect = member && member.status === "waiting";
   const canRequeue =
     member && (member.status === "failed" || member.status === "rate_limited");
 

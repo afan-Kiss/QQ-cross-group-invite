@@ -27,7 +27,7 @@ import { MemberDetailDrawer } from "@/components/dashboard/MemberDetailDrawer";
 import { MemberContextMenu } from "@/components/dashboard/MemberContextMenu";
 import { toast } from "@/store/useToastStore";
 
-const roleLabel = { owner: "群主", admin: "管理员", member: "成员" } as const;
+const roleLabel = { owner: "群主", admin: "管理员", member: "成员", unknown: "未知" } as const;
 
 const statusLabel: Record<MemberStatus, string> = {
   success: "邀请成功",
@@ -39,7 +39,7 @@ const statusLabel: Record<MemberStatus, string> = {
 };
 
 function canSelect(status: MemberStatus) {
-  return status === "waiting" || status === "failed" || status === "rate_limited";
+  return status === "waiting";
 }
 
 export function MemberTable() {

@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { api, ApiError, applyResultsToMembers } from "@/lib/api";
-import { validateInviteBatchInterval } from "@/lib/invite-config-schema";
+import { parseInviteConfigForm, validateInviteBatchInterval } from "@/lib/invite-config-schema";
 import { toEpochMs } from "@/lib/utils";
 import type {
   AppStatus,
@@ -125,7 +125,7 @@ function mapPersistedTask(t: PersistedTask): InviteTask {
 }
 
 function selectableStatus(status: MemberStatus): boolean {
-  return status === "waiting" || status === "failed" || status === "rate_limited";
+  return status === "waiting";
 }
 
 function reconcileSelectedQqs(members: Member[], selected: Set<number>, onlyWaiting = false): Set<number> {
@@ -258,14 +258,15 @@ export const useInviteStore = create<InviteStore>((set, get) => ({
   toggleSelect: (qq) =>
     set((s) => {
       const member = s.members.find((m) => m.qq === qq);
-      if (member && !selectableStatus(member.status) && member.status !== "waiting") {
-        if (member.status === "filtered" || member.status === "success" || member.status === "inviting") {
-          return {};
-        }
-      }
       const next = new Set(s.selectedQqs);
-      if (next.has(qq)) next.delete(qq);
-      else next.add(qq);
+      if (next.has(qq)) {
+        next.delete(qq);
+        return { selectedQqs: next };
+      }
+      if (!member || !selectableStatus(member.status)) {
+        return {};
+      }
+      next.add(qq);
       return { selectedQqs: next };
     }),
 
@@ -405,14 +406,25 @@ export const useInviteStore = create<InviteStore>((set, get) => ({
       return;
     }
     const { config, selectedQqs, members } = get();
-    const qqList = Array.from(selectedQqs).filter((qq) => {
-      const m = members.find((x) => x.qq === qq);
-      return m && selectableStatus(m.status);
-    });
     if (!get().membersLoaded) {
       toast("warning", "\u8bf7\u5148\u52a0\u8f7d\u6210\u5458");
       return;
     }
+    const parsed = parseInviteConfigForm(config);
+    if (!parsed.success) {
+      const msg = parsed.error.issues[0]?.message || "\u53c2\u6570\u65e0\u6548";
+      toast("error", msg);
+      return;
+    }
+    const bounds = validateInviteBatchInterval(config.batch_count, config.interval_ms);
+    if (!bounds.ok) {
+      toast("error", bounds.message);
+      return;
+    }
+    const qqList = Array.from(selectedQqs).filter((qq) => {
+      const m = members.find((x) => x.qq === qq);
+      return m && selectableStatus(m.status);
+    });
     if (qqList.length === 0) {
       toast("warning", "\u8bf7\u81f3\u5c11\u9009\u62e9\u4e00\u540d\u6210\u5458");
       return;
@@ -425,10 +437,6 @@ export const useInviteStore = create<InviteStore>((set, get) => ({
     });
     try {
       await api.saveConfig(config);
-      const bounds = validateInviteBatchInterval(config.batch_count, config.interval_ms);
-      if (!bounds.ok) {
-        throw new Error(bounds.message);
-      }
       const res = await api.startInvite({
         target_group_id: config.target_group_id,
         source_group_id: config.source_group_id,

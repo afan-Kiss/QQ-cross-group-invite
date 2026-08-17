@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  api,
   applyResultsToMembers,
   normalizeStatus,
   validateHealthPayload,
@@ -103,12 +104,24 @@ describe("applyResultsToMembers", () => {
   });
 });
 
-describe("selectedQqs payload", () => {
-  it("builds qq_list from selected set", () => {
-    const selectedQqs = new Set([10001, 10002]);
-    const qq_list = Array.from(selectedQqs);
-    expect(qq_list).toEqual([10001, 10002]);
-    expect(qq_list.length).toBe(2);
+describe("mapLoadedMembers roles", () => {
+  it("maps unknown role to unknown", () => {
+    const members = api.mapLoadedMembers(
+      [
+        {
+          qq: 1,
+          nickname: "x",
+          role: "unknown",
+          eligible: false,
+          filter_reason: "\u89d2\u8272\u672a\u77e5",
+          has_token: false,
+          token: "",
+        },
+      ],
+      true,
+    );
+    expect(members[0].role).toBe("unknown");
+    expect(members[0].status).toBe("filtered");
   });
 });
 

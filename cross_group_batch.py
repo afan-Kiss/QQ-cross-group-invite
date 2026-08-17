@@ -670,8 +670,6 @@ def load_source_members(
         nick = str(item.get("nickname") or item.get("nick") or str(qq))
         card = str(item.get("card") or "")
         token = token_map.get(qq, "")
-        if not token:
-            continue
         is_staff = role in (MemberRole.OWNER, MemberRole.ADMIN)
         eligible = not (filter_staff and is_staff)
         filter_reason = ""
@@ -864,6 +862,15 @@ def start_batch(
                 cleaned_qq.append(q)
         if not cleaned_qq:
             raise ValueError("请至少选择一名成员")
+        cache_key = (int(source_group_id), bool(filter_staff))
+        with _members_lock:
+            snap = _members_snapshot
+        if snap is not None and snap.key == cache_key and snap.members:
+            by_qq = {m.qq: m for m in snap.members}
+            for q in cleaned_qq:
+                m = by_qq.get(q)
+                if m is None or not m.eligible:
+                    raise ValueError("所选成员状态已变化，请重新加载成员后再试")
 
     task_id = _make_task_id()
     with _state_lock:
@@ -926,14 +933,15 @@ def start_batch(
                 with _state_lock:
                     _append_timeline("members_loaded", str(len(members)))
 
-            # Only invite eligible members; honor qq_list selection
+            # Only invite eligible members; honor qq_list selection.
+            # Never silently drop selected QQs: any invalid selection rejects the whole start.
             invite_members = [m for m in members if m.eligible]
             if cleaned_qq is not None:
                 allow = set(cleaned_qq)
                 invite_members = [m for m in invite_members if m.qq in allow]
                 missing = allow - {m.qq for m in invite_members}
-                if missing and not invite_members:
-                    raise RuntimeError("所选成员均不可邀请（可能已被过滤或缺少 Token）")
+                if missing:
+                    raise RuntimeError("所选成员状态已变化，请重新加载成员后再试")
 
             with _state_lock:
                 _state.total = len(invite_members)

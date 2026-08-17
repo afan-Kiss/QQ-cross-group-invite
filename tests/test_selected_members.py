@@ -42,8 +42,8 @@ def test_qq_list_filters_members(monkeypatch, patch_network):
     assert all(r["qq"] in selected for r in st["results"])
 
 
-def test_qq_list_excludes_ineligible_staff(monkeypatch, patch_network):
-    # 10004 is admin / ineligible in sample_members
+def test_qq_list_rejects_ineligible_staff_selection(monkeypatch, patch_network, sample_members):
+    # 10004 is admin / ineligible — whole start must fail before inviting.
     invited: list[int] = []
 
     def capture_invite(**kwargs):
@@ -51,14 +51,20 @@ def test_qq_list_excludes_ineligible_staff(monkeypatch, patch_network):
         return True, None, ""
 
     monkeypatch.setattr(cgb, "_invite_one", capture_invite)
-
-    cgb.start_batch(
-        target_group_id=200,
+    snap = cgb.MembersCacheSnapshot(
         source_group_id=100,
-        interval_ms=100,
-        qq_list=[10001, 10004],
+        filter_staff=True,
+        members=tuple(sample_members),
     )
-    assert wait_not_running(timeout=2.0)
-    st = cgb.get_state()
-    assert st["total"] == 1
-    assert invited == [10001]
+    with cgb._members_lock:
+        cgb._members_snapshot = snap
+
+    with pytest.raises(ValueError, match="\u72b6\u6001\u5df2\u53d8\u5316"):
+        cgb.start_batch(
+            target_group_id=200,
+            source_group_id=100,
+            interval_ms=100,
+            qq_list=[10001, 10004],
+            filter_staff=True,
+        )
+    assert invited == []

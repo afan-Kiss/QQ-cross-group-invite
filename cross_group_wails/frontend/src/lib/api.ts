@@ -99,6 +99,7 @@ export function validateHealthPayload(data: HealthResponse): HealthResponse {
 function mapRole(role: string): MemberRole {
   if (role === "owner") return "owner";
   if (role === "admin") return "admin";
+  if (role === "unknown") return "unknown";
   return "member";
 }
 
