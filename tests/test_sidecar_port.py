@@ -21,7 +21,7 @@ def test_sidecar_binds_custom_port(monkeypatch):
     monkeypatch.setattr(svc, "start_napcat_health_refresh", lambda: None)
     monkeypatch.setattr(
         "napcat_health._state",
-        {"online": False, "message": "NapCat offline", "checked_at": time.time()},
+        {"online": False, "message": "饭饭定制 offline", "checked_at": time.time()},
     )
 
     ready = threading.Event()

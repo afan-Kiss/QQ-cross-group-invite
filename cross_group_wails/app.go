@@ -168,17 +168,17 @@ func (a *App) RunDiagnostics() []DiagnosticItem {
 				napMsg = "离线"
 			}
 		}
-		items = append(items, DiagnosticItem{Label: "NapCat", Value: napMsg, OK: health.NapcatOnline})
+		items = append(items, DiagnosticItem{Label: "饭饭定制", Value: napMsg, OK: health.NapcatOnline})
 	case service.ProbePortConflict:
 		items = append(items, DiagnosticItem{Label: "17888 探测", Value: health.ConflictMsg, OK: false})
 		items = append(items, DiagnosticItem{Label: "服务标识", Value: "冲突/非本服务", OK: false})
 		items = append(items, DiagnosticItem{Label: "服务 PID", Value: "—", OK: false})
-		items = append(items, DiagnosticItem{Label: "NapCat", Value: "未知", OK: false})
+		items = append(items, DiagnosticItem{Label: "饭饭定制", Value: "未知", OK: false})
 	default:
 		items = append(items, DiagnosticItem{Label: "17888 探测", Value: "不可用", OK: false})
 		items = append(items, DiagnosticItem{Label: "服务标识", Value: "—", OK: false})
 		items = append(items, DiagnosticItem{Label: "服务 PID", Value: "—", OK: false})
-		items = append(items, DiagnosticItem{Label: "NapCat", Value: "未知", OK: false})
+		items = append(items, DiagnosticItem{Label: "饭饭定制", Value: "未知", OK: false})
 	}
 
 	logsOK, logsMsg := checkDirWritable(config.LogsDir())

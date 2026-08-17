@@ -84,7 +84,7 @@ export function Sidebar() {
               </span>
             </div>
             <div className="flex items-center justify-between">
-              <span>NapCat</span>
+              <span>饭饭定制</span>
               <span className={napcatOnline ? "text-primary" : "text-warning"}>
                 ● {napcatOnline ? "在线" : "离线"}
               </span>

@@ -79,7 +79,7 @@ function guardServiceReady() {
 function guardNapcatOnline() {
   const service = useServiceStore.getState();
   if (!service.napcatOnline) {
-    throw new ApiError(service.napcatMessage || "NapCat 未连接", "NAPCAT_OFFLINE");
+    throw new ApiError(service.napcatMessage || "饭饭定制未连接", "NAPCAT_OFFLINE");
   }
 }
 

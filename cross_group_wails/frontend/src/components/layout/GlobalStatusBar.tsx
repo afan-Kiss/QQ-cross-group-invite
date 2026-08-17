@@ -23,7 +23,7 @@ export function GlobalStatusBar() {
           本地服务 <span className={serviceOk ? "text-primary" : "text-danger"}>●</span>
         </span>
         <span>
-          NapCat <span className={napcatOk ? "text-primary" : "text-warning"}>●</span>
+          饭饭定制 <span className={napcatOk ? "text-primary" : "text-warning"}>●</span>
         </span>
       </div>
       <div>版本 1.0.0</div>

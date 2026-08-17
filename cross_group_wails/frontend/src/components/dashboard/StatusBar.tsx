@@ -20,7 +20,7 @@ export function StatusBar() {
           ? "本地服务：异常"
           : "本地服务：启动中";
 
-  const napcatLabel = napcatOnline ? "NapCat：在线" : "NapCat：未连接";
+  const napcatLabel = napcatOnline ? "饭饭定制：在线" : "饭饭定制：未连接";
 
   return (
     <footer className="flex h-9 shrink-0 items-center justify-between border-t border-border bg-white/90 px-4 text-[12px] text-muted-foreground">

@@ -78,7 +78,7 @@ export function ConfigPanel() {
             </span>
           </div>
           <div className="flex justify-between">
-            <span>NapCat</span>
+            <span>饭饭定制</span>
             <span className={napcatOnline ? "text-primary" : "text-warning"}>
               ● {napcatOnline ? "在线" : "离线"}
             </span>
@@ -88,7 +88,7 @@ export function ConfigPanel() {
 
       {!napcatOnline && serviceReady && (
         <div className="mb-4 rounded-[10px] border border-[#f0dca0] bg-warning-light px-3 py-2 text-[12px] leading-5 text-[#9a7618]">
-          <p>NapCat 未连接，请启动 NapCat 后再加载成员或开始邀请。</p>
+          <p>饭饭定制未连接，请启动饭饭定制后再加载成员或开始邀请。</p>
           <button
             type="button"
             className="mt-2 rounded-[8px] border border-[#e0c56a] bg-white px-3 py-1 text-[12px] hover:bg-[#fff8e6] disabled:opacity-60"

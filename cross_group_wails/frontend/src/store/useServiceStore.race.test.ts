@@ -138,7 +138,7 @@ describe("service store request ordering + instance epoch", () => {
         message: "B",
         startedByUs: true,
         napcatOnline: true,
-        napcatMessage: "NapCat online",
+        napcatMessage: "饭饭定制 online",
         appSession: "sess-B",
         backendInstance: "cross-group-invite:1.0.0:2000",
         backendPid: 2000,
@@ -168,11 +168,11 @@ describe("service store request ordering + instance epoch", () => {
   it("refreshNapcat updates store from API", async () => {
     refreshNapcatApi.mockResolvedValueOnce({
       napcat_online: true,
-      napcat_message: "NapCat online",
+      napcat_message: "饭饭定制 online",
     });
     await useServiceStore.getState().refreshNapcat();
     expect(useServiceStore.getState().napcatOnline).toBe(true);
-    expect(useServiceStore.getState().napcatMessage).toBe("NapCat online");
+    expect(useServiceStore.getState().napcatMessage).toBe("饭饭定制 online");
     expect(useServiceStore.getState().refreshingNapcat).toBe(false);
   });
 

@@ -113,7 +113,7 @@ export function SettingsPage() {
           ok: health?.localService === "ready",
         },
         { label: "17888", value: health?.localService === "ready" ? "正常" : "异常", ok: health?.localService === "ready" },
-        { label: "NapCat", value: health?.napcatOnline ? "在线" : "离线", ok: !!health?.napcatOnline },
+        { label: "饭饭定制", value: health?.napcatOnline ? "在线" : "离线", ok: !!health?.napcatOnline },
         { label: "服务地址", value: "127.0.0.1:17888（内置服务）", ok: true },
       ]);
     } finally {
@@ -198,12 +198,12 @@ export function SettingsPage() {
             <p className="mt-1 font-mono">127.0.0.1:17888（内置服务）</p>
           </div>
           <div className="text-[13px]">
-            <span className="text-muted-foreground">NapCat 状态</span>
+            <span className="text-muted-foreground">饭饭定制状态</span>
             <p className="mt-1">{napcatOnline ? "在线" : "离线"} · 本地服务 {localService}</p>
           </div>
           <Field label="OneBot 地址" value={settings.onebotUrl} onChange={(v) => update({ onebotUrl: v })} />
           <div className="text-[13px]">
-            <span className="text-muted-foreground">NapCat WebUI Token</span>
+            <span className="text-muted-foreground">饭饭定制 Token</span>
             <input
               type="password"
               value={settings.napcatWebuiToken}

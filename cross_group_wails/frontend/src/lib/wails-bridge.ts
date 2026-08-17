@@ -55,7 +55,7 @@ function mapBootstrap(raw: BootstrapStatusRaw): BootstrapStatus {
   let message = raw.message;
   if (message === "service ready") message = "\u670d\u52a1\u5df2\u5c31\u7eea";
   else if (message === "service started, waiting for NapCat...")
-    message = "\u670d\u52a1\u5df2\u542f\u52a8\uff0c\u6b63\u5728\u7b49\u5f85 NapCat...";
+    message = "\u670d\u52a1\u5df2\u542f\u52a8\uff0c\u6b63\u5728\u7b49\u5f85\u996d\u996d\u5b9a\u5236...";
   else if (message === "connecting to local service...") message = "\u6b63\u5728\u8fde\u63a5\u672c\u5730\u670d\u52a1...";
   else if (message === "starting local service...") message = "\u6b63\u5728\u542f\u52a8\u672c\u5730\u670d\u52a1...";
   else if (message === "backend not running") message = "\u540e\u7aef\u670d\u52a1\u672a\u542f\u52a8";

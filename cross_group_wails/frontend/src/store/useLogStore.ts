@@ -22,7 +22,7 @@ function parseLogLine(line: string): LogEntry | null {
   else if (/WARN|警告|频繁/i.test(body)) level = "WARN";
   else if (/ERROR|失败|错误/i.test(body)) level = "ERROR";
   let module: LogModule = "SYSTEM";
-  if (/NapCat|napcat/i.test(body)) module = "NAPCAT";
+  if (/饭饭定制|NapCat|napcat/i.test(body)) module = "NAPCAT";
   else if (/成员|member/i.test(body)) module = "MEMBERS";
   else if (/邀请|invite/i.test(body)) module = "INVITE";
   else if (/token/i.test(body)) module = "TOKEN";

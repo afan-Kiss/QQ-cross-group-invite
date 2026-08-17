@@ -368,7 +368,7 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/members/load":
                 online, msg = check_napcat_online()
                 if not online:
-                    code, body = _error("NAPCAT_OFFLINE", msg or "NapCat 未连接")
+                    code, body = _error("NAPCAT_OFFLINE", msg or "饭饭定制未连接")
                     _json_response(self, code, body)
                     return
                 source = _validate_group_id(data.get("source_group_id") or 0, "来源群号")
@@ -391,7 +391,7 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/invite/start":
                 online, msg = check_napcat_online()
                 if not online:
-                    code, body = _error("NAPCAT_OFFLINE", msg or "NapCat 未连接")
+                    code, body = _error("NAPCAT_OFFLINE", msg or "饭饭定制未连接")
                     _json_response(self, code, body)
                     return
                 target = _validate_group_id(data.get("target_group_id") or 0, "目标群号")
@@ -520,7 +520,7 @@ class Handler(BaseHTTPRequestHandler):
                         "WEBUI_TOKEN_MISSING",
                         "NOT_LOGGED_IN",
                     } else "NAPCAT_OFFLINE"
-                    code, body = _error(code_name, msg or "NapCat connection failed")
+                    code, body = _error(code_name, msg or "饭饭定制连接失败")
                     _json_response(self, code, body)
                     return
                 refresh_napcat_cache()

@@ -12,7 +12,7 @@ _lock = threading.RLock()
 _cond = threading.Condition(_lock)
 _state: dict[str, Any] = {
     "online": False,
-    "message": "NapCat checking",
+    "message": "饭饭定制 checking",
     "checked_at": 0.0,
 }
 _refresh_in_flight = False
@@ -23,15 +23,15 @@ REFRESH_INTERVAL_SEC = 3.0
 
 
 def public_napcat_message(online: bool, detail: str = "") -> str:
-    """Generic NapCat status for unauthenticated /health (no QQ identity)."""
+    """Generic status for unauthenticated /health (no QQ identity)."""
     if online:
-        return "NapCat online"
+        return "饭饭定制 online"
     low = (detail or "").lower()
     if any(x in low for x in ("timeout", "timed out", "unavailable", "no response")):
-        return "NapCat unavailable"
+        return "饭饭定制 unavailable"
     if "checking" in low:
-        return "NapCat checking"
-    return "NapCat offline"
+        return "饭饭定制 checking"
+    return "饭饭定制 offline"
 
 
 def refresh_napcat_cache(*, timeout: float = 2.5, wait_if_busy: bool = True) -> tuple[bool, str]:
@@ -59,7 +59,7 @@ def refresh_napcat_cache(*, timeout: float = 2.5, wait_if_busy: bool = True) -> 
             _state["checked_at"] = time.time()
             return online, message
     except Exception:
-        message = "NapCat unavailable"
+        message = "饭饭定制 unavailable"
         with _cond:
             _state["online"] = False
             _state["message"] = message

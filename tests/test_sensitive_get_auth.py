@@ -91,7 +91,7 @@ def test_health_always_open(monkeypatch):
     monkeypatch.setattr(
         napcat_health,
         "_state",
-        {"online": False, "message": "NapCat offline", "checked_at": 1.0},
+        {"online": False, "message": "饭饭定制 offline", "checked_at": 1.0},
     )
     captured: dict = {}
 

@@ -9,7 +9,7 @@ def test_build_health_payload_service_id(monkeypatch):
     monkeypatch.setattr(
         napcat_health,
         "_state",
-        {"online": True, "message": "NapCat online", "checked_at": 1.0},
+        {"online": True, "message": "饭饭定制 online", "checked_at": 1.0},
     )
     monkeypatch.setattr(svc, "SESSION_ID", "sess-test-secret")
     monkeypatch.setattr(svc, "SESSION_REQUIRED", True)
@@ -25,7 +25,7 @@ def test_build_health_payload_service_id(monkeypatch):
     assert payload["session_required"] is True
     assert payload["owned"] is True
     assert payload["napcat_online"] is True
-    assert payload["napcat_message"] == "NapCat online"
+    assert payload["napcat_message"] == "饭饭定制 online"
 
     matched = svc.build_health_payload("sess-test-secret")
     assert matched["session_match"] is True

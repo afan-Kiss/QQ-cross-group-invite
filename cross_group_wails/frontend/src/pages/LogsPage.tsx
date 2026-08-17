@@ -130,7 +130,7 @@ export function LogsPage() {
               </span>
             </li>
             <li className="flex justify-between">
-              <span className="text-muted-foreground">NapCat</span>
+              <span className="text-muted-foreground">饭饭定制</span>
               <span className={napcatOnline ? "text-primary" : "text-warning"}>
                 {napcatOnline ? "在线" : "离线"}
               </span>

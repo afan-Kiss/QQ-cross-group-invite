@@ -382,7 +382,7 @@ def send_napcat_packet(
     except TimeoutError as e:
         raise RuntimeError(f"请求超时（{timeout}s）。") from e
     except urllib.error.URLError as e:
-        raise RuntimeError(f"无法连接 NapCat API: {e.reason}") from e
+        raise RuntimeError(f"无法连接饭饭定制 API: {e.reason}") from e
 
 
 def send_onebot_packet(
@@ -409,7 +409,7 @@ def send_onebot_packet(
         )
     _ensure_port(
         url,
-        hint="请确认野生框架已登录，且 NapCat HTTP 已开启（默认 6099，见 bin/config/webui.json）。",
+        hint="请确认野生框架已登录，且饭饭定制 HTTP 已开启（默认 6099，见 bin/config/webui.json）。",
     )
     payload = {
         "action": "send_packet",
@@ -586,12 +586,12 @@ def check_napcat_online(
         url = str(onebot_url or cfg.get("onebot_url") or "http://127.0.0.1:6099/api").rstrip("/")
         host, port = parse_host_port(url)
         if not port_open(host, port, timeout=min(timeout, 1.5)):
-            return False, f"NapCat offline ({host}:{port} no response)"
+            return False, f"饭饭定制 offline ({host}:{port} no response)"
         payload = _onebot_full_response("get_login_info", timeout=timeout, api_url=url)
         uid = _extract_login_identity(payload)
-        return True, f"NapCat online (QQ {uid})"
+        return True, f"饭饭定制 online (QQ {uid})"
     except Exception as exc:
-        return False, f"NapCat offline: {exc}"
+        return False, f"饭饭定制 offline: {exc}"
 
 
 def test_napcat_connection(
@@ -614,7 +614,7 @@ def test_napcat_connection(
 
     host, port = parse_host_port(url)
     if not port_open(host, port, timeout=min(timeout, 1.5)):
-        return False, f"NapCat port unreachable ({host}:{port})", "PORT_UNREACHABLE"
+        return False, f"饭饭定制 port unreachable ({host}:{port})", "PORT_UNREACHABLE"
 
     try:
         payload = _onebot_full_response("get_login_info", timeout=timeout, api_url=url)
@@ -626,12 +626,12 @@ def test_napcat_connection(
         return False, f"OneBot API unavailable: {exc}", "ONEBOT_UNAVAILABLE"
 
     if not token:
-        return False, "NapCat WebUI token missing", "WEBUI_TOKEN_MISSING"
+        return False, "饭饭定制 Token missing", "WEBUI_TOKEN_MISSING"
 
     try:
         napcat_webui_login(token, api_url=url, timeout=min(timeout, 10), force=True)
     except Exception as exc:
         # Never include raw token in message.
-        return False, f"NapCat WebUI token invalid: {exc}", "WEBUI_TOKEN_INVALID"
+        return False, f"饭饭定制 Token invalid: {exc}", "WEBUI_TOKEN_INVALID"
 
-    return True, f"NapCat connection ok (QQ {uid})", "OK"
+    return True, f"饭饭定制 connection ok (QQ {uid})", "OK"

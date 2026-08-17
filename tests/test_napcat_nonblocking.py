@@ -12,7 +12,7 @@ def _reset_napcat(monkeypatch):
     with napcat_health._cond:
         napcat_health._refresh_in_flight = False
         napcat_health._state.update(
-            {"online": False, "message": "NapCat checking", "checked_at": 0.0}
+            {"online": False, "message": "饭饭定制 checking", "checked_at": 0.0}
         )
         napcat_health._cond.notify_all()
     napcat_health._stop.clear()
@@ -46,7 +46,7 @@ def test_manual_refresh_waits_for_in_flight(monkeypatch):
         calls["n"] += 1
         started.set()
         time.sleep(0.35)
-        return True, "NapCat online (QQ 1)"
+        return True, "饭饭定制 online (QQ 1)"
 
     monkeypatch.setattr("napcat_health.check_napcat_online", probe)
 
@@ -59,7 +59,7 @@ def test_manual_refresh_waits_for_in_flight(monkeypatch):
     online, msg = napcat_health.refresh_napcat_cache(wait_if_busy=True)
     t.join(timeout=3)
     assert online is True
-    assert msg == "NapCat online"
+    assert msg == "饭饭定制 online"
     assert calls["n"] == 1
 
 

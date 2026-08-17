@@ -42,7 +42,7 @@ export function AboutPage() {
             ["Go 版本", info.goVersion || "—"],
             ["前端版本", info.frontendVersion],
             ["Python 服务版本", info.pythonServiceVersion],
-            ["NapCat 状态", napcatOnline ? "在线" : "离线"],
+            ["饭饭定制状态", napcatOnline ? "在线" : "离线"],
           ].map(([k, v]) => (
             <div key={k} className="flex justify-between border-b border-border/50 py-2">
               <dt className="text-muted-foreground">{k}</dt>
@@ -58,14 +58,6 @@ export function AboutPage() {
             className="w-full rounded-[10px] border border-border py-2.5 text-[13px] hover:bg-[#f7faf5]"
           >
             打开日志目录
-          </button>
-          <button
-            type="button"
-            disabled
-            className="w-full rounded-[10px] border border-border py-2.5 text-[13px] text-muted-foreground opacity-60 cursor-not-allowed"
-            title="暂未开放"
-          >
-            检查更新（暂未开放）
           </button>
         </div>
       </div>
