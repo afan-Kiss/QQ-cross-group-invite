@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest run",
+    "check:encoding": "node ./scripts/check-encoding.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.1",
@@ -36,6 +38,7 @@
     "@vitejs/plugin-react": "^4.6.0",
     "tailwindcss": "^4.1.12",
     "typescript": "~5.8.3",
-    "vite": "^7.0.4"
+    "vite": "^7.0.4",
+    "vitest": "^3.2.7"
   }
 }

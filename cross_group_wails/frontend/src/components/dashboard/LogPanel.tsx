@@ -3,6 +3,8 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { parseLogLevel } from "@/lib/utils";
 import { useInviteStore } from "@/store/useInviteStore";
+import { wailsBridge } from "@/lib/wails-bridge";
+import { toast } from "@/store/useToastStore";
 
 const levelClass = {
   info: "text-[#6b7a8f]",
@@ -24,14 +26,41 @@ export function LogPanel() {
     }
   }, [logs, autoScrollLogs]);
 
+  const exportLogs = async () => {
+    try {
+      const stamp = new Date();
+      const pad = (n: number) => String(n).padStart(2, "0");
+      const name = `QQ跨群邀请工具日志_${stamp.getFullYear()}${pad(stamp.getMonth() + 1)}${pad(stamp.getDate())}_${pad(stamp.getHours())}${pad(stamp.getMinutes())}${pad(stamp.getSeconds())}.txt`;
+      const content = logs.join("\n");
+      const path = await wailsBridge.exportLogs(content);
+      if (path) toast("success", `已导出到 ${path}`);
+      else {
+        // fallback download when not in wails or cancelled
+        const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = name;
+        a.click();
+        URL.revokeObjectURL(url);
+        toast("success", "日志已导出");
+      }
+    } catch (e) {
+      toast("error", e instanceof Error ? e.message : "导出失败");
+    }
+  };
+
   return (
     <div className="animate-fade-up flex h-full min-h-[220px] flex-col rounded-[16px] border border-border bg-white p-5 shadow-[var(--shadow-card)]">
-      <h3 className="mb-3 text-[15px] font-semibold text-[#2f352d]">������־</h3>
+      <h3 className="mb-3 text-[15px] font-semibold text-[#2f352d]">运行日志</h3>
 
       <div
         ref={scrollRef}
         className="min-h-0 flex-1 overflow-auto rounded-[12px] border border-border bg-[#fafbf9] p-3 font-mono text-[12px] leading-6"
       >
+        {logs.length === 0 && (
+          <div className="text-muted-foreground">暂无日志</div>
+        )}
         {logs.map((line, i) => {
           const level = parseLogLevel(line);
           return (
@@ -48,14 +77,14 @@ export function LogPanel() {
             checked={autoScrollLogs}
             onCheckedChange={(v) => setAutoScrollLogs(Boolean(v))}
           />
-          �Զ�����
+          自动滚动
         </label>
         <div className="flex gap-2">
-          <Button variant="secondary" size="sm" onClick={clearLogs}>
-            �����־
+          <Button variant="secondary" size="sm" onClick={() => void clearLogs()}>
+            清空日志
           </Button>
-          <Button variant="secondary" size="sm">
-            ������־
+          <Button variant="secondary" size="sm" onClick={() => void exportLogs()}>
+            导出日志
           </Button>
         </div>
       </div>

@@ -22,6 +22,22 @@ export namespace main {
 	        this.logsDir = source["logsDir"];
 	    }
 	}
+	export class DiagnosticItem {
+	    label: string;
+	    value: string;
+	    ok: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new DiagnosticItem(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.label = source["label"];
+	        this.value = source["value"];
+	        this.ok = source["ok"];
+	    }
+	}
 
 }
 

@@ -5,10 +5,16 @@ import {main} from '../models';
 
 export function EnsureBackend():Promise<service.BootstrapStatus>;
 
+export function ExportLogs(arg1:string):Promise<string>;
+
 export function GetAppInfo():Promise<main.AppInfo>;
 
 export function OpenLogsDir():Promise<void>;
 
 export function ProbeHealth():Promise<service.BootstrapStatus>;
+
+export function RunDiagnostics():Promise<Array<main.DiagnosticItem>>;
+
+export function SaveFileDialog(arg1:string):Promise<string>;
 
 export function ShutdownBackend():Promise<void>;

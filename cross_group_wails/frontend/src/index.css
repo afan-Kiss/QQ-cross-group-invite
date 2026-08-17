@@ -81,3 +81,22 @@ body {
 .animate-fade-in {
   animation: fade-in 0.18s ease-out both;
 }
+
+.reduce-motion .animate-fade-up,
+.reduce-motion .animate-fade-in,
+.reduce-motion * {
+  animation: none !important;
+  transition: none !important;
+}
+
+.compact-table table tbody td {
+  padding-top: 0.35rem;
+  padding-bottom: 0.35rem;
+}
+
+html.theme-dark body {
+  /* product currently ships light palette only; system dark keeps light UI */
+  background: var(--color-page-bg);
+  color: #242824;
+}
+

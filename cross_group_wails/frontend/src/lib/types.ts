@@ -8,6 +8,15 @@ export type MemberStatus =
   | "waiting"
   | "inviting";
 
+export type TaskRunStatus =
+  | "idle"
+  | "preparing"
+  | "running"
+  | "stopping"
+  | "stopped"
+  | "completed"
+  | "error";
+
 export interface InviteConfig {
   target_group_id: string;
   source_group_id: string;
@@ -25,6 +34,20 @@ export interface Member {
   token?: string;
   filterReason?: string;
   failReason?: string;
+  startedAt?: number;
+  finishedAt?: number;
+  durationMs?: number;
+  sourceGroupId?: string;
+}
+
+export interface InviteResult {
+  qq: number;
+  nickname: string;
+  status: MemberStatus;
+  reason: string;
+  started_at: number;
+  finished_at: number;
+  duration_ms: number;
 }
 
 export interface RateLimitRecord {
@@ -55,46 +78,56 @@ export interface BatchProgress {
   batchNumber: number;
   batchTotal: number;
   batchDone: number;
+  totalBatches: number;
   currentNickname: string;
   currentQq: number;
   intervalRemainingMs: number;
+  intervalMs: number;
+  nextInviteAt: number;
 }
 
-export interface InviteStatus {
-  running: boolean;
-  total: number;
-  done: number;
+export interface RateSeriesPoint {
+  timestamp: number;
   success: number;
-  current_qq: number;
-  current_nickname: string;
-  message: string;
-  frequent: RateLimitRecord[];
-  errors: FailedRecord[];
-  logs: string[];
+  failed: number;
+  rate_limited: number;
+  total: number;
 }
 
 export interface AppStatus extends InviteStats {
   running: boolean;
+  status: TaskRunStatus;
+  task_id: string;
   logs: string[];
   rate_limit_list: RateLimitRecord[];
   failed_list: FailedRecord[];
+  results: InviteResult[];
+  rate_series: RateSeriesPoint[];
   members: Member[];
   current_qq: number;
   current_nickname: string;
   message: string;
+  error_message: string;
+  started_at: number;
+  finished_at: number;
   napcat_online?: boolean;
   napcat_message?: string;
   batch: BatchProgress;
 }
 
 export interface LoadMembersResponse {
+  ok?: boolean;
   count: number;
+  eligible?: number;
+  filtered?: number;
   members: Array<{
     qq: number;
     nickname: string;
     role: string;
     card?: string;
     token?: string;
+    eligible?: boolean;
+    filter_reason?: string;
   }>;
 }
 
@@ -102,6 +135,8 @@ export interface HealthResponse {
   ok: boolean;
   service: string;
   version?: string;
+  session_id?: string;
+  pid?: number;
   napcat_online: boolean;
   napcat_message: string;
 }
@@ -119,4 +154,25 @@ export interface ChartPoint {
   success: number;
   failed: number;
   rateLimited: number;
+  total: number;
+}
+
+export interface PersistedTask {
+  id: string;
+  source_group_id: number | string;
+  target_group_id: number | string;
+  created_at?: number;
+  started_at: number;
+  finished_at?: number;
+  status: string;
+  selected_count?: number;
+  total: number;
+  success: number;
+  rate_limited: number;
+  failed: number;
+  batch_size?: number;
+  interval_ms?: number;
+  stop_reason?: string;
+  error_message?: string;
+  timeline?: Array<{ at: number; event: string; detail?: string }>;
 }

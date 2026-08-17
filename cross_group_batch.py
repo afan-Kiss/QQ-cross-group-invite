@@ -2,11 +2,16 @@
 """Batch cross-group invite engine with member filtering."""
 from __future__ import annotations
 
+import json
+import os
 import re
+import secrets
 import threading
 import time
+import uuid
 from dataclasses import dataclass, field
 from enum import Enum
+from pathlib import Path
 from typing import Any
 
 from capture_utils import (
@@ -31,6 +36,10 @@ from pull_cross_group import (
 )
 
 FE7_SLEEP = 0.12
+RATE_BUCKET_SEC = 5
+RATE_RETENTION_SEC = 5 * 60
+DATA_DIR = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "QQCrossGroupInvite" / "data"
+TASKS_FILE = DATA_DIR / "tasks.json"
 
 
 class MemberRole(str, Enum):
@@ -40,6 +49,25 @@ class MemberRole(str, Enum):
     UNKNOWN = "unknown"
 
 
+class TaskRunStatus(str, Enum):
+    IDLE = "idle"
+    PREPARING = "preparing"
+    RUNNING = "running"
+    STOPPING = "stopping"
+    STOPPED = "stopped"
+    COMPLETED = "completed"
+    ERROR = "error"
+
+
+class InviteResultStatus(str, Enum):
+    WAITING = "waiting"
+    INVITING = "inviting"
+    SUCCESS = "success"
+    RATE_LIMITED = "rate_limited"
+    FAILED = "failed"
+    FILTERED = "filtered"
+
+
 @dataclass
 class SourceMember:
     qq: int
@@ -47,6 +75,8 @@ class SourceMember:
     token: str
     role: MemberRole = MemberRole.MEMBER
     card: str = ""
+    eligible: bool = True
+    filter_reason: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -55,6 +85,8 @@ class SourceMember:
             "token": self.token,
             "role": self.role.value,
             "card": self.card,
+            "eligible": self.eligible,
+            "filter_reason": self.filter_reason,
         }
 
 
@@ -75,38 +107,137 @@ class InviteRecord:
 
 
 @dataclass
+class InviteResult:
+    qq: int
+    nickname: str
+    status: InviteResultStatus = InviteResultStatus.WAITING
+    reason: str = ""
+    started_at: float = 0.0
+    finished_at: float = 0.0
+    duration_ms: int = 0
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "qq": self.qq,
+            "nickname": self.nickname,
+            "status": self.status.value,
+            "reason": self.reason,
+            "started_at": self.started_at,
+            "finished_at": self.finished_at,
+            "duration_ms": self.duration_ms,
+        }
+
+
+@dataclass
+class RateBucket:
+    timestamp: int
+    success: int = 0
+    failed: int = 0
+    rate_limited: int = 0
+
+    @property
+    def total(self) -> int:
+        return self.success + self.failed + self.rate_limited
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "timestamp": self.timestamp,
+            "success": self.success,
+            "failed": self.failed,
+            "rate_limited": self.rate_limited,
+            "total": self.total,
+        }
+
+
+@dataclass
 class BatchState:
     running: bool = False
+    status: TaskRunStatus = TaskRunStatus.IDLE
+    task_id: str = ""
     total: int = 0
     done: int = 0
     success: int = 0
     current_qq: int = 0
     current_nickname: str = ""
     message: str = ""
+    error_message: str = ""
+    started_at: float = 0.0
+    finished_at: float = 0.0
+    source_group_id: int = 0
+    target_group_id: int = 0
+    batch_size: int = 20
+    interval_ms: int = 1500
+    batch_number: int = 0
+    batch_total_count: int = 0
+    batch_done: int = 0
+    total_batches: int = 0
+    next_invite_at: float = 0.0
     frequent: list[InviteRecord] = field(default_factory=list)
     errors: list[InviteRecord] = field(default_factory=list)
+    results: list[InviteResult] = field(default_factory=list)
+    rate_series: list[RateBucket] = field(default_factory=list)
     logs: list[str] = field(default_factory=list)
+    timeline: list[dict[str, Any]] = field(default_factory=list)
     _stop: threading.Event = field(default_factory=threading.Event)
 
     def to_dict(self) -> dict[str, Any]:
+        now = time.time()
+        remaining = 0
+        if self.running and self.next_invite_at > now:
+            remaining = int(max(0, (self.next_invite_at - now) * 1000))
         return {
             "running": self.running,
+            "status": self.status.value,
+            "task_id": self.task_id,
             "total": self.total,
             "done": self.done,
             "success": self.success,
             "current_qq": self.current_qq,
             "current_nickname": self.current_nickname,
             "message": self.message,
+            "error_message": self.error_message,
+            "started_at": self.started_at,
+            "finished_at": self.finished_at,
+            "source_group_id": self.source_group_id,
+            "target_group_id": self.target_group_id,
+            "batch_size": self.batch_size,
+            "batch_count": self.batch_size,
+            "interval_ms": self.interval_ms,
+            "batch_number": self.batch_number,
+            "batch_total_count": self.batch_total_count or self.batch_size,
+            "batch_done": self.batch_done,
+            "total_batches": self.total_batches,
+            "next_invite_at": self.next_invite_at,
+            "interval_remaining_ms": remaining,
             "frequent": [x.to_dict() for x in self.frequent],
             "errors": [x.to_dict() for x in self.errors],
+            "results": [x.to_dict() for x in self.results],
+            "rate_series": [x.to_dict() for x in self.rate_series],
             "logs": self.logs[-200:],
+            "timeline": list(self.timeline),
         }
 
 
 _state = BatchState()
-_state_lock = threading.Lock()
+_state_lock = threading.RLock()
 _members_cache: list[SourceMember] = []
 _members_cache_key: tuple[int, bool] | None = None
+_owned_task_id: str | None = None
+
+
+def _now() -> float:
+    return time.time()
+
+
+def _make_task_id() -> str:
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    return f"{stamp}-{secrets.token_hex(2)}"
+
+
+def _append_timeline(event: str, detail: str = "") -> None:
+    _state.timeline.append(
+        {"at": _now(), "event": event, "detail": detail}
+    )
 
 
 def _log(msg: str) -> None:
@@ -116,6 +247,163 @@ def _log(msg: str) -> None:
         _state.logs.append(line)
         if len(_state.logs) > 500:
             _state.logs = _state.logs[-300:]
+
+
+def _interruptible_wait(seconds: float) -> bool:
+    """Wait up to seconds. Returns True if stop was requested."""
+    if seconds <= 0:
+        return _state._stop.is_set()
+    return _state._stop.wait(seconds)
+
+
+def _record_rate(kind: str) -> None:
+    bucket_ts = int(_now() // RATE_BUCKET_SEC) * RATE_BUCKET_SEC
+    cutoff = _now() - RATE_RETENTION_SEC
+    series = _state.rate_series
+    if not series or series[-1].timestamp != bucket_ts:
+        series.append(RateBucket(timestamp=bucket_ts))
+    bucket = series[-1]
+    if kind == "success":
+        bucket.success += 1
+    elif kind == "rate_limited":
+        bucket.rate_limited += 1
+    else:
+        bucket.failed += 1
+    _state.rate_series = [b for b in series if b.timestamp >= cutoff]
+
+
+def _tasks_path() -> Path:
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    return TASKS_FILE
+
+
+def _load_tasks() -> list[dict[str, Any]]:
+    path = _tasks_path()
+    if not path.is_file():
+        return []
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        return raw if isinstance(raw, list) else []
+    except (OSError, json.JSONDecodeError):
+        return []
+
+
+def _save_tasks(tasks: list[dict[str, Any]]) -> None:
+    path = _tasks_path()
+    path.write_text(
+        json.dumps(tasks[-200:], ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+
+def _upsert_task_record(record: dict[str, Any]) -> None:
+    tasks = _load_tasks()
+    tid = record.get("id")
+    replaced = False
+    for i, item in enumerate(tasks):
+        if item.get("id") == tid:
+            tasks[i] = {**item, **record}
+            replaced = True
+            break
+    if not replaced:
+        tasks.append(record)
+    _save_tasks(tasks)
+
+
+def list_tasks() -> list[dict[str, Any]]:
+    with _state_lock:
+        current = None
+        if _state.task_id:
+            current = {
+                "id": _state.task_id,
+                "source_group_id": _state.source_group_id,
+                "target_group_id": _state.target_group_id,
+                "created_at": _state.started_at,
+                "started_at": _state.started_at,
+                "finished_at": _state.finished_at,
+                "status": _state.status.value,
+                "selected_count": _state.total,
+                "total": _state.total,
+                "success": _state.success,
+                "rate_limited": len(_state.frequent),
+                "failed": len(_state.errors),
+                "batch_size": _state.batch_size,
+                "interval_ms": _state.interval_ms,
+                "stop_reason": "",
+                "error_message": _state.error_message,
+                "timeline": list(_state.timeline),
+            }
+    tasks = _load_tasks()
+    if current:
+        found = False
+        for i, t in enumerate(tasks):
+            if t.get("id") == current["id"]:
+                tasks[i] = {**t, **current}
+                found = True
+                break
+        if not found:
+            tasks.append(current)
+    tasks.sort(key=lambda x: float(x.get("started_at") or x.get("created_at") or 0), reverse=True)
+    return tasks
+
+
+def get_task(task_id: str) -> dict[str, Any] | None:
+    for t in list_tasks():
+        if t.get("id") == task_id:
+            return t
+    return None
+
+
+def _persist_current_task(**extra: Any) -> None:
+    with _state_lock:
+        if not _state.task_id:
+            return
+        record = {
+            "id": _state.task_id,
+            "source_group_id": _state.source_group_id,
+            "target_group_id": _state.target_group_id,
+            "created_at": _state.started_at,
+            "started_at": _state.started_at,
+            "finished_at": _state.finished_at,
+            "status": _state.status.value,
+            "selected_count": _state.total,
+            "total": _state.total,
+            "success": _state.success,
+            "rate_limited": len(_state.frequent),
+            "failed": len(_state.errors),
+            "batch_size": _state.batch_size,
+            "interval_ms": _state.interval_ms,
+            "stop_reason": extra.get("stop_reason", ""),
+            "error_message": _state.error_message,
+            "timeline": list(_state.timeline),
+        }
+    _upsert_task_record(record)
+
+
+def clear_logs() -> None:
+    with _state_lock:
+        _state.logs.clear()
+
+
+def clear_failed() -> None:
+    with _state_lock:
+        _state.errors.clear()
+
+
+def clear_rate_limits() -> None:
+    with _state_lock:
+        _state.frequent.clear()
+
+
+def clear_state(kinds: list[str] | None = None) -> None:
+    if not kinds:
+        kinds = ["logs", "failed", "rate_limits"]
+    if "logs" in kinds:
+        clear_logs()
+    if "failed" in kinds:
+        clear_failed()
+    if "rate_limits" in kinds or "frequent" in kinds:
+        clear_rate_limits()
 
 
 def _extract_error_text(hex_data: str) -> str:
@@ -138,17 +426,17 @@ def _extract_error_text(hex_data: str) -> str:
 
 def _failure_reason(code: int | None) -> str:
     if code == 1289:
-        return "\u64cd\u4f5c\u592a\u9891\u7e41"
+        return "操作太频繁"
     if code is not None:
-        return f"\u9080\u8bf7\u5931\u8d25\uff08\u9519\u8bef\u7801 {code}\uff09"
-    return "\u9080\u8bf7\u5931\u8d25"
+        return f"邀请失败（错误码 {code}）"
+    return "邀请失败"
 
 
 def _classify_failure(code: int | None, msg: str) -> str:
     text = msg or ""
     if code == 1289:
         return "frequent"
-    if any(k in text for k in ("\u9891\u7e41", "\u64cd\u4f5c\u9891\u7e41", "too fast", "rate")):
+    if any(k in text for k in ("频繁", "操作频繁", "too fast", "rate")):
         return "frequent"
     return "error"
 
@@ -198,7 +486,8 @@ def load_source_members(
     capture_dir=None,
     record_logs: bool = False,
 ) -> list[SourceMember]:
-    global _members_cache
+    """Load full member set. Staff are marked filtered when filter_staff=True."""
+    global _members_cache, _members_cache_key
     cfg = load_cfg()
     cap = capture_dir or resolve_capture_dir(cfg)
 
@@ -206,15 +495,15 @@ def load_source_members(
         if record_logs:
             _log(msg)
 
-    log(f"\u6b63\u5728\u52a0\u8f7d\u6765\u6e90\u7fa4\u6210\u5458\uff0c\u7fa4\u53f7={source_group_id}...")
+    log(f"正在加载来源群成员，群号={source_group_id}...")
 
     token_map = fetch_fe7_token_map_live(cap, source_group_id)
     if not token_map:
         token_map = scan_capture_fe7_token_map(cap)
         if token_map:
-            log("\u5b9e\u65f6\u62c9\u4e0d\u5230\u6210\u5458\uff0c\u5df2\u4ece\u6293\u5305\u8bb0\u5f55\u6062\u590d")
+            log("实时拉不到成员，已从抓包记录恢复")
         else:
-            log("\u62c9\u53d6\u6210\u5458\u5217\u8868\u5931\u8d25\uff0c\u8bf7\u786e\u8ba4\u7fa4\u53f7\u6b63\u786e\u4e14 NapCat \u5728\u7ebf")
+            log("拉取成员列表失败，请确认群号正确且 NapCat 在线")
     ob_list = _onebot_members(source_group_id)
     by_qq: dict[int, SourceMember] = {}
 
@@ -233,15 +522,24 @@ def load_source_members(
             role = MemberRole.ADMIN
         else:
             role = MemberRole.MEMBER
-        if filter_staff and role in (MemberRole.OWNER, MemberRole.ADMIN):
-            continue
         nick = str(item.get("nickname") or item.get("nick") or str(qq))
         card = str(item.get("card") or "")
         token = token_map.get(qq, "")
         if not token:
             continue
+        is_staff = role in (MemberRole.OWNER, MemberRole.ADMIN)
+        eligible = not (filter_staff and is_staff)
+        filter_reason = ""
+        if filter_staff and is_staff:
+            filter_reason = "群主" if role == MemberRole.OWNER else "管理员"
         by_qq[qq] = SourceMember(
-            qq=qq, nickname=nick, token=token, role=role, card=card
+            qq=qq,
+            nickname=nick,
+            token=token,
+            role=role,
+            card=card,
+            eligible=eligible,
+            filter_reason=filter_reason,
         )
 
     if not by_qq and token_map:
@@ -249,14 +547,22 @@ def load_source_members(
             if qq < 10000:
                 continue
             by_qq[qq] = SourceMember(
-                qq=qq, nickname=str(qq), token=token, role=MemberRole.UNKNOWN
+                qq=qq,
+                nickname=str(qq),
+                token=token,
+                role=MemberRole.UNKNOWN,
+                eligible=True,
             )
 
     members = sorted(by_qq.values(), key=lambda m: m.qq)
-    global _members_cache_key
     _members_cache = members
     _members_cache_key = (int(source_group_id), bool(filter_staff))
-    log(f"\u5df2\u52a0\u8f7d {len(members)} \u540d\u53ef\u9080\u8bf7\u6210\u5458\uff08\u8fc7\u6ee4\u7fa4\u4e3b/\u7ba1\u7406\u5458={filter_staff}\uff09")
+    eligible_count = sum(1 for m in members if m.eligible)
+    filtered_count = len(members) - eligible_count
+    log(
+        f"已加载 {len(members)} 名成员（可邀请 {eligible_count}，已过滤 {filtered_count}，"
+        f"过滤群主/管理员={filter_staff}）"
+    )
     return members
 
 
@@ -271,9 +577,15 @@ def get_state() -> dict[str, Any]:
 
 def stop_batch() -> None:
     with _state_lock:
+        if not _state.running and _state.status not in (
+            TaskRunStatus.PREPARING,
+            TaskRunStatus.RUNNING,
+        ):
+            return
         _state._stop.set()
-        _state.message = "\u6b63\u5728\u505c\u6b62..."
-    _log("\u6536\u5230\u505c\u6b62\u8bf7\u6c42")
+        _state.status = TaskRunStatus.STOPPING
+        _state.message = "正在停止..."
+    _log("收到停止请求")
 
 
 def _invite_one(
@@ -300,34 +612,136 @@ def _invite_one(
     return ok, code, msg
 
 
+def _update_result(qq: int, **fields: Any) -> None:
+    for r in _state.results:
+        if r.qq == qq:
+            for k, v in fields.items():
+                setattr(r, k, v)
+            return
+
+
+def _finish_member(
+    member: SourceMember,
+    *,
+    status: InviteResultStatus,
+    reason: str,
+    started_at: float,
+) -> None:
+    finished = _now()
+    duration = int(max(0, (finished - started_at) * 1000)) if started_at else 0
+    rec = InviteRecord(qq=member.qq, nickname=member.nickname, reason=reason)
+    with _state_lock:
+        _state.done += 1
+        if _state.batch_size > 0:
+            _state.batch_done = ((_state.done - 1) % _state.batch_size) + 1
+            _state.batch_number = ((_state.done - 1) // _state.batch_size) + 1
+        _update_result(
+            member.qq,
+            status=status,
+            reason=reason,
+            started_at=started_at,
+            finished_at=finished,
+            duration_ms=duration,
+        )
+        if status == InviteResultStatus.SUCCESS:
+            _state.success += 1
+            _record_rate("success")
+        elif status == InviteResultStatus.RATE_LIMITED:
+            _state.frequent.append(rec)
+            _record_rate("rate_limited")
+            _append_timeline("rate_limited", f"{member.nickname}({member.qq})")
+        elif status == InviteResultStatus.FAILED:
+            _state.errors.append(rec)
+            _record_rate("failed")
+            _append_timeline("failed", f"{member.nickname}({member.qq}): {reason}")
+
+
 def start_batch(
     *,
     target_group_id: int,
     source_group_id: int,
-    count: int,
-    interval_ms: int,
+    count: int = 0,
+    interval_ms: int = 1500,
     filter_staff: bool = True,
     qq_list: list[int] | None = None,
-) -> None:
+    batch_size: int | None = None,
+) -> str:
+    """Start invite batch. count is ignored when qq_list is provided.
+    batch_size = per-batch size (not total invite count).
+    """
+    global _owned_task_id
+    resolved_batch_size = int(batch_size if batch_size is not None else (count or 20))
+    if resolved_batch_size < 1:
+        resolved_batch_size = 20
+    if resolved_batch_size > 1000:
+        raise ValueError("每批人数必须在 1-1000 之间")
+    if interval_ms < 100 or interval_ms > 600000:
+        raise ValueError("邀请间隔必须在 100-600000 毫秒之间")
+    if target_group_id <= 0 or source_group_id <= 0:
+        raise ValueError("群号必须为正整数")
+    if target_group_id == source_group_id:
+        raise ValueError("目标群和来源群不能相同")
+
+    cleaned_qq: list[int] | None = None
+    if qq_list is not None:
+        seen: set[int] = set()
+        cleaned_qq = []
+        for x in qq_list:
+            q = int(x)
+            if q <= 0:
+                raise ValueError("qq_list 包含无效 QQ 号")
+            if q not in seen:
+                seen.add(q)
+                cleaned_qq.append(q)
+        if not cleaned_qq:
+            raise ValueError("请至少选择一名成员")
+
+    task_id = _make_task_id()
     with _state_lock:
         if _state.running:
-            raise RuntimeError("\u4e0a\u4e00\u6b21\u9080\u8bf7\u8fd8\u6ca1\u7ed3\u675f\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5")
+            raise RuntimeError("上一次邀请还没结束，请稍后再试")
         _state._stop.clear()
         _state.running = True
+        _state.status = TaskRunStatus.PREPARING
+        _state.task_id = task_id
         _state.total = 0
         _state.done = 0
         _state.success = 0
+        _state.current_qq = 0
+        _state.current_nickname = ""
         _state.frequent.clear()
         _state.errors.clear()
+        _state.results.clear()
+        _state.rate_series.clear()
         _state.logs.clear()
-        _state.message = "\u51c6\u5907\u4e2d..."
+        _state.timeline.clear()
+        _state.message = "准备中..."
+        _state.error_message = ""
+        _state.started_at = _now()
+        _state.finished_at = 0.0
+        _state.source_group_id = source_group_id
+        _state.target_group_id = target_group_id
+        _state.batch_size = resolved_batch_size
+        _state.interval_ms = interval_ms
+        _state.batch_number = 0
+        _state.batch_done = 0
+        _state.batch_total_count = resolved_batch_size
+        _state.total_batches = 0
+        _state.next_invite_at = 0.0
+        _owned_task_id = task_id
+        _append_timeline("created", task_id)
+
+    _persist_current_task()
 
     def worker() -> None:
+        final_status = TaskRunStatus.COMPLETED
+        final_message = "已完成"
+        error_message = ""
         cfg = load_cfg()
         cap = resolve_capture_dir(cfg)
         try:
             cache_key = (int(source_group_id), bool(filter_staff))
-            members = _members_cache
+            members = list(_members_cache)
             if _members_cache_key != cache_key or not members:
                 members = load_source_members(
                     source_group_id,
@@ -335,36 +749,68 @@ def start_batch(
                     capture_dir=cap,
                     record_logs=True,
                 )
-            if qq_list:
-                allow = set(qq_list)
-                members = [m for m in members if m.qq in allow]
-            if count > 0:
-                members = members[:count]
+                with _state_lock:
+                    _append_timeline("members_loaded", str(len(members)))
+
+            # Only invite eligible members; honor qq_list selection
+            invite_members = [m for m in members if m.eligible]
+            if cleaned_qq is not None:
+                allow = set(cleaned_qq)
+                invite_members = [m for m in invite_members if m.qq in allow]
+                missing = allow - {m.qq for m in invite_members}
+                if missing and not invite_members:
+                    raise RuntimeError("所选成员均不可邀请（可能已被过滤或缺少 Token）")
 
             with _state_lock:
-                _state.total = len(members)
-            if not members:
-                raise RuntimeError("\u6ca1\u6709\u53ef\u9080\u8bf7\u6210\u5458")
+                _state.total = len(invite_members)
+                _state.total_batches = (
+                    (len(invite_members) + resolved_batch_size - 1) // resolved_batch_size
+                    if invite_members
+                    else 0
+                )
+                _state.results = [
+                    InviteResult(qq=m.qq, nickname=m.nickname)
+                    for m in invite_members
+                ]
+                _state.status = TaskRunStatus.RUNNING
+                _state.message = "邀请运行中"
+                _append_timeline("started", f"total={len(invite_members)}")
+            _persist_current_task()
 
-            _log("\u6b63\u5728\u51c6\u5907\u8de8\u7fa4\u9080\u8bf7...")
+            if not invite_members:
+                raise RuntimeError("没有可邀请成员")
+
+            _log("正在准备跨群邀请...")
             live_fe7 = open_cross_group_picker(cap, target_group_id, source_group_id)
             context_token = query_source_context_token(
                 cap, source_group_id, live_rsp=live_fe7
             )
             if not context_token:
-                raise RuntimeError("\u65e0\u6cd5\u83b7\u53d6\u6765\u6e90\u7fa4\u4fe1\u606f\uff0c\u8bf7\u786e\u8ba4\u7fa4\u53f7\u6b63\u786e\uff0c\u5e76\u4fdd\u7559\u8fc7\u8de8\u7fa4\u9080\u8bf7\u7684\u6293\u5305\u8bb0\u5f55")
+                raise RuntimeError(
+                    "无法获取来源群信息，请确认群号正确，并保留过跨群邀请的抓包记录"
+                )
 
-            if target_group_id == source_group_id:
-                raise RuntimeError("\u76ee\u6807\u7fa4\u548c\u6765\u6e90\u7fa4\u4e0d\u80fd\u76f8\u540c")
+            for idx, member in enumerate(invite_members):
+                if _state._stop.is_set():
+                    final_status = TaskRunStatus.STOPPED
+                    final_message = "已停止"
+                    break
 
-            for member in members:
+                started_at = _now()
                 with _state_lock:
-                    if _state._stop.is_set():
-                        _state.message = "\u5df2\u505c\u6b62"
-                        break
+                    if idx % resolved_batch_size == 0:
+                        batch_no = (idx // resolved_batch_size) + 1
+                        _state.batch_number = batch_no
+                        _state.batch_done = 0
+                        _append_timeline("batch_start", f"batch={batch_no}")
                     _state.current_qq = member.qq
                     _state.current_nickname = member.nickname
-                    _state.message = f"\u9080\u8bf7 {member.nickname}({member.qq})"
+                    _state.message = f"邀请 {member.nickname}({member.qq})"
+                    _update_result(
+                        member.qq,
+                        status=InviteResultStatus.INVITING,
+                        started_at=started_at,
+                    )
 
                 token = member.token
                 if not token or not token_owner_safe(cap, member.qq, token):
@@ -373,62 +819,103 @@ def start_batch(
                         token = fresh
                         member.token = fresh
                 if not token:
-                    reason = "\u627e\u4e0d\u5230\u8be5\u6210\u5458\u7684\u9080\u8bf7\u4fe1\u606f"
-                    rec = InviteRecord(qq=member.qq, nickname=member.nickname, reason=reason)
-                    with _state_lock:
-                        _state.done += 1
-                        _state.errors.append(rec)
-                        _log(f"\u5931\u8d25 {member.nickname}({member.qq}): {reason}")
-                    continue
-                if context_token == token:
-                    reason = "\u6765\u6e90\u7fa4\u4fe1\u606f\u4e0e\u6210\u5458\u4fe1\u606f\u51b2\u7a81\uff0c\u8bf7\u91cd\u65b0\u52a0\u8f7d\u6210\u5458"
-                    rec = InviteRecord(qq=member.qq, nickname=member.nickname, reason=reason)
-                    with _state_lock:
-                        _state.done += 1
-                        _state.errors.append(rec)
-                        _log(f"\u5931\u8d25 {member.nickname}({member.qq}): {reason}")
-                    continue
-
-                ok, code, msg = _invite_one(
-                    target_group_id=target_group_id,
-                    source_group_id=source_group_id,
-                    context_token=context_token,
-                    member=member,
-                    capture_dir=cap,
-                )
-                reason = msg or _failure_reason(code)
-                kind = _classify_failure(code, reason)
-                rec = InviteRecord(qq=member.qq, nickname=member.nickname, reason=reason)
-                with _state_lock:
-                    _state.done += 1
+                    reason = "找不到该成员的邀请信息"
+                    _finish_member(
+                        member,
+                        status=InviteResultStatus.FAILED,
+                        reason=reason,
+                        started_at=started_at,
+                    )
+                    _log(f"失败 {member.nickname}({member.qq}): {reason}")
+                elif context_token == token:
+                    reason = "来源群信息与成员信息冲突，请重新加载成员"
+                    _finish_member(
+                        member,
+                        status=InviteResultStatus.FAILED,
+                        reason=reason,
+                        started_at=started_at,
+                    )
+                    _log(f"失败 {member.nickname}({member.qq}): {reason}")
+                else:
+                    ok, code, msg = _invite_one(
+                        target_group_id=target_group_id,
+                        source_group_id=source_group_id,
+                        context_token=context_token,
+                        member=member,
+                        capture_dir=cap,
+                    )
+                    reason = msg or _failure_reason(code)
+                    kind = _classify_failure(code, reason)
                     if ok:
-                        _state.success += 1
-                        _log(f"\u6210\u529f {member.nickname}({member.qq})")
+                        _finish_member(
+                            member,
+                            status=InviteResultStatus.SUCCESS,
+                            reason="",
+                            started_at=started_at,
+                        )
+                        _log(f"成功 {member.nickname}({member.qq})")
                     elif kind == "frequent":
-                        _state.frequent.append(rec)
-                        _log(f"\u9891\u7e41 {member.nickname}({member.qq}): {reason}")
+                        _finish_member(
+                            member,
+                            status=InviteResultStatus.RATE_LIMITED,
+                            reason=reason,
+                            started_at=started_at,
+                        )
+                        _log(f"频繁 {member.nickname}({member.qq}): {reason}")
                     else:
-                        _state.errors.append(rec)
-                        _log(f"\u5931\u8d25 {member.nickname}({member.qq}): {reason}")
+                        _finish_member(
+                            member,
+                            status=InviteResultStatus.FAILED,
+                            reason=reason,
+                            started_at=started_at,
+                        )
+                        _log(f"失败 {member.nickname}({member.qq}): {reason}")
 
-                with _state_lock:
-                    if _state._stop.is_set():
+                if _state._stop.is_set():
+                    final_status = TaskRunStatus.STOPPED
+                    final_message = "已停止"
+                    break
+
+                if interval_ms > 0 and idx < len(invite_members) - 1:
+                    with _state_lock:
+                        _state.next_invite_at = _now() + (interval_ms / 1000.0)
+                    if _interruptible_wait(interval_ms / 1000.0):
+                        final_status = TaskRunStatus.STOPPED
+                        final_message = "已停止"
                         break
-                if interval_ms > 0:
-                    time.sleep(interval_ms / 1000.0)
+                    with _state_lock:
+                        _state.next_invite_at = 0.0
 
         except Exception as exc:
-            _log(f"\u5f02\u5e38\u7ec8\u6b62: {exc}")
+            final_status = TaskRunStatus.ERROR
+            final_message = str(exc)
+            error_message = str(exc)
+            _log(f"异常终止: {exc}")
             with _state_lock:
-                _state.message = str(exc)
+                _append_timeline("error", str(exc))
         finally:
             with _state_lock:
                 _state.running = False
-                if not _state.message.startswith("\u5df2\u505c"):
-                    _state.message = "\u5df2\u5b8c\u6210"
-            _log("\u4efb\u52a1\u7ed3\u675f")
+                _state.current_qq = 0
+                _state.current_nickname = ""
+                _state.next_invite_at = 0.0
+                _state.finished_at = _now()
+                _state.status = final_status
+                _state.message = final_message
+                _state.error_message = error_message
+                if final_status == TaskRunStatus.STOPPED:
+                    _append_timeline("stopped", final_message)
+                elif final_status == TaskRunStatus.ERROR:
+                    _append_timeline("error", error_message)
+                else:
+                    _append_timeline("completed", final_message)
+            _persist_current_task(
+                stop_reason="user" if final_status == TaskRunStatus.STOPPED else ""
+            )
+            _log("任务结束")
 
-    threading.Thread(target=worker, daemon=True).start()
+    threading.Thread(target=worker, daemon=True, name="invite-worker").start()
+    return task_id
 
 
 def token_owner_safe(capture_dir, qq: int, token: str) -> bool:
@@ -438,3 +925,8 @@ def token_owner_safe(capture_dir, qq: int, token: str) -> bool:
     if owner is not None and owner != qq:
         return False
     return True
+
+
+def owns_task(task_id: str | None) -> bool:
+    with _state_lock:
+        return bool(task_id) and task_id == _owned_task_id and _state.running

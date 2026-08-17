@@ -59,14 +59,6 @@ export function AboutPage() {
           >
             打开日志目录
           </button>
-          <button
-            type="button"
-            disabled
-            className="w-full rounded-[10px] border border-border py-2.5 text-[13px] text-muted-foreground opacity-60 cursor-not-allowed"
-            title="暂未开放"
-          >
-            检查更新（暂未开放）
-          </button>
         </div>
       </div>
     </div>

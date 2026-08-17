@@ -2,6 +2,9 @@
 config.json
 *.env
 .env.*
+_invite_api_dump.txt
+**/runtime/
+**/data/
 
 # Python
 __pycache__/
@@ -15,6 +18,7 @@ dist/
 # Node
 node_modules/
 frontend/dist/
+**/frontend/dist/
 npm-debug.log*
 
 # Wails / Tauri build outputs
@@ -22,6 +26,7 @@ cross_group_wails/build/bin/
 cross_group_wails/bin/*.exe
 cross_group_tauri/src-tauri/target/
 cross_group_tauri/dist/
+cross_group_tauri/node_modules/
 
 # IDE / OS
 .vscode/
@@ -34,5 +39,10 @@ Thumbs.db
 *.exe
 !cross_group_service.spec
 
-# Large local vendor cache (optional keep source in repo)
-# cross_group_gui/vendor/
+# Local temp scripts
+_fix_*.py
+_patch_*.py
+_check_enc.py
+_tmp_*.py
+enc_*.txt
+**/_enc_report.txt

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ColumnDef,
   flexRender,
@@ -7,7 +7,7 @@ import {
   getPaginationRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import { ChevronLeft, ChevronRight, RefreshCw, Search } from "lucide-react";
+import { ChevronLeft, ChevronRight, Eye, EyeOff, RefreshCw, Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -20,22 +20,26 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { Member, MemberStatus } from "@/lib/types";
-import { cn, formatNumber } from "@/lib/utils";
+import { cn, formatNumber, maskToken } from "@/lib/utils";
 import { useInviteStore } from "@/store/useInviteStore";
+import { useSettingsStore } from "@/store/useSettingsStore";
+import { MemberDetailDrawer } from "@/components/dashboard/MemberDetailDrawer";
+import { MemberContextMenu } from "@/components/dashboard/MemberContextMenu";
+import { toast } from "@/store/useToastStore";
 
-const roleLabel = { owner: "Ⱥ��", admin: "����Ա", member: "��Ա" } as const;
+const roleLabel = { owner: "群主", admin: "管理员", member: "成员" } as const;
 
 const statusLabel: Record<MemberStatus, string> = {
-  success: "����ɹ�",
-  filtered: "�ѹ��ˣ�����Ա��",
-  rate_limited: "Ƶ������",
-  failed: "����ʧ��",
-  waiting: "�ȴ���",
-  inviting: "������",
+  success: "邀请成功",
+  filtered: "已过滤",
+  rate_limited: "频繁限制",
+  failed: "邀请失败",
+  waiting: "等待中",
+  inviting: "邀请中",
 };
 
-function statusVariant(status: MemberStatus) {
-  return status as "success" | "filtered" | "rate_limited" | "failed" | "waiting" | "inviting";
+function canSelect(status: MemberStatus) {
+  return status === "waiting" || status === "failed" || status === "rate_limited";
 }
 
 export function MemberTable() {
@@ -44,10 +48,15 @@ export function MemberTable() {
   const selectedQqs = useInviteStore((s) => s.selectedQqs);
   const toggleSelect = useInviteStore((s) => s.toggleSelect);
   const toggleSelectAll = useInviteStore((s) => s.toggleSelectAll);
-  const stats = useInviteStore((s) => s.stats);
+  const setDetailMemberQq = useInviteStore((s) => s.setDetailMemberQq);
+  const detailMemberQq = useInviteStore((s) => s.detailMemberQq);
+  const refreshStatus = useInviteStore((s) => s.refreshStatus);
+  const compactTable = useSettingsStore((s) => s.settings.compactTable);
 
   const [globalFilter, setGlobalFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [revealedTokens, setRevealedTokens] = useState<Set<number>>(new Set());
+  const [menu, setMenu] = useState<{ x: number; y: number; member: Member } | null>(null);
 
   const filteredMembers = useMemo(() => {
     if (statusFilter === "all") return members;
@@ -58,78 +67,109 @@ export function MemberTable() {
     () => [
       {
         id: "select",
-        header: ({ table }) => (
-          <Checkbox
-            checked={
-              table.getRowModel().rows.length > 0 &&
-              table.getRowModel().rows.every((row) => selectedQqs.has(row.original.qq))
-            }
-            onCheckedChange={() =>
-              toggleSelectAll(table.getRowModel().rows.map((r) => r.original.qq))
-            }
-          />
-        ),
+        header: ({ table }) => {
+          const rows = table.getRowModel().rows.filter((r) => canSelect(r.original.status));
+          return (
+            <Checkbox
+              checked={rows.length > 0 && rows.every((row) => selectedQqs.has(row.original.qq))}
+              onCheckedChange={() => toggleSelectAll(rows.map((r) => r.original.qq))}
+            />
+          );
+        },
         cell: ({ row }) => (
           <Checkbox
             checked={selectedQqs.has(row.original.qq)}
+            disabled={!canSelect(row.original.status)}
             onCheckedChange={() => toggleSelect(row.original.qq)}
+            onClick={(e) => e.stopPropagation()}
           />
         ),
         size: 40,
       },
       {
         accessorKey: "qq",
-        header: "QQ��",
+        header: "QQ号",
         cell: ({ getValue }) => (
           <span className="font-mono text-[13px]">{getValue<number>()}</span>
         ),
       },
       {
         accessorKey: "nickname",
-        header: "�ǳ�",
+        header: "昵称",
+      },
+      {
+        accessorKey: "card",
+        header: "群名片",
+        cell: ({ getValue }) => getValue<string>() || "—",
       },
       {
         accessorKey: "role",
-        header: "��ɫ",
+        header: "角色",
         cell: ({ getValue }) => {
           const role = getValue<Member["role"]>();
           return <Badge variant={role}>{roleLabel[role]}</Badge>;
         },
       },
       {
+        id: "token",
+        header: "Token",
+        cell: ({ row }) => {
+          const token = row.original.token;
+          const revealed = revealedTokens.has(row.original.qq);
+          return (
+            <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+              <span className="font-mono text-[12px] text-muted-foreground">
+                {revealed ? token || "—" : maskToken(token)}
+              </span>
+              <button
+                type="button"
+                className="rounded p-1 text-muted-foreground hover:bg-[#eef1eb]"
+                title={revealed ? "隐藏" : "显示"}
+                onClick={() =>
+                  setRevealedTokens((prev) => {
+                    const next = new Set(prev);
+                    if (next.has(row.original.qq)) next.delete(row.original.qq);
+                    else next.add(row.original.qq);
+                    return next;
+                  })
+                }
+              >
+                {revealed ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+              </button>
+            </div>
+          );
+        },
+      },
+      {
         accessorKey: "status",
-        header: "״̬",
+        header: "状态",
         cell: ({ row }) => {
           const status = row.original.status;
           const label =
             status === "filtered" && row.original.filterReason
-              ? `�ѹ��ˣ�${row.original.filterReason}��`
+              ? `已过滤（${row.original.filterReason}）`
               : statusLabel[status];
-          return <Badge variant={statusVariant(status)}>{label}</Badge>;
+          return <Badge variant={status}>{label}</Badge>;
         },
       },
       {
         id: "action",
-        header: "����",
-        cell: ({ row }) => {
-          const status = row.original.status;
-          if (status === "success")
-            return (
-              <button className="text-[13px] text-primary hover:underline">�鿴</button>
-            );
-          if (status === "rate_limited")
-            return (
-              <button className="text-[13px] text-[#b8860b] hover:underline">����</button>
-            );
-          if (status === "failed")
-            return (
-              <button className="text-[13px] text-danger hover:underline">����</button>
-            );
-          return <span className="text-muted-foreground">��</span>;
-        },
+        header: "操作",
+        cell: ({ row }) => (
+          <button
+            type="button"
+            className="text-[13px] text-primary hover:underline"
+            onClick={(e) => {
+              e.stopPropagation();
+              setDetailMemberQq(row.original.qq);
+            }}
+          >
+            查看
+          </button>
+        ),
       },
     ],
-    [selectedQqs, toggleSelect, toggleSelectAll],
+    [selectedQqs, toggleSelect, toggleSelectAll, revealedTokens, setDetailMemberQq],
   );
 
   const table = useReactTable({
@@ -140,23 +180,41 @@ export function MemberTable() {
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
+    globalFilterFn: (row, _columnId, filterValue) => {
+      const q = String(filterValue).toLowerCase();
+      if (!q) return true;
+      return (
+        String(row.original.qq).includes(q) ||
+        row.original.nickname.toLowerCase().includes(q) ||
+        (row.original.card || "").toLowerCase().includes(q)
+      );
+    },
     initialState: { pagination: { pageSize: 20 } },
   });
 
-  const pageQqs = table.getRowModel().rows.map((r) => r.original.qq);
+  const pageSelectable = table
+    .getRowModel()
+    .rows.filter((r) => canSelect(r.original.status))
+    .map((r) => r.original.qq);
   const allPageSelected =
-    pageQqs.length > 0 && pageQqs.every((qq) => selectedQqs.has(qq));
+    pageSelectable.length > 0 && pageSelectable.every((qq) => selectedQqs.has(qq));
+
+  useEffect(() => {
+    if (detailMemberQq == null) {
+      setRevealedTokens(new Set());
+    }
+  }, [detailMemberQq]);
 
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <h3 className="text-[15px] font-semibold text-[#2f352d]">
-            ��Ա�б����� {formatNumber(stats.total || members.length)} �ˣ�
+            成员列表（共 {formatNumber(members.length)} 人）
           </h3>
           {membersLoaded && (
             <span className="rounded-full bg-primary-light px-2.5 py-0.5 text-xs font-medium text-primary">
-              �Ѽ���
+              已加载
             </span>
           )}
         </div>
@@ -166,39 +224,50 @@ export function MemberTable() {
             <Input
               value={globalFilter}
               onChange={(e) => setGlobalFilter(e.target.value)}
-              placeholder="����QQ�Ż��ǳ�"
+              placeholder="搜索QQ号或昵称"
               className="w-[200px] pl-9"
             />
           </div>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger className="w-[120px]">
-              <SelectValue placeholder="ȫ��״̬" />
+              <SelectValue placeholder="全部状态" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">ȫ��״̬</SelectItem>
-              <SelectItem value="waiting">�ȴ���</SelectItem>
-              <SelectItem value="success">����ɹ�</SelectItem>
-              <SelectItem value="rate_limited">Ƶ������</SelectItem>
-              <SelectItem value="failed">����ʧ��</SelectItem>
-              <SelectItem value="filtered">�ѹ���</SelectItem>
+              <SelectItem value="all">全部状态</SelectItem>
+              <SelectItem value="waiting">等待中</SelectItem>
+              <SelectItem value="success">邀请成功</SelectItem>
+              <SelectItem value="rate_limited">频繁限制</SelectItem>
+              <SelectItem value="failed">邀请失败</SelectItem>
+              <SelectItem value="filtered">已过滤</SelectItem>
+              <SelectItem value="inviting">邀请中</SelectItem>
             </SelectContent>
           </Select>
-          <Button variant="secondary" size="sm">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => {
+              void refreshStatus();
+              toast("info", "已刷新");
+            }}
+          >
             <RefreshCw className="h-3.5 w-3.5" />
-            ˢ��
+            刷新
           </Button>
         </div>
       </div>
 
       <div className="min-h-0 flex-1 overflow-auto rounded-[12px] border border-border">
-        <table className="w-full min-w-[720px] border-collapse text-left text-sm">
+        <table className="w-full min-w-[860px] border-collapse text-left text-sm">
           <thead className="sticky top-0 z-10 bg-[#f9faf8]">
             {table.getHeaderGroups().map((hg) => (
               <tr key={hg.id} className="border-b border-border">
                 {hg.headers.map((header) => (
                   <th
                     key={header.id}
-                    className="px-3 py-3 text-[13px] font-medium text-muted-foreground"
+                    className={cn(
+                      "px-3 text-[13px] font-medium text-muted-foreground",
+                      compactTable ? "py-2" : "py-3",
+                    )}
                   >
                     {flexRender(header.column.columnDef.header, header.getContext())}
                   </th>
@@ -210,10 +279,18 @@ export function MemberTable() {
             {table.getRowModel().rows.map((row) => (
               <tr
                 key={row.id}
-                className="border-b border-border/70 transition-colors duration-150 hover:bg-[#f7f9f5]"
+                className={cn(
+                  "border-b border-border/70 transition-colors duration-150 hover:bg-[#f7f9f5] cursor-pointer",
+                  compactTable ? "[&>td]:py-1.5" : "[&>td]:py-2.5",
+                )}
+                onClick={() => setDetailMemberQq(row.original.qq)}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  setMenu({ x: e.clientX, y: e.clientY, member: row.original });
+                }}
               >
                 {row.getVisibleCells().map((cell) => (
-                  <td key={cell.id} className="px-3 py-2.5">
+                  <td key={cell.id} className="px-3">
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                   </td>
                 ))}
@@ -227,9 +304,11 @@ export function MemberTable() {
         <div className="flex items-center gap-2 text-[13px] text-muted-foreground">
           <Checkbox
             checked={allPageSelected}
-            onCheckedChange={() => toggleSelectAll(pageQqs)}
+            onCheckedChange={() => toggleSelectAll(pageSelectable)}
           />
-          <span>ȫѡ����ѡ {formatNumber(selectedQqs.size)} �</span>
+          <span>
+            全选（已选 {formatNumber(selectedQqs.size)} 项）
+          </span>
         </div>
         <div className="flex items-center gap-2">
           <Button
@@ -260,7 +339,7 @@ export function MemberTable() {
               );
             })}
             {table.getPageCount() > 5 && (
-              <span className="px-1 text-muted-foreground">�� {table.getPageCount()}</span>
+              <span className="px-1 text-muted-foreground">… {table.getPageCount()}</span>
             )}
           </div>
           <Button
@@ -279,13 +358,23 @@ export function MemberTable() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="20">20 ��/ҳ</SelectItem>
-              <SelectItem value="50">50 ��/ҳ</SelectItem>
-              <SelectItem value="100">100 ��/ҳ</SelectItem>
+              <SelectItem value="20">20条/页</SelectItem>
+              <SelectItem value="50">50条/页</SelectItem>
+              <SelectItem value="100">100条/页</SelectItem>
             </SelectContent>
           </Select>
         </div>
       </div>
+
+      <MemberDetailDrawer />
+      {menu && (
+        <MemberContextMenu
+          x={menu.x}
+          y={menu.y}
+          member={menu.member}
+          onClose={() => setMenu(null)}
+        />
+      )}
     </div>
   );
 }

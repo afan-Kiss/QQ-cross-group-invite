@@ -19,6 +19,12 @@ _SENSITIVE_PATTERNS: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"(?i)(Authorization\s*[:=]\s*)(\S+)"), r"\1***"),
     (re.compile(r"(?i)(onebot[_-]?token\s*[:=]\s*)(\S+)"), r"\1***"),
     (re.compile(r"(?i)(napcat[_-]?token\s*[:=]\s*)(\S+)"), r"\1***"),
+    (re.compile(r"(?i)(napcat[_-]?webui[_-]?token\s*[:=]\s*)(\S+)"), r"\1***"),
+    (re.compile(r"(?i)(password\s*[:=]\s*)(\S+)"), r"\1***"),
+    (re.compile(r"(?i)(\"password\"\s*:\s*\")([^\"]+)(\")"), r"\1***\3"),
+    (re.compile(r"(?i)(session[_-]?id\s*[:=]\s*)(\S+)"), r"\1***"),
+    (re.compile(r"(?i)(X-App-Session\s*[:=]\s*)(\S+)"), r"\1***"),
+    (re.compile(r"(?i)(cookie\s*[:=]\s*)(\S+)"), r"\1***"),
 ]
 
 
@@ -32,18 +38,32 @@ class _SanitizeFilter(logging.Filter):
         return True
 
 
-def setup_service_logger(name: str = "cross-group-service") -> logging.Logger:
+def sanitize_text(text: str) -> str:
+    out = text
+    for pattern, replacement in _SENSITIVE_PATTERNS:
+        out = pattern.sub(replacement, out)
+    return out
+
+
+def setup_service_logger(
+    name: str = "cross-group-service",
+    *,
+    level: str = "INFO",
+    max_bytes: int = 5 * 1024 * 1024,
+    backup_count: int = 5,
+) -> logging.Logger:
     LOG_DIR.mkdir(parents=True, exist_ok=True)
 
     logger = logging.getLogger(name)
-    if logger.handlers:
-        return logger
+    for h in list(logger.handlers):
+        logger.removeHandler(h)
+        h.close()
 
-    logger.setLevel(logging.INFO)
+    logger.setLevel(getattr(logging, str(level).upper(), logging.INFO))
     handler = RotatingFileHandler(
         LOG_FILE,
-        maxBytes=5 * 1024 * 1024,
-        backupCount=5,
+        maxBytes=max(1024 * 1024, int(max_bytes)),
+        backupCount=max(1, int(backup_count)),
         encoding="utf-8",
     )
     handler.setFormatter(

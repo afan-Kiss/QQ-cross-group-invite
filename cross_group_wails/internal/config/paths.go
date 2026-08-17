@@ -36,3 +36,7 @@ func ConfigPath() string {
 func ServiceLogPath() string {
 	return filepath.Join(LogsDir(), "service.log")
 }
+
+func AppLogPath() string {
+	return filepath.Join(LogsDir(), "app.log")
+}

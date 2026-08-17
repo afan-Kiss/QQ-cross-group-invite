@@ -5,22 +5,31 @@ from __future__ import annotations
 import argparse
 import json
 import mimetypes
+import os
+import signal
+import threading
+import time
+import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
 from cross_group_batch import (
+    clear_failed,
+    clear_logs,
+    clear_rate_limits,
+    clear_state,
     get_cached_members,
     get_state,
+    get_task,
+    list_tasks,
     load_source_members,
     start_batch,
     stop_batch,
 )
-from myqq_api import check_napcat_online, load_cfg, save_cfg
+from myqq_api import check_napcat_online, load_cfg, onebot_action, save_cfg
 from service_logger import setup_service_logger
-
-logger = setup_service_logger()
 
 WEB_DIR = Path(__file__).resolve().parent / "web"
 PORT = 17888
@@ -28,12 +37,54 @@ SERVICE_ID = "cross-group-invite"
 SERVICE_VERSION = "1.0.0"
 HOST = "127.0.0.1"
 
+SESSION_ID = ""
+_server: ThreadingHTTPServer | None = None
+logger = setup_service_logger()
+
+ALLOWED_ORIGINS = {
+    "http://wails.localhost",
+    "http://wails.localhost:34115",
+    "https://wails.localhost",
+    "http://localhost:34115",
+    "http://127.0.0.1:34115",
+    "null",
+    "",
+}
+
+
+def _cors_headers(handler: BaseHTTPRequestHandler) -> dict[str, str]:
+    origin = handler.headers.get("Origin") or ""
+    if origin in ALLOWED_ORIGINS or origin.startswith("http://wails.") or origin.startswith("https://wails."):
+        allow = origin if origin else "null"
+    elif not origin:
+        allow = "null"
+    else:
+        allow = "http://wails.localhost"
+    return {
+        "Access-Control-Allow-Origin": allow,
+        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, X-App-Session",
+        "Vary": "Origin",
+    }
+
+
+def _error(code: str, message: str, http_status: int = 400) -> tuple[int, dict[str, Any]]:
+    return http_status, {"ok": False, "code": code, "message": message, "error": message}
+
+
+def _ok(payload: dict[str, Any] | None = None) -> tuple[int, dict[str, Any]]:
+    data = {"ok": True}
+    if payload:
+        data.update(payload)
+    return 200, data
+
 
 def _json_response(handler: BaseHTTPRequestHandler, code: int, obj: Any) -> None:
     body = json.dumps(obj, ensure_ascii=False).encode("utf-8")
     handler.send_response(code)
     handler.send_header("Content-Type", "application/json; charset=utf-8")
-    handler.send_header("Access-Control-Allow-Origin", "*")
+    for k, v in _cors_headers(handler).items():
+        handler.send_header(k, v)
     handler.send_header("Content-Length", str(len(body)))
     handler.end_headers()
     handler.wfile.write(body)
@@ -47,12 +98,26 @@ def _file_response(handler: BaseHTTPRequestHandler, path: Path) -> bool:
         mime = "application/octet-stream"
     data = path.read_bytes()
     handler.send_response(200)
-    handler.send_header("Content-Type", f"{mime}; charset=utf-8" if mime.startswith("text/") or mime.endswith("javascript") else mime)
+    handler.send_header(
+        "Content-Type",
+        f"{mime}; charset=utf-8" if mime.startswith("text/") or mime.endswith("javascript") else mime,
+    )
     handler.send_header("Content-Length", str(len(data)))
     handler.send_header("Cache-Control", "no-cache")
     handler.end_headers()
     handler.wfile.write(data)
     return True
+
+
+def _check_session(handler: BaseHTTPRequestHandler, required: bool = True) -> tuple[int, dict[str, Any]] | None:
+    if not SESSION_ID:
+        return None
+    header = handler.headers.get("X-App-Session") or ""
+    if header == SESSION_ID:
+        return None
+    if not required:
+        return None
+    return _error("UNAUTHORIZED", "会话校验失败，拒绝操作", 403)
 
 
 def build_health_payload() -> dict[str, Any]:
@@ -61,9 +126,21 @@ def build_health_payload() -> dict[str, Any]:
         "ok": True,
         "service": SERVICE_ID,
         "version": SERVICE_VERSION,
+        "session_id": SESSION_ID,
+        "pid": os.getpid(),
         "napcat_online": napcat_online,
         "napcat_message": napcat_message,
     }
+
+
+def _validate_group_id(value: Any, label: str) -> int:
+    try:
+        gid = int(value)
+    except (TypeError, ValueError):
+        raise ValueError(f"{label}必须为纯数字") from None
+    if gid <= 0:
+        raise ValueError(f"{label}必须大于 0")
+    return gid
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -72,9 +149,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_OPTIONS(self) -> None:
         self.send_response(204)
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        for k, v in _cors_headers(self).items():
+            self.send_header(k, v)
         self.end_headers()
 
     def _read_json(self) -> dict[str, Any]:
@@ -108,36 +184,76 @@ class Handler(BaseHTTPRequestHandler):
                 self,
                 200,
                 {
+                    "ok": True,
                     "target_group_id": str(cfg.get("target_group_id") or ""),
                     "source_group_id": str(cfg.get("source_group_id") or ""),
-                    "batch_count": str(cfg.get("batch_count") or "10"),
+                    "batch_count": str(cfg.get("batch_count") or "20"),
                     "interval_ms": str(cfg.get("interval_ms") or "2000"),
                     "filter_staff": bool(cfg.get("filter_staff", True)),
+                    "onebot_url": str(cfg.get("onebot_url") or ""),
+                    "napcat_webui_token": "",
+                    "has_napcat_token": bool(cfg.get("napcat_webui_token")),
                 },
             )
             return
         if path == "/status":
             state = get_state()
             napcat_online, napcat_message = check_napcat_online()
+            state["ok"] = True
             state["napcat_online"] = napcat_online
             state["napcat_message"] = napcat_message
             _json_response(self, 200, state)
             return
         if path == "/members":
+            members = get_cached_members()
+            eligible = sum(1 for m in members if m.eligible)
             _json_response(
                 self,
                 200,
-                {"members": [m.to_dict() for m in get_cached_members()]},
+                {
+                    "ok": True,
+                    "members": [m.to_dict() for m in members],
+                    "total": len(members),
+                    "eligible": eligible,
+                    "filtered": len(members) - eligible,
+                },
             )
+            return
+        if path == "/tasks":
+            _json_response(self, 200, {"ok": True, "tasks": list_tasks()})
+            return
+        if path.startswith("/tasks/"):
+            tid = path[len("/tasks/") :]
+            task = get_task(tid)
+            if not task:
+                code, body = _error("MEMBER_NOT_FOUND", "任务不存在", 404)
+                _json_response(self, code, body)
+                return
+            _json_response(self, 200, {"ok": True, "task": task})
             return
         if self._serve_static(path):
             return
-        _json_response(self, 404, {"error": "not found"})
+        code, body = _error("NOT_FOUND", "not found", 404)
+        _json_response(self, code, body)
 
     def do_POST(self) -> None:
         path = urlparse(self.path).path
         data = self._read_json()
         try:
+            # Strict ownership only for shutdown; other writes optionally validate if header present.
+            if path == "/shutdown":
+                denied = _check_session(self, required=True)
+                if denied is not None:
+                    code, body = denied
+                    _json_response(self, code, body)
+                    return
+            elif self.headers.get("X-App-Session"):
+                denied = _check_session(self, required=True)
+                if denied is not None:
+                    code, body = denied
+                    _json_response(self, code, body)
+                    return
+
             if path == "/config":
                 cfg = load_cfg()
                 for k in (
@@ -148,75 +264,258 @@ class Handler(BaseHTTPRequestHandler):
                     "filter_staff",
                     "onebot_url",
                     "napcat_webui_token",
+                    "log_level",
+                    "max_log_file_mb",
+                    "log_retention_days",
+                    "auto_clean_logs",
                 ):
                     if k in data:
+                        if k == "napcat_webui_token" and data[k] == "":
+                            continue
                         cfg[k] = data[k]
                 save_cfg(cfg)
-                _json_response(self, 200, {"ok": True})
+                code, body = _ok()
+                _json_response(self, code, body)
                 return
 
             if path == "/members/load":
-                source = int(data.get("source_group_id") or 0)
-                if source <= 0:
-                    raise ValueError("\u8bf7\u586b\u5199\u6765\u6e90\u7fa4\u53f7")
+                online, msg = check_napcat_online()
+                if not online:
+                    code, body = _error("NAPCAT_OFFLINE", msg or "NapCat 未连接")
+                    _json_response(self, code, body)
+                    return
+                source = _validate_group_id(data.get("source_group_id") or 0, "来源群号")
                 filter_staff = bool(data.get("filter_staff", True))
                 members = load_source_members(
                     source, filter_staff=filter_staff, record_logs=False
                 )
-                _json_response(
-                    self,
-                    200,
-                    {"count": len(members), "members": [m.to_dict() for m in members]},
+                eligible = sum(1 for m in members if m.eligible)
+                code, body = _ok(
+                    {
+                        "count": len(members),
+                        "eligible": eligible,
+                        "filtered": len(members) - eligible,
+                        "members": [m.to_dict() for m in members],
+                    }
                 )
+                _json_response(self, code, body)
                 return
 
             if path == "/invite/start":
-                target = int(data.get("target_group_id") or 0)
-                source = int(data.get("source_group_id") or 0)
-                if target <= 0 or source <= 0:
-                    raise ValueError("\u8bf7\u586b\u5199\u76ee\u6807\u7fa4\u53f7\u548c\u6765\u6e90\u7fa4\u53f7")
+                online, msg = check_napcat_online()
+                if not online:
+                    code, body = _error("NAPCAT_OFFLINE", msg or "NapCat 未连接")
+                    _json_response(self, code, body)
+                    return
+                target = _validate_group_id(data.get("target_group_id") or 0, "目标群号")
+                source = _validate_group_id(data.get("source_group_id") or 0, "来源群号")
                 if target == source:
-                    raise ValueError("\u76ee\u6807\u7fa4\u548c\u6765\u6e90\u7fa4\u4e0d\u80fd\u76f8\u540c")
-                count = int(data.get("count") or 0)
+                    code, body = _error("INVALID_ARGUMENT", "目标群和来源群不能相同")
+                    _json_response(self, code, body)
+                    return
+                batch_size = int(data.get("batch_count") or data.get("batch_size") or data.get("count") or 20)
                 interval_ms = int(data.get("interval_ms") or 1500)
                 filter_staff = bool(data.get("filter_staff", True))
                 qq_list = data.get("qq_list")
-                if qq_list:
-                    qq_list = [int(x) for x in qq_list]
-                start_batch(
-                    target_group_id=target,
-                    source_group_id=source,
-                    count=count,
-                    interval_ms=interval_ms,
-                    filter_staff=filter_staff,
-                    qq_list=qq_list,
-                )
-                _json_response(self, 200, {"ok": True})
+                if qq_list is None:
+                    code, body = _error("INVALID_ARGUMENT", "请至少选择一名成员")
+                    _json_response(self, code, body)
+                    return
+                qq_list = [int(x) for x in qq_list]
+                if not qq_list:
+                    code, body = _error("INVALID_ARGUMENT", "请至少选择一名成员")
+                    _json_response(self, code, body)
+                    return
+                try:
+                    task_id = start_batch(
+                        target_group_id=target,
+                        source_group_id=source,
+                        count=0,
+                        interval_ms=interval_ms,
+                        filter_staff=filter_staff,
+                        qq_list=qq_list,
+                        batch_size=batch_size,
+                    )
+                except RuntimeError as exc:
+                    code, body = _error("TASK_RUNNING", str(exc))
+                    _json_response(self, code, body)
+                    return
+                except ValueError as exc:
+                    code, body = _error("INVALID_ARGUMENT", str(exc))
+                    _json_response(self, code, body)
+                    return
+                code, body = _ok({"task_id": task_id})
+                _json_response(self, code, body)
                 return
 
             if path == "/invite/stop":
+                state = get_state()
+                if not state.get("running") and state.get("status") not in (
+                    "preparing",
+                    "running",
+                    "stopping",
+                ):
+                    code, body = _error("TASK_NOT_RUNNING", "当前没有运行中的任务")
+                    _json_response(self, code, body)
+                    return
                 stop_batch()
-                _json_response(self, 200, {"ok": True})
+                code, body = _ok()
+                _json_response(self, code, body)
                 return
 
-            _json_response(self, 404, {"error": "not found"})
+            if path == "/state/clear-logs":
+                clear_logs()
+                code, body = _ok()
+                _json_response(self, code, body)
+                return
+
+            if path == "/state/clear-failed":
+                clear_failed()
+                code, body = _ok()
+                _json_response(self, code, body)
+                return
+
+            if path == "/state/clear-rate-limits":
+                clear_rate_limits()
+                code, body = _ok()
+                _json_response(self, code, body)
+                return
+
+            if path == "/state/clear":
+                kinds = data.get("kinds")
+                if isinstance(kinds, list):
+                    clear_state([str(x) for x in kinds])
+                else:
+                    clear_state()
+                code, body = _ok()
+                _json_response(self, code, body)
+                return
+
+            if path == "/test-connection":
+                online, msg = check_napcat_online()
+                if not online:
+                    code, body = _error("NAPCAT_OFFLINE", msg or "NapCat 未连接")
+                    _json_response(self, code, body)
+                    return
+                try:
+                    onebot_action("get_login_info", {})
+                except Exception as exc:
+                    code, body = _error("NAPCAT_OFFLINE", f"OneBot 调用失败: {exc}")
+                    _json_response(self, code, body)
+                    return
+                code, body = _ok({"message": "连接正常", "napcat_online": True})
+                _json_response(self, code, body)
+                return
+
+            if path == "/shutdown":
+                logger.info("shutdown requested")
+                stop_batch()
+                code, body = _ok({"message": "shutting down"})
+                _json_response(self, code, body)
+
+                def _stop() -> None:
+                    global _server
+                    if _server is not None:
+                        _server.shutdown()
+
+                threading.Thread(target=_stop, daemon=True).start()
+                return
+
+            code, body = _error("NOT_FOUND", "not found", 404)
+            _json_response(self, code, body)
+        except ValueError as exc:
+            code, body = _error("INVALID_ARGUMENT", str(exc))
+            _json_response(self, code, body)
         except Exception as exc:
-            _json_response(self, 400, {"error": str(exc)})
+            logger.exception("request failed: %s", path)
+            code, body = _error("INTERNAL_ERROR", str(exc), 500)
+            _json_response(self, code, body)
 
 
-def main(open_browser: bool = False) -> None:
-    server = ThreadingHTTPServer((HOST, PORT), Handler)
+def _pid_alive(pid: int) -> bool:
+    if pid <= 0:
+        return True
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+        handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, wintypes.DWORD(pid))
+        if handle:
+            kernel32.CloseHandle(handle)
+            return True
+        return False
+    except Exception:
+        return True
+
+
+def _start_parent_watchdog(parent_pid: int) -> None:
+    if parent_pid <= 0:
+        return
+
+    def _watch() -> None:
+        global _server
+        while True:
+            time.sleep(1.0)
+            if not _pid_alive(parent_pid):
+                logger.info("parent pid %s exited; shutting down sidecar", parent_pid)
+                stop_batch()
+                if _server is not None:
+                    _server.shutdown()
+                break
+
+    threading.Thread(target=_watch, daemon=True, name="parent-watchdog").start()
+
+
+def main(open_browser: bool = False, session_id: str = "", parent_pid: int = 0) -> None:
+    global SESSION_ID, _server, logger
+    SESSION_ID = session_id or str(uuid.uuid4())
+    cfg = load_cfg()
+    log_level = str(cfg.get("log_level") or "INFO")
+    max_mb = int(cfg.get("max_log_file_mb") or 5)
+    retention = int(cfg.get("log_retention_days") or 7)
+    logger = setup_service_logger(
+        level=log_level,
+        max_bytes=max_mb * 1024 * 1024,
+        backup_count=max(1, retention),
+    )
+
+    _server = ThreadingHTTPServer((HOST, PORT), Handler)
     url = f"http://{HOST}:{PORT}/"
-    logger.info("cross-group service started at %s (service=%s)", url, SERVICE_ID)
+    logger.info(
+        "cross-group service started at %s (service=%s session=%s pid=%s parent=%s)",
+        url,
+        SERVICE_ID,
+        SESSION_ID,
+        os.getpid(),
+        parent_pid or "-",
+    )
     if open_browser:
         logger.info("browser open requested, but sidecar mode should pass --no-browser")
+
+    _start_parent_watchdog(parent_pid)
+
+    def _on_signal(signum: int, _frame: Any) -> None:
+        logger.info("signal %s received", signum)
+        stop_batch()
+        if _server is not None:
+            _server.shutdown()
+
     try:
-        server.serve_forever()
+        signal.signal(signal.SIGINT, _on_signal)
+        signal.signal(signal.SIGTERM, _on_signal)
+    except (ValueError, OSError):
+        pass
+
+    try:
+        _server.serve_forever()
     except KeyboardInterrupt:
         logger.info("service interrupted")
     finally:
         stop_batch()
-        server.server_close()
+        if _server is not None:
+            _server.server_close()
         logger.info("service stopped")
 
 
@@ -224,5 +523,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Cross-group invite local API service")
     parser.add_argument("--no-browser", action="store_true", help="Do not open browser")
     parser.add_argument("--open-browser", action="store_true", help="Open browser on start")
+    parser.add_argument("--session-id", default="", help="Ownership session id from host app")
+    parser.add_argument("--parent-pid", type=int, default=0, help="Host app PID for watchdog")
     args = parser.parse_args()
-    main(open_browser=args.open_browser and not args.no_browser)
+    main(
+        open_browser=args.open_browser and not args.no_browser,
+        session_id=args.session_id,
+        parent_pid=args.parent_pid,
+    )

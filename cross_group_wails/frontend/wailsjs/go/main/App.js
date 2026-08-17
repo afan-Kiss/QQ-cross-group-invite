@@ -6,6 +6,10 @@ export function EnsureBackend() {
   return window['go']['main']['App']['EnsureBackend']();
 }
 
+export function ExportLogs(arg1) {
+  return window['go']['main']['App']['ExportLogs'](arg1);
+}
+
 export function GetAppInfo() {
   return window['go']['main']['App']['GetAppInfo']();
 }
@@ -16,6 +20,14 @@ export function OpenLogsDir() {
 
 export function ProbeHealth() {
   return window['go']['main']['App']['ProbeHealth']();
+}
+
+export function RunDiagnostics() {
+  return window['go']['main']['App']['RunDiagnostics']();
+}
+
+export function SaveFileDialog(arg1) {
+  return window['go']['main']['App']['SaveFileDialog'](arg1);
 }
 
 export function ShutdownBackend() {

@@ -14,8 +14,8 @@ export interface AppSettings {
   logRetentionDays: string;
   autoCleanLogs: boolean;
   serviceAddress: string;
-  onebotPort: string;
-  onebotPassword: string;
+  onebotUrl: string;
+  napcatWebuiToken: string;
 }
 
 const defaults: AppSettings = {
@@ -32,8 +32,8 @@ const defaults: AppSettings = {
   logRetentionDays: "7",
   autoCleanLogs: true,
   serviceAddress: "127.0.0.1:17888",
-  onebotPort: "3000",
-  onebotPassword: "",
+  onebotUrl: "http://127.0.0.1:3000",
+  napcatWebuiToken: "",
 };
 
 interface SettingsStore {
@@ -42,21 +42,52 @@ interface SettingsStore {
   load: () => void;
 }
 
+function applyUiSettings(settings: AppSettings) {
+  const root = document.documentElement;
+  const scale = Number(settings.uiScale) || 100;
+  root.style.fontSize = `${(16 * scale) / 100}px`;
+  root.classList.toggle("reduce-motion", !settings.animations);
+  root.classList.toggle("compact-table", settings.compactTable);
+
+  const preferDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+  const dark = settings.theme === "system" && preferDark;
+  root.classList.toggle("theme-dark", dark);
+  root.classList.toggle("theme-light", !dark);
+}
+
 export const useSettingsStore = create<SettingsStore>((set) => ({
   settings: { ...defaults },
-  update: (patch) => set((s) => ({ settings: { ...s.settings, ...patch } })),
+  update: (patch) =>
+    set((s) => {
+      const settings = { ...s.settings, ...patch };
+      applyUiSettings(settings);
+      return { settings };
+    }),
   load: () => {
     try {
       const raw = localStorage.getItem("qq-cross-group-settings");
       if (raw) {
-        set({ settings: { ...defaults, ...JSON.parse(raw) } });
+        const parsed = { ...defaults, ...JSON.parse(raw) } as AppSettings;
+        // migrate old keys
+        const legacy = parsed as AppSettings & { onebotPort?: string; onebotPassword?: string };
+        if (!parsed.onebotUrl && legacy.onebotPort) {
+          parsed.onebotUrl = `http://127.0.0.1:${legacy.onebotPort}`;
+        }
+        if (!parsed.napcatWebuiToken && legacy.onebotPassword) {
+          parsed.napcatWebuiToken = legacy.onebotPassword;
+        }
+        applyUiSettings(parsed);
+        set({ settings: parsed });
+        return;
       }
     } catch {
       /* ignore */
     }
+    applyUiSettings(defaults);
   },
 }));
 
 export function persistSettings(settings: AppSettings) {
   localStorage.setItem("qq-cross-group-settings", JSON.stringify(settings));
+  applyUiSettings(settings);
 }

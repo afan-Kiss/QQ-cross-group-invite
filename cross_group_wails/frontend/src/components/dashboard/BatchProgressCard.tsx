@@ -1,18 +1,19 @@
 import { Progress } from "@/components/ui/progress";
-import { formatNumber } from "@/lib/utils";
 import { useInviteStore } from "@/store/useInviteStore";
 
 export function BatchProgressCard() {
   const batch = useInviteStore((s) => s.stats.batch);
+  const inviting = useInviteStore((s) => s.inviting);
   const percent =
     batch.batchTotal > 0
       ? Number(((batch.batchDone / batch.batchTotal) * 100).toFixed(2))
       : 0;
+  const remainingSec = (batch.intervalRemainingMs || 0) / 1000;
 
   return (
     <div className="animate-fade-up rounded-[16px] border border-border bg-white p-5 shadow-[var(--shadow-card)]">
       <h3 className="mb-4 text-[15px] font-semibold text-[#2f352d]">
-        ��ǰ���ν��ȣ��� {batch.batchNumber} ����
+        当前批次进度（第 {batch.batchNumber} / {batch.totalBatches || "\u2014"} 批）
       </h3>
 
       <div className="mb-3 flex items-end justify-between">
@@ -29,15 +30,19 @@ export function BatchProgressCard() {
 
       <div className="space-y-2 text-[13px]">
         <p className="text-[#4a5248]">
-          �������룺
+          当前成员：
           <span className="font-medium text-[#2f352d]">
-            {batch.currentNickname} ({batch.currentQq})
+            {batch.currentNickname || "\u2014"} ({batch.currentQq || "\u2014"})
           </span>
         </p>
         <p className="text-muted-foreground">
-          ���ʣ�ࣺ
+          下一次邀请：
           <span className="font-medium text-[#2f352d]">
-            {formatNumber(batch.intervalRemainingMs)} ms
+            {inviting && remainingSec > 0
+              ? `${remainingSec.toFixed(1)} 秒`
+              : inviting
+                ? "进行中"
+                : "0"}
           </span>
         </p>
       </div>

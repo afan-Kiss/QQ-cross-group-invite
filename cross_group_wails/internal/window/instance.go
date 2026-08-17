@@ -8,34 +8,58 @@ import (
 	"time"
 
 	"golang.org/x/sys/windows"
+
+	"cross_group_wails/internal/applog"
 )
 
 const (
-	mutexName    = "Global\\QQCrossGroupInvite_SingleInstance"
-	focusPort    = "17889"
-	focusMessage = "focus"
+	mutexName      = "Global\\QQCrossGroupInvite_SingleInstance"
+	localMutexName = "Local\\QQCrossGroupInvite_SingleInstance"
+	focusPort      = "17889"
+	focusMessage   = "focus"
 )
 
-var focusListenerOnce sync.Once
+var (
+	focusListenerOnce sync.Once
+	instanceMutex     windows.Handle
+)
 
-func AcquireSingleInstance() (bool, error) {
-	name, err := windows.UTF16PtrFromString(mutexName)
+func tryCreateMutex(name string) (owned bool, err error) {
+	ptr, err := windows.UTF16PtrFromString(name)
 	if err != nil {
 		return false, err
 	}
-	_, err = windows.CreateMutex(nil, true, name)
-	if err != nil {
-		return false, err
-	}
-	if windows.GetLastError() == windows.ERROR_ALREADY_EXISTS {
+	h, err := windows.CreateMutex(nil, false, ptr)
+	if err == windows.ERROR_ALREADY_EXISTS {
+		if h != 0 {
+			_ = windows.CloseHandle(h)
+		}
 		return false, nil
 	}
+	if err != nil {
+		return false, err
+	}
+	instanceMutex = h
 	return true, nil
+}
+
+func AcquireSingleInstance() (bool, error) {
+	ok, err := tryCreateMutex(mutexName)
+	if err == nil {
+		return ok, nil
+	}
+	applog.Error("Global single-instance mutex failed: %v; trying Local fallback", err)
+	ok2, err2 := tryCreateMutex(localMutexName)
+	if err2 != nil {
+		return false, fmt.Errorf("global mutex: %v; local mutex: %v", err, err2)
+	}
+	return ok2, nil
 }
 
 func RequestFocusExisting() {
 	conn, err := net.DialTimeout("tcp", "127.0.0.1:"+focusPort, 500*time.Millisecond)
 	if err != nil {
+		applog.Warn("request focus failed: %v", err)
 		return
 	}
 	defer conn.Close()
@@ -47,6 +71,7 @@ func StartFocusListener(onFocus func()) {
 		go func() {
 			listener, err := net.Listen("tcp", "127.0.0.1:"+focusPort)
 			if err != nil {
+				applog.Error("focus listener listen failed: %v", err)
 				return
 			}
 			for {
@@ -79,6 +104,8 @@ func FocusOrExit() error {
 
 func MustFocusOrExit() {
 	if err := FocusOrExit(); err != nil {
+		applog.Error("single instance error: %v", err)
 		fmt.Fprintf(os.Stderr, "single instance error: %v\n", err)
+		os.Exit(1)
 	}
 }

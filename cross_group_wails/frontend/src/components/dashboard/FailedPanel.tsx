@@ -1,50 +1,74 @@
 import { Button } from "@/components/ui/button";
 import { useInviteStore } from "@/store/useInviteStore";
+import { formatTime } from "@/lib/utils";
+import { toast } from "@/store/useToastStore";
 
 export function FailedPanel() {
   const list = useInviteStore((s) => s.failedList);
   const clearFailed = useInviteStore((s) => s.clearFailed);
-  const count = useInviteStore((s) => s.stats.failed);
+  const requeueMember = useInviteStore((s) => s.requeueMember);
+  const setDetailMemberQq = useInviteStore((s) => s.setDetailMemberQq);
 
   return (
-    <div className="animate-fade-up flex h-full min-h-[220px] flex-col rounded-[16px] border border-border bg-white p-4 shadow-[var(--shadow-card)]">
+    <div className="flex h-full min-h-[220px] flex-col rounded-[16px] border border-border bg-white p-5 shadow-[var(--shadow-card)]">
       <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-[15px] font-semibold text-[#2f352d]">����ʧ�ܣ�{count} �ˣ�</h3>
-        <Button variant="ghost" size="sm" onClick={clearFailed}>
-          ���
+        <h3 className="text-[15px] font-semibold text-[#2f352d]">邀请失败</h3>
+        <Button variant="secondary" size="sm" onClick={() => void clearFailed()}>
+          清空
         </Button>
       </div>
-
       <div className="min-h-0 flex-1 overflow-auto">
-        <table className="w-full text-left text-[13px]">
-          <thead>
-            <tr className="border-b border-border text-muted-foreground">
-              <th className="pb-2 font-medium">QQ��</th>
-              <th className="pb-2 font-medium">�ǳ�</th>
-              <th className="pb-2 font-medium">ʧ��ԭ��</th>
-              <th className="pb-2 font-medium">����</th>
-            </tr>
-          </thead>
-          <tbody>
-            {list.slice(0, 5).map((item) => (
-              <tr key={item.qq} className="border-b border-border/60 hover:bg-[#f7f9f5]">
-                <td className="py-2 font-mono">{item.qq}</td>
-                <td className="py-2">{item.nickname}</td>
-                <td className="max-w-[120px] truncate py-2 text-muted-foreground">
-                  {item.reason}
-                </td>
-                <td className="py-2">
-                  <button className="text-danger hover:underline">����</button>
-                </td>
+        {list.length === 0 ? (
+          <p className="text-[13px] text-muted-foreground">暂无失败记录</p>
+        ) : (
+          <table className="w-full text-left text-[13px]">
+            <thead>
+              <tr className="text-muted-foreground">
+                <th className="pb-2">QQ</th>
+                <th className="pb-2">原因</th>
+                <th className="pb-2">时间</th>
+                <th className="pb-2">操作</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      <div className="mt-2 flex items-center justify-between text-[12px] text-muted-foreground">
-        <span>�� {count} ��</span>
-        <button className="text-primary hover:underline">�鿴����</button>
+            </thead>
+            <tbody>
+              {list.map((item) => (
+                <tr key={`${item.qq}-${item.at}`} className="border-t border-border/60">
+                  <td className="py-2 font-mono">{item.qq}</td>
+                  <td className="py-2">{item.reason}</td>
+                  <td className="py-2">{formatTime(item.at)}</td>
+                  <td className="py-2">
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        className="text-primary hover:underline"
+                        onClick={async () => {
+                          await navigator.clipboard.writeText(String(item.qq));
+                          toast("success", "已复制QQ");
+                        }}
+                      >
+                        复制
+                      </button>
+                      <button
+                        type="button"
+                        className="text-primary hover:underline"
+                        onClick={() => setDetailMemberQq(item.qq)}
+                      >
+                        查看成员
+                      </button>
+                      <button
+                        type="button"
+                        className="text-primary hover:underline"
+                        onClick={() => requeueMember(item.qq)}
+                      >
+                        重新邀请
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
     </div>
   );

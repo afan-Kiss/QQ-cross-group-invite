@@ -8,6 +8,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 	"github.com/wailsapp/wails/v2/pkg/options/windows"
 
+	"cross_group_wails/internal/applog"
 	"cross_group_wails/internal/window"
 )
 
@@ -15,12 +16,13 @@ import (
 var assets embed.FS
 
 func main() {
+	applog.Init()
 	window.MustFocusOrExit()
 
 	app := NewApp()
 
 	err := wails.Run(&options.App{
-		Title:             "QQ Cross Group Invite",
+		Title:             "QQ跨群邀请工具",
 		Width:             1440,
 		Height:            960,
 		MinWidth:          1280,
@@ -45,6 +47,7 @@ func main() {
 	})
 
 	if err != nil {
+		applog.Error("wails run error: %v", err)
 		println("Error:", err.Error())
 	}
 }

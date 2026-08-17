@@ -1,22 +1,35 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useInviteStore } from "@/store/useInviteStore";
 import { useServiceStore } from "@/store/useServiceStore";
 
-export function usePollingStatus(intervalMs = 1500) {
+export function usePollingStatus() {
   const refreshStatus = useInviteStore((s) => s.refreshStatus);
   const inviting = useInviteStore((s) => s.inviting);
-  const bootstrapped = useServiceStore((s) => s.bootstrapped);
+  const localService = useServiceStore((s) => s.localService);
+  const inFlight = useRef(false);
 
   useEffect(() => {
-    if (!bootstrapped) return;
-    void refreshStatus();
-  }, [bootstrapped, refreshStatus]);
+    if (localService !== "ready") return;
 
-  useEffect(() => {
-    if (!bootstrapped) return;
+    let cancelled = false;
+    const tick = async () => {
+      if (cancelled || inFlight.current) return;
+      inFlight.current = true;
+      try {
+        await refreshStatus();
+      } finally {
+        inFlight.current = false;
+      }
+    };
+
+    void tick();
     const timer = window.setInterval(() => {
-      void refreshStatus();
-    }, inviting ? intervalMs : intervalMs * 2);
-    return () => window.clearInterval(timer);
-  }, [bootstrapped, inviting, intervalMs, refreshStatus]);
+      void tick();
+    }, inviting ? 800 : 2500);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [localService, inviting, refreshStatus]);
 }

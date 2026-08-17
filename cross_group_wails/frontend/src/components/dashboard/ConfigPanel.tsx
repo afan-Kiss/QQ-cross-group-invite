@@ -68,9 +68,16 @@ export function ConfigPanel() {
       </div>
 
       {!napcatOnline && serviceReady && (
-        <p className="mb-4 rounded-[10px] border border-[#f0dca0] bg-warning-light px-3 py-2 text-[12px] leading-5 text-[#9a7618]">
-          NapCat 未连接，请启动 NapCat 后再加载成员或开始邀请。
-        </p>
+        <div className="mb-4 rounded-[10px] border border-[#f0dca0] bg-warning-light px-3 py-2 text-[12px] leading-5 text-[#9a7618]">
+          <p>NapCat 未连接，请启动 NapCat 后再加载成员或开始邀请。</p>
+          <button
+            type="button"
+            className="mt-2 rounded-[8px] border border-[#e0c56a] bg-white px-3 py-1 text-[12px] hover:bg-[#fff8e6]"
+            onClick={() => void useServiceStore.getState().refreshHealth()}
+          >
+            重新检测
+          </button>
+        </div>
       )}
 
       <div className="space-y-4">
@@ -104,18 +111,18 @@ export function ConfigPanel() {
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="batch">批量人数</Label>
+          <Label htmlFor="batch">每批人数</Label>
           <Input
             id="batch"
             type="number"
             min={1}
-            max={50}
+            max={1000}
             disabled={!serviceReady}
             {...register("batch_count", {
               onChange: (e) => setConfig({ batch_count: e.target.value }),
             })}
           />
-          <p className="text-[12px] text-muted-foreground">每批处理人数（1-50）</p>
+          <p className="text-[12px] text-muted-foreground">每批处理人数（1-1000），总人数以所选成员为准</p>
         </div>
 
         <div className="space-y-2">
