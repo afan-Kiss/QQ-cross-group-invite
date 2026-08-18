@@ -35,6 +35,7 @@ const statusLabel: Record<MemberStatus, string> = {
   failed: "邀请失败",
   waiting: "等待中",
   inviting: "邀请中",
+  cancelled: "已取消",
 };
 
 function canSelect(status: MemberStatus) {
@@ -213,6 +214,7 @@ export function MemberTable() {
               <SelectItem value="failed">邀请失败</SelectItem>
               <SelectItem value="filtered">已过滤</SelectItem>
               <SelectItem value="inviting">邀请中</SelectItem>
+              <SelectItem value="cancelled">已取消</SelectItem>
             </SelectContent>
           </Select>
           <Button

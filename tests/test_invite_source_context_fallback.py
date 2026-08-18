@@ -288,5 +288,5 @@ def test_invite_batch_requires_target_membership(monkeypatch, sample_members):
         tokens=["u_REDACTaAAAAAAAAAAAAAAA", "u_REDACTbAAAAAAAAAAAAAAA"],
         capture_dir=Path("."),
     )
-    assert [ok for _m, ok, _c, _msg in results] == [False, False]
+    assert [kind for _m, kind, _c, _msg in results] == ["failed", "failed"]
     assert results[0][3] == "\u670d\u52a1\u5668\u54cd\u5e94\u5df2\u8fd4\u56de\uff0c\u4f46\u76ee\u6807\u7fa4\u6210\u5458\u672a\u51fa\u73b0"

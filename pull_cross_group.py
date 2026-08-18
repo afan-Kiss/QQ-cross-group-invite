@@ -47,7 +47,8 @@ CMD_88D_111 = "OidbSvcTrpcTcp.0x88d_111"
 CMD_11EC = "OidbSvcTrpcTcp.0x11ec_1"
 PACKET_SLEEP = 0.15
 FE7_SLEEP = 0.12
-FE7_MAX_PAGES = 16
+# Safety cap only. Prefer desired_qqs / no-cursor / stop as primary stop conditions.
+FE7_MAX_PAGES = 64
 MEMBERSHIP_RETRY_SEC = 5.0
 MEMBERSHIP_RETRY_INTERVAL = 0.8
 NOT_IN_GROUP_MARKERS = (
@@ -60,10 +61,28 @@ NOT_IN_GROUP_MARKERS = (
 )
 
 
+class PickerStopped(Exception):
+    """User stop requested before invite packets were fully sent."""
+
+
+class PickerProtocolError(Exception):
+    """OIDB picker stage failed at protocol or empty-result level."""
+
+    def __init__(self, message: str, *, stage: str = "", code: int | None = None):
+        super().__init__(message)
+        self.stage = stage
+        self.code = code
+
+
 @dataclass
 class PickerSession:
     token_map: dict[int, str] = field(default_factory=dict)
     fe7_pages: int = 0
+    created_at: float = 0.0
+    requested_qqs: list[int] = field(default_factory=list)
+    missing_qqs: list[int] = field(default_factory=list)
+    error: str = ""
+    hit_page_limit: bool = False
 
 
 def _cfg_int(cfg: dict, *keys: str) -> int | None:
@@ -81,6 +100,26 @@ def protocol_log(stage: str, **fields: object) -> None:
             continue
         parts.append(f"{key}={val}")
     print(" ".join(parts))
+
+
+def _stop_requested(stop_event) -> bool:
+    return bool(stop_event is not None and getattr(stop_event, "is_set", lambda: False)())
+
+
+def _interruptible_sleep(seconds: float, stop_event=None) -> bool:
+    """Sleep unless stop_event fires. True means stopped."""
+    if seconds <= 0:
+        return _stop_requested(stop_event)
+    if stop_event is not None and hasattr(stop_event, "wait"):
+        return bool(stop_event.wait(seconds))
+    time.sleep(seconds)
+    return _stop_requested(stop_event)
+
+
+def _raise_if_stopped(stop_event, *, stage: str) -> None:
+    if _stop_requested(stop_event):
+        protocol_log(stage, result="stopped")
+        raise PickerStopped(stage)
 
 
 def _parse_api_response(raw: str) -> dict:
@@ -109,6 +148,36 @@ def _api_send_failed(resp: dict) -> str:
         return str(resp.get("message") or resp.get("wording") or "send_packet status=failed")
     if retcode not in (None, 0, "0") and status != "ok":
         return str(resp.get("message") or resp.get("wording") or f"send_packet retcode={retcode}")
+    return ""
+
+
+def parse_oidb_recv_status(hex_data: str) -> tuple[int | None, bool]:
+    """OIDB top-level field3==0 is protocol OK for 88d/11ec/FE7/758 RECV."""
+    return parse_758_recv_status(hex_data)
+
+
+def _oidb_protocol_failed(resp: dict, *, require_status: bool = True) -> str:
+    """Transport OK but OIDB RECV field3 != 0 / missing.
+
+    require_status=True: missing/unparseable body is an error (picker stages).
+    require_status=False: unparseable body is ignored; non-zero field3 still fails.
+    """
+    if not isinstance(resp, dict):
+        return "响应无法解析"
+    api_err = _api_send_failed(resp)
+    if api_err:
+        return api_err
+    data = _rsp_hex(resp)
+    if not data:
+        return "缺少协议响应" if require_status else ""
+    try:
+        code, ok = parse_oidb_recv_status(data)
+    except Exception:
+        return "协议状态无法解析" if require_status else ""
+    if code is None:
+        return "协议状态无法解析" if require_status else ""
+    if not ok:
+        return f"协议错误 code={code}"
     return ""
 
 
@@ -175,22 +244,24 @@ def _send_packet(cmd: str, hex_data: str, *, label: str | None = None, stage: st
     resp = _parse_api_response(raw)
     api_err = _api_send_failed(resp)
     rsp = _rsp_hex(resp)
-    code, proto_ok = parse_758_recv_status(rsp) if rsp else (None, False)
+    code, proto_ok = parse_oidb_recv_status(rsp) if rsp else (None, False)
     protocol_log(
         stage or (label or cmd.rsplit(".", 1)[-1]),
         cmd=cmd.rsplit(".", 1)[-1],
         send_len=send_len,
         api_err=api_err or "none",
         recv_len=len(rsp) // 2 if rsp else 0,
-        proto_code=code,
+        proto_code=code if code is not None else "none",
         proto_ok=proto_ok,
     )
     return resp
 
 
-def _send_fe7(hex_data: str, *, label: str = "fe7_4") -> str:
+def _send_fe7(hex_data: str, *, label: str = "fe7_4", stop_event=None) -> str:
+    _raise_if_stopped(stop_event, stage="SOURCE_FE7")
     resp = _send_packet(CMD_FE7, hex_data, label=label, stage="SOURCE_FE7")
-    time.sleep(FE7_SLEEP)
+    if _interruptible_sleep(FE7_SLEEP, stop_event):
+        raise PickerStopped("SOURCE_FE7")
     return _rsp_hex(resp)
 
 
@@ -328,81 +399,203 @@ def patch_fe1_token_list(hex_data: str, tokens: list[str]) -> str:
 
 
 def open_cross_group_picker(
-    capture_dir: Path, target_group_id: int, source_group_id: int
+    capture_dir: Path,
+    target_group_id: int,
+    source_group_id: int,
+    *,
+    desired_qqs: list[int] | None = None,
+    stop_event=None,
 ) -> PickerSession | None:
-    """Live picker: built 88d_111 + 11ec + paginated FE7. capture_dir is unused at runtime."""
+    """Live picker: built 88d_111 + 11ec + paginated FE7.
+
+    capture_dir is unused at runtime (kept for call-site compatibility).
+    When desired_qqs is set, FE7 stops once all requested QQ tokens are mapped.
+
+    88d_14 remains an optional catalog prefix observed in historical picker
+    windows. The live path does not send it and does not require capture files.
+    """
     del capture_dir
+    requested = [int(q) for q in (desired_qqs or []) if int(q) > 0]
+    wanted = set(requested)
     token_map: dict[int, str] = {}
     fe7_pages = 0
+    hit_page_limit = False
+    created_at = time.time()
     print("open cross-group picker (live)...")
-    resp = _send_packet(
-        CMD_88D_111,
-        build_88d_111(target_group_id),
-        label="88d_111",
-        stage="PICKER_88D",
-    )
-    if _api_send_failed(resp):
-        protocol_log("PICKER_SESSION", result="send_failed", cmd="0x88d_111")
-        return None
-    time.sleep(PACKET_SLEEP)
-    resp = _send_packet(
-        CMD_11EC,
-        build_11ec_1(target_group_id),
-        label="11ec_1",
-        stage="PICKER_11EC",
-    )
-    if _api_send_failed(resp):
-        protocol_log("PICKER_SESSION", result="send_failed", cmd="0x11ec_1")
-        return None
-    time.sleep(PACKET_SLEEP)
 
-    cursor: bytes | None = None
-    seen_cursors: set[bytes] = set()
-    while fe7_pages < FE7_MAX_PAGES:
-        hx = build_fe7_group_list(source_group_id, page_cursor=cursor)
-        resp = _send_packet(
-            CMD_FE7,
-            hx,
-            label=f"fe7_4 page {fe7_pages + 1}",
-            stage="PICKER_FE7",
-        )
-        if _api_send_failed(resp):
-            if fe7_pages == 0:
-                protocol_log("PICKER_SESSION", result="send_failed", cmd="0xfe7_4")
-                return None
-            break
-        fe7_pages += 1
-        rsp = _rsp_hex(resp)
-        page_map = parse_fe7_token_map(rsp) if rsp else {}
-        token_map.update(page_map)
+    def _fail(stage_name: str, err: str, *, code: int | None = None) -> None:
         protocol_log(
-            "PICKER_FE7",
-            page=fe7_pages,
-            mapped=len(page_map),
-            merged=len(token_map),
+            "PICKER_SESSION",
+            result="protocol_failed",
+            picker_stage=stage_name,
+            err=err,
+            proto_code=code if code is not None else "none",
+            fe7_pages=fe7_pages,
+            mapped=len(token_map),
+            requested=len(requested),
+            missing=len(wanted - set(token_map)),
         )
-        cursor = extract_fe7_page_cursor(rsp) if rsp else None
-        if not cursor:
-            break
-        if cursor in seen_cursors:
-            break
-        seen_cursors.add(cursor)
-        time.sleep(PACKET_SLEEP)
-    protocol_log(
-        "PICKER_SESSION",
-        result="ok",
-        fe7_pages=fe7_pages,
-        mapped=len(token_map),
-    )
-    return PickerSession(token_map=token_map, fe7_pages=fe7_pages)
+
+    try:
+        _raise_if_stopped(stop_event, stage="PICKER_88D")
+        hx111 = build_88d_111(target_group_id)
+        resp = _send_packet(CMD_88D_111, hx111, label="88d_111", stage="PICKER_88D")
+        err = _oidb_protocol_failed(resp)
+        if err:
+            code, _ = parse_oidb_recv_status(_rsp_hex(resp)) if _rsp_hex(resp) else (None, False)
+            _fail("PICKER_88D", err, code=code)
+            return None
+        if _interruptible_sleep(PACKET_SLEEP, stop_event):
+            raise PickerStopped("PICKER_88D")
+
+        _raise_if_stopped(stop_event, stage="PICKER_11EC")
+        resp = _send_packet(
+            CMD_11EC,
+            build_11ec_1(target_group_id),
+            label="11ec_1",
+            stage="PICKER_11EC",
+        )
+        err = _oidb_protocol_failed(resp)
+        if err:
+            code, _ = parse_oidb_recv_status(_rsp_hex(resp)) if _rsp_hex(resp) else (None, False)
+            _fail("PICKER_11EC", err, code=code)
+            return None
+        if _interruptible_sleep(PACKET_SLEEP, stop_event):
+            raise PickerStopped("PICKER_11EC")
+
+        cursor: bytes | None = None
+        seen_cursors: set[bytes] = set()
+        while fe7_pages < FE7_MAX_PAGES:
+            _raise_if_stopped(stop_event, stage="PICKER_FE7")
+            hx = build_fe7_group_list(source_group_id, page_cursor=cursor)
+            resp = _send_packet(
+                CMD_FE7,
+                hx,
+                label=f"fe7_4 page {fe7_pages + 1}",
+                stage="PICKER_FE7",
+            )
+            err = _oidb_protocol_failed(resp)
+            if err:
+                code, _ = parse_oidb_recv_status(_rsp_hex(resp)) if _rsp_hex(resp) else (None, False)
+                if fe7_pages == 0:
+                    _fail("PICKER_FE7", err, code=code)
+                    return None
+                protocol_log(
+                    "PICKER_FE7",
+                    result="page_protocol_failed",
+                    page=fe7_pages + 1,
+                    err=err,
+                    proto_code=code if code is not None else "none",
+                )
+                break
+            fe7_pages += 1
+            rsp = _rsp_hex(resp)
+            page_map = parse_fe7_token_map(rsp) if rsp else {}
+            token_map.update(page_map)
+            missing_n = len(wanted - set(token_map)) if wanted else 0
+            protocol_log(
+                "PICKER_FE7",
+                page=fe7_pages,
+                mapped=len(page_map),
+                merged=len(token_map),
+                requested=len(requested),
+                missing=missing_n,
+            )
+            if wanted and wanted.issubset(token_map.keys()):
+                protocol_log("PICKER_FE7", result="desired_complete", page=fe7_pages)
+                break
+            cursor = extract_fe7_page_cursor(rsp) if rsp else None
+            if not cursor:
+                break
+            if cursor in seen_cursors:
+                protocol_log("PICKER_FE7", result="cursor_repeat", page=fe7_pages)
+                break
+            seen_cursors.add(cursor)
+            if _interruptible_sleep(PACKET_SLEEP, stop_event):
+                raise PickerStopped("PICKER_FE7")
+        else:
+            hit_page_limit = True
+
+        missing = sorted(wanted - set(token_map)) if wanted else []
+        if hit_page_limit and missing:
+            msg = f"FE7 分页达到安全上限 {FE7_MAX_PAGES}，仍缺少 {len(missing)} 名成员凭证"
+            protocol_log(
+                "PICKER_SESSION",
+                result="pagination_limit",
+                fe7_pages=fe7_pages,
+                mapped=len(token_map),
+                requested=len(requested),
+                missing=len(missing),
+            )
+            return PickerSession(
+                token_map=token_map,
+                fe7_pages=fe7_pages,
+                created_at=created_at,
+                requested_qqs=requested,
+                missing_qqs=missing,
+                error=msg,
+                hit_page_limit=True,
+            )
+
+        if not token_map:
+            if wanted:
+                msg = "选择器未返回本批所需成员的邀请凭证"
+                protocol_log(
+                    "PICKER_SESSION",
+                    result="desired_missing",
+                    fe7_pages=fe7_pages,
+                    mapped=0,
+                    requested=len(requested),
+                    missing=len(requested),
+                )
+                return PickerSession(
+                    token_map={},
+                    fe7_pages=fe7_pages,
+                    created_at=created_at,
+                    requested_qqs=requested,
+                    missing_qqs=list(requested),
+                    error=msg,
+                    hit_page_limit=hit_page_limit,
+                )
+            _fail("PICKER_FE7", "选择器未返回任何成员邀请凭证")
+            return None
+
+        protocol_log(
+            "PICKER_SESSION",
+            result="ok",
+            fe7_pages=fe7_pages,
+            mapped=len(token_map),
+            requested=len(requested),
+            missing=len(missing),
+        )
+        return PickerSession(
+            token_map=token_map,
+            fe7_pages=fe7_pages,
+            created_at=created_at,
+            requested_qqs=requested,
+            missing_qqs=missing,
+            hit_page_limit=hit_page_limit,
+        )
+    except PickerStopped:
+        protocol_log(
+            "PICKER_SESSION",
+            result="stopped",
+            fe7_pages=fe7_pages,
+            mapped=len(token_map),
+            requested=len(requested),
+        )
+        raise
 
 
-def sync_fe1_selection(capture_dir: Path, tokens: list[str]) -> bool:
+def sync_fe1_selection(
+    capture_dir: Path, tokens: list[str], *, stop_event=None
+) -> bool:
     """Send 0xfe1_8 with the same token list that will go into 758."""
     del capture_dir
     cleaned = [t for t in tokens if t]
     if not cleaned:
         return False
+    _raise_if_stopped(stop_event, stage="FE1_SYNC")
     try:
         hex_data = build_cross_group_fe1_pb(cleaned)
     except ValueError as exc:
@@ -418,10 +611,13 @@ def sync_fe1_selection(capture_dir: Path, tokens: list[str]) -> bool:
         token_n=len(cleaned),
         tokens=",".join(describe_token(t) for t in cleaned),
     )
+    _raise_if_stopped(stop_event, stage="FE1_SYNC")
     resp = _send_packet(CMD_FE1, hex_data, label="fe1_8 selection sync", stage="FE1_SYNC")
-    time.sleep(PACKET_SLEEP)
-    if _api_send_failed(resp):
-        protocol_log("FE1_SYNC", result="send_failed")
+    if _interruptible_sleep(PACKET_SLEEP, stop_event):
+        raise PickerStopped("FE1_SYNC")
+    err = _oidb_protocol_failed(resp, require_status=False)
+    if err:
+        protocol_log("FE1_SYNC", result="protocol_failed", err=err)
         return False
     return True
 
@@ -434,6 +630,7 @@ def send_cross_group_invite(
     invitee_tokens: list[str] | None = None,
     capture_dir: Path | None = None,
     source_context_token: str | None = None,
+    stop_event=None,
 ) -> tuple[bool, dict]:
     del source_context_token
     del capture_dir
@@ -443,6 +640,7 @@ def send_cross_group_invite(
     if not tokens:
         protocol_log("INVITE_758", result="no_tokens", n=0)
         return False, {"error": "no_tokens"}
+    _raise_if_stopped(stop_event, stage="INVITE_758")
     pb_hex = build_cross_group_758_pb(
         target_group_id=target_group_id,
         source_group_id=source_group_id,
@@ -458,6 +656,7 @@ def send_cross_group_invite(
         invitee_blocks=len(parsed[2]),
         invitees=",".join(describe_token(t) for t in tokens),
     )
+    _raise_if_stopped(stop_event, stage="INVITE_758")
     resp = _send_packet(CMD_758, pb_hex, label="758 cross-group invite", stage="INVITE_758")
     ok = _response_ok(resp)
     if not ok:
@@ -588,12 +787,16 @@ def run(cfg: dict | None = None) -> int:
         raise RuntimeError("当前选择器会话没有返回该成员的邀请凭证")
     if not sync_fe1_selection(capture_dir, [invitee_token]):
         raise RuntimeError("跨群选择同步失败，未发送邀请")
-    ok, resp = send_cross_group_invite(
-        target_group_id=target_group_id,
-        source_group_id=source_group_id,
-        invitee_tokens=[invitee_token],
-        capture_dir=capture_dir,
-    )
+    try:
+        ok, resp = send_cross_group_invite(
+            target_group_id=target_group_id,
+            source_group_id=source_group_id,
+            invitee_tokens=[invitee_token],
+            capture_dir=capture_dir,
+        )
+    except PickerStopped:
+        print("stopped before 758")
+        return 1
     data = _rsp_hex(resp)
     code, _ = parse_758_recv_status(data) if data else (None, False)
     protocol_log("INVITE_758", proto_ok=ok, proto_code=code)

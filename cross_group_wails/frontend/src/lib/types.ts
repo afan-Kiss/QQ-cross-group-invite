@@ -6,7 +6,8 @@ export type MemberStatus =
   | "rate_limited"
   | "failed"
   | "waiting"
-  | "inviting";
+  | "inviting"
+  | "cancelled";
 
 export type TaskRunStatus =
   | "idle"

@@ -24,6 +24,7 @@ from myqq_api import load_cfg, onebot_action
 from pb_utils import describe_token, parse_758_recv_status
 from pull_cross_group import (
     PickerSession,
+    PickerStopped,
     _rsp_hex,
     open_cross_group_picker,
     probe_source_group_fe7,
@@ -36,6 +37,9 @@ from pull_cross_group import (
 
 RATE_BUCKET_SEC = 5
 RATE_RETENTION_SEC = 5 * 60
+# UI batch_count stays 1-1000. Per-packet size is the largest verified FE1 list (10 tokens / 276B).
+# Captured 758 success is 2 and 6 blocks; the repeated-block builder allows N>=1 including a final packet of 1.
+PROTOCOL_INVITE_PACKET_MAX = 10
 DATA_DIR = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "QQCrossGroupInvite" / "data"
 TASKS_FILE = DATA_DIR / "tasks.json"
 
@@ -76,6 +80,7 @@ class InviteResultStatus(str, Enum):
     RATE_LIMITED = "rate_limited"
     FAILED = "failed"
     FILTERED = "filtered"
+    CANCELLED = "cancelled"
 
 
 @dataclass
@@ -778,47 +783,88 @@ def _invite_batch(
     members: list[SourceMember],
     tokens: list[str],
     capture_dir,
-) -> list[tuple[SourceMember, bool, int | None, str]]:
-    """One FE1 + one N-block 758 for this batch. Tokens must be picker-fresh."""
-    results: list[tuple[SourceMember, bool, int | None, str]] = []
+) -> list[tuple[SourceMember, str, int | None, str]]:
+    """One FE1 + one N-block 758 for this batch. Tokens must be picker-fresh.
+
+    Outcome kind: success | failed | rate_limited | cancelled
+    cancelled = stopped before 758 was sent (not a protocol failure).
+    After 758 is sent, membership verify always completes for this batch.
+    """
+    results: list[tuple[SourceMember, str, int | None, str]] = []
     if len(members) != len(tokens) or not members:
         return [
-            (m, False, None, "当前选择器会话没有返回该成员的邀请凭证")
+            (m, "failed", None, "当前选择器会话没有返回该成员的邀请凭证")
             for m in members
         ]
-    if not sync_fe1_selection(capture_dir, tokens):
-        reason = "跨群选择同步失败，未发送邀请"
-        return [(m, False, None, reason) for m in members]
-    ok, resp = send_cross_group_invite(
-        target_group_id=target_group_id,
-        source_group_id=source_group_id,
-        invitee_tokens=tokens,
-        capture_dir=capture_dir,
-    )
-    rsp_hex = _rsp_hex(resp)
-    code, _ = parse_758_recv_status(rsp_hex) if rsp_hex else (None, False)
-    msg = _extract_error_text(rsp_hex)
-    if not ok:
-        if not msg and isinstance(resp, dict):
-            msg = str(resp.get("message") or resp.get("wording") or resp.get("error") or "")
-        if not msg and code is None:
-            msg = "758 返回无法确认邀请成功"
-        return [(m, False, code, msg) for m in members]
-    for member in members:
-        if _state._stop.is_set():
-            results.append((member, False, code, "758 已返回，但无法确认目标群成员"))
+    stop_event = _state._stop
+    packet_max = max(1, int(PROTOCOL_INVITE_PACKET_MAX))
+    for offset in range(0, len(members), packet_max):
+        sub_members = members[offset : offset + packet_max]
+        sub_tokens = tokens[offset : offset + packet_max]
+        if stop_event.is_set():
+            results.extend(
+                (m, "cancelled", None, "已停止，未发送邀请") for m in sub_members
+            )
             continue
-        present = wait_target_membership(
-            target_group_id,
-            member.qq,
-            stop_event=_state._stop,
-        )
-        if present is True:
-            results.append((member, True, code, ""))
-        elif present is False:
-            results.append((member, False, code, "服务器响应已返回，但目标群成员未出现"))
-        else:
-            results.append((member, False, code, "758 已返回，但无法确认目标群成员"))
+        try:
+            if not sync_fe1_selection(capture_dir, sub_tokens, stop_event=stop_event):
+                if stop_event.is_set():
+                    results.extend(
+                        (m, "cancelled", None, "已停止，未发送邀请") for m in sub_members
+                    )
+                    continue
+                reason = "跨群选择同步失败，未发送邀请"
+                results.extend((m, "failed", None, reason) for m in sub_members)
+                continue
+            if stop_event.is_set():
+                results.extend(
+                    (m, "cancelled", None, "已停止，未发送邀请") for m in sub_members
+                )
+                continue
+            ok, resp = send_cross_group_invite(
+                target_group_id=target_group_id,
+                source_group_id=source_group_id,
+                invitee_tokens=sub_tokens,
+                capture_dir=capture_dir,
+                stop_event=stop_event,
+            )
+        except PickerStopped:
+            results.extend(
+                (m, "cancelled", None, "已停止，未发送邀请") for m in sub_members
+            )
+            continue
+        rsp_hex = _rsp_hex(resp)
+        code, _ = parse_758_recv_status(rsp_hex) if rsp_hex else (None, False)
+        msg = _extract_error_text(rsp_hex)
+        if not ok:
+            if isinstance(resp, dict) and resp.get("error") == "stopped":
+                results.extend(
+                    (m, "cancelled", None, "已停止，未发送邀请") for m in sub_members
+                )
+                continue
+            if not msg and isinstance(resp, dict):
+                msg = str(resp.get("message") or resp.get("wording") or resp.get("error") or "")
+            if not msg and code is None:
+                msg = "758 返回无法确认邀请成功"
+            results.extend((m, "failed", code, msg) for m in sub_members)
+            continue
+        # 758 already sent: finish membership verify even if stop was requested.
+        for member in sub_members:
+            present = wait_target_membership(
+                target_group_id,
+                member.qq,
+                stop_event=None,
+            )
+            if present is True:
+                results.append((member, "success", code, ""))
+            elif present is False:
+                results.append(
+                    (member, "failed", code, "服务器响应已返回，但目标群成员未出现")
+                )
+            else:
+                results.append(
+                    (member, "failed", code, "758 已返回，但无法确认目标群成员")
+                )
     return results
 
 
@@ -828,6 +874,36 @@ def _update_result(qq: int, **fields: Any) -> None:
             for k, v in fields.items():
                 setattr(r, k, v)
             return
+
+
+def _mark_unsent_cancelled(member: SourceMember, *, reason: str, started_at: float) -> None:
+    """Stop before 758: not a protocol failure, do not increment failed_count."""
+    finished = _now()
+    duration = int(max(0, (finished - started_at) * 1000)) if started_at else 0
+    with _state_lock:
+        already = next((r for r in _state.results if r.qq == member.qq), None)
+        if already and already.status not in (
+            InviteResultStatus.WAITING,
+            InviteResultStatus.INVITING,
+        ):
+            return
+        counted = already is None or already.status in (
+            InviteResultStatus.WAITING,
+            InviteResultStatus.INVITING,
+        )
+        _update_result(
+            member.qq,
+            status=InviteResultStatus.CANCELLED,
+            reason=reason,
+            started_at=started_at,
+            finished_at=finished,
+            duration_ms=duration,
+        )
+        if counted:
+            _state.done += 1
+            if _state.batch_size > 0:
+                _state.batch_done += 1
+        _append_timeline("stopped", f"{member.nickname}({member.qq}): {reason}")
 
 
 def _finish_member(
@@ -874,6 +950,21 @@ def _finish_member(
             _state.failed_count += 1
             _record_rate("failed")
             _append_timeline("failed", f"{member.nickname}({member.qq}): {reason}")
+        elif status == InviteResultStatus.CANCELLED:
+            _append_timeline("stopped", f"{member.nickname}({member.qq}): {reason}")
+
+
+def _cancel_remaining_unsent(reason: str = "已停止，未发送邀请") -> None:
+    """Mark WAITING/INVITING rows cancelled without counting them as protocol failures."""
+    with _state_lock:
+        pending = [
+            r
+            for r in _state.results
+            if r.status in (InviteResultStatus.WAITING, InviteResultStatus.INVITING)
+        ]
+    for row in pending:
+        member = SourceMember(qq=row.qq, nickname=row.nickname, token="")
+        _mark_unsent_cancelled(member, reason=reason, started_at=row.started_at or _now())
 
 
 def start_batch(
@@ -1015,14 +1106,6 @@ def start_batch(
             if not invite_members:
                 raise RuntimeError("没有可邀请成员")
 
-            _log("正在准备跨群邀请...")
-            picker = open_cross_group_picker(cap, target_group_id, source_group_id)
-            if picker is None:
-                raise RuntimeError(
-                    "来源群成员已加载，但跨群邀请凭证未准备成功"
-                )
-            picker_map = dict(getattr(picker, "token_map", None) or {})
-
             batches = [
                 invite_members[i : i + resolved_batch_size]
                 for i in range(0, len(invite_members), resolved_batch_size)
@@ -1044,8 +1127,6 @@ def start_batch(
                         _state.current_nickname = chunk[0].nickname
                         _state.message = f"邀请 {chunk[0].nickname}({chunk[0].qq})"
 
-                ready: list[SourceMember] = []
-                ready_tokens: list[str] = []
                 for member in chunk:
                     started_at = _now()
                     started_at_by_qq[member.qq] = started_at
@@ -1055,6 +1136,38 @@ def start_batch(
                             status=InviteResultStatus.INVITING,
                             started_at=started_at,
                         )
+
+                desired = [m.qq for m in chunk]
+                _log(f"正在准备第 {batch_idx + 1} 批跨群邀请凭证...")
+                try:
+                    picker = open_cross_group_picker(
+                        cap,
+                        target_group_id,
+                        source_group_id,
+                        desired_qqs=desired,
+                        stop_event=_state._stop,
+                    )
+                except PickerStopped:
+                    for member in chunk:
+                        _mark_unsent_cancelled(
+                            member,
+                            reason="已停止，未发送邀请",
+                            started_at=started_at_by_qq.get(member.qq, _now()),
+                        )
+                    final_status = TaskRunStatus.STOPPED
+                    final_message = "已停止"
+                    break
+
+                if picker is None:
+                    raise RuntimeError(
+                        "来源群成员已加载，但跨群邀请凭证未准备成功"
+                    )
+                picker_map = dict(getattr(picker, "token_map", None) or {})
+
+                ready: list[SourceMember] = []
+                ready_tokens: list[str] = []
+                for member in chunk:
+                    started_at = started_at_by_qq.get(member.qq, _now())
                     fresh = picker_map.get(int(member.qq)) or ""
                     if member.token and fresh and member.token != fresh:
                         _log(
@@ -1063,6 +1176,10 @@ def start_batch(
                         )
                     if not fresh:
                         reason = "当前选择器会话没有返回该成员的邀请凭证"
+                        if getattr(picker, "hit_page_limit", False):
+                            reason = (
+                                "FE7 分页达到安全上限，当前选择器会话没有返回该成员的邀请凭证"
+                            )
                         _finish_member(
                             member,
                             status=InviteResultStatus.FAILED,
@@ -1074,6 +1191,17 @@ def start_batch(
                     ready.append(member)
                     ready_tokens.append(fresh)
 
+                if _state._stop.is_set():
+                    for member in ready:
+                        _mark_unsent_cancelled(
+                            member,
+                            reason="已停止，未发送邀请",
+                            started_at=started_at_by_qq.get(member.qq, _now()),
+                        )
+                    final_status = TaskRunStatus.STOPPED
+                    final_message = "已停止"
+                    break
+
                 if ready:
                     batch_results = _invite_batch(
                         target_group_id=target_group_id,
@@ -1082,11 +1210,19 @@ def start_batch(
                         tokens=ready_tokens,
                         capture_dir=cap,
                     )
-                    for member, ok, code, msg in batch_results:
+                    for member, kind_or_ok, code, msg in batch_results:
+                        if isinstance(kind_or_ok, bool):
+                            if kind_or_ok:
+                                kind = "success"
+                            elif _classify_failure(code, msg or "") == "frequent":
+                                kind = "rate_limited"
+                            else:
+                                kind = "failed"
+                        else:
+                            kind = str(kind_or_ok or "failed")
                         reason = msg or _failure_reason(code)
-                        kind = _classify_failure(code, reason)
                         started_at = started_at_by_qq.get(member.qq, _now())
-                        if ok:
+                        if kind == "success":
                             _finish_member(
                                 member,
                                 status=InviteResultStatus.SUCCESS,
@@ -1094,7 +1230,14 @@ def start_batch(
                                 started_at=started_at,
                             )
                             _log(f"成功 {member.nickname}({member.qq})")
-                        elif kind == "frequent":
+                        elif kind == "cancelled":
+                            _mark_unsent_cancelled(
+                                member,
+                                reason=reason or "已停止，未发送邀请",
+                                started_at=started_at,
+                            )
+                            _log(f"已停止 {member.nickname}({member.qq}): {reason}")
+                        elif kind == "rate_limited":
                             _finish_member(
                                 member,
                                 status=InviteResultStatus.RATE_LIMITED,
@@ -1132,6 +1275,8 @@ def start_batch(
             error_message = str(exc)
             _log(f"异常终止: {exc}")
         finally:
+            if final_status == TaskRunStatus.STOPPED:
+                _cancel_remaining_unsent()
             with _state_lock:
                 _state.running = False
                 _state.current_qq = 0

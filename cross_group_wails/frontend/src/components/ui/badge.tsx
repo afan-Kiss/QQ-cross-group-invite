@@ -17,6 +17,7 @@ const badgeVariants = cva(
         inviting: "bg-[#e8edf5] text-[#5b6f8f]",
         rate_limited: "bg-[#fff8e6] text-[#b8860b]",
         failed: "bg-danger-light text-danger",
+        cancelled: "bg-[#eef0ec] text-[#7a8276]",
       },
     },
     defaultVariants: {

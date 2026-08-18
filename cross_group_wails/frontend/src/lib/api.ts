@@ -111,6 +111,7 @@ function mapResultStatus(status: string): MemberStatus {
     "rate_limited",
     "failed",
     "filtered",
+    "cancelled",
   ];
   return (allowed.includes(status as MemberStatus) ? status : "waiting") as MemberStatus;
 }

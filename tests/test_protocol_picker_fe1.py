@@ -60,7 +60,7 @@ def test_picker_fresh_token_overrides_stale_member_token(monkeypatch, sample_mem
     sent_fe1: list[list[str]] = []
     sent_758: list[list[str]] = []
 
-    def fake_fe1(_cap, tokens):
+    def fake_fe1(_cap, tokens, **_k):
         sent_fe1.append(list(tokens))
         return True
 
@@ -162,7 +162,7 @@ def test_fe1_false_does_not_send_758(monkeypatch, sample_members):
         capture_dir=Path("."),
     )
     assert sent == []
-    assert all(ok is False for _m, ok, _c, _msg in results)
+    assert all(kind == "failed" for _m, kind, _c, _msg in results)
     assert results[0][3] == "\u8de8\u7fa4\u9009\u62e9\u540c\u6b65\u5931\u8d25\uff0c\u672a\u53d1\u9001\u9080\u8bf7"
 
 
@@ -394,9 +394,9 @@ def test_open_picker_merges_all_fe7_pages(monkeypatch, tmp_path):
             body = bytearray(b"\x08\x01")
             if cur:
                 body.extend(encode_field_bytes(15, cur))
-            top = encode_pb_message({4: [bytes(body)]})
+            top = encode_pb_message({3: [0], 4: [bytes(body)]})
             return {"code": 0, "data": top.hex()}
-        return {"code": 0, "data": "ok"}
+        return {"code": 0, "data": "1800"}
 
     monkeypatch.setattr(pcg, "_send_packet", fake_send)
     monkeypatch.setattr(pcg, "parse_fe7_token_map", lambda _rsp: pages.pop(0) if pages else {})
@@ -418,8 +418,8 @@ def test_open_picker_works_without_capture_logs(monkeypatch, tmp_path):
     def fake_send(cmd, hex_data, **_k):
         sent.append(cmd)
         if "0xfe7_4" in cmd:
-            return {"code": 0, "data": "fe7"}
-        return {"code": 0, "data": "ok"}
+            return {"code": 0, "data": "1800"}
+        return {"code": 0, "data": "1800"}
 
     monkeypatch.setattr(pcg, "_send_packet", fake_send)
     monkeypatch.setattr(pcg, "parse_fe7_token_map", lambda _rsp: {10001: TOK_A})

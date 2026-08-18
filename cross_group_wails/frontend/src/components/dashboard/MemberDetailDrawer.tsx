@@ -13,6 +13,7 @@ const statusLabel = {
   failed: "邀请失败",
   waiting: "等待中",
   inviting: "邀请中",
+  cancelled: "已取消",
 } as const;
 
 async function copyText(text: string, label: string) {

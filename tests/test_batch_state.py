@@ -138,3 +138,4 @@ def test_invite_result_to_dict():
     assert d["qq"] == 9
     assert d["status"] == "success"
     assert d["duration_ms"] == 12
+    assert InviteResultStatus.CANCELLED.value == "cancelled"

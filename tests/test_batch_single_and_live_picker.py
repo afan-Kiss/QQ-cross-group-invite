@@ -178,7 +178,7 @@ def test_invite_batch_allows_single_token(monkeypatch):
     )
     assert len(sent) == 1
     assert sent[0]["invitee_tokens"] == [TOK_A]
-    assert results[0][1] is True
+    assert results[0][1] == "success"
 
 
 def test_live_builders_sizes_and_target():
