@@ -26,12 +26,15 @@ def test_mismatched_token_fails_without_invite(monkeypatch, patch_network):
     invited: list[int] = []
 
     def capture_invite(**kwargs):
-        invited.append(kwargs["member"].qq)
-        return True, None, ""
+        invited.extend(m.qq for m in kwargs["members"])
+        return [(m, True, None, "") for m in kwargs["members"]]
 
-    monkeypatch.setattr(cgb, "_invite_one", capture_invite)
-    monkeypatch.setattr(cgb, "token_owner_safe", lambda *_a, **_k: False)
-    monkeypatch.setattr(cgb, "query_invitee_token", lambda *_a, **_k: "")
+    monkeypatch.setattr(cgb, "_invite_batch", capture_invite)
+    monkeypatch.setattr(
+        cgb,
+        "open_cross_group_picker",
+        lambda *_a, **_k: cgb.PickerSession(token_map={}, fe7_pages=1),
+    )
     snap = cgb.MembersCacheSnapshot(
         source_group_id=100,
         filter_staff=True,
@@ -62,7 +65,7 @@ def test_mismatched_token_fails_without_invite(monkeypatch, patch_network):
     assert st["failed_count"] == 1
     assert st["success"] == 0
     reason = st["results"][0].get("reason") or ""
-    assert "TOKEN" in reason.upper() or "\u627e\u4e0d\u5230" in reason
+    assert "\u5f53\u524d\u9009\u62e9\u5668\u4f1a\u8bdd" in reason
 
 
 def test_invite_start_rejects_zero_batch_and_interval(monkeypatch):

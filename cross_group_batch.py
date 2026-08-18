@@ -21,8 +21,9 @@ from capture_utils import (
     scan_capture_fe7_token_map,
 )
 from myqq_api import load_cfg, onebot_action
-from pb_utils import parse_758_recv_status
+from pb_utils import describe_token, parse_758_recv_status
 from pull_cross_group import (
+    PickerSession,
     _rsp_hex,
     missing_picker_templates,
     open_cross_group_picker,
@@ -31,7 +32,7 @@ from pull_cross_group import (
     resolve_capture_dir,
     send_cross_group_invite,
     sync_fe1_selection,
-    target_group_has_member,
+    wait_target_membership,
 )
 
 RATE_BUCKET_SEC = 5
@@ -771,20 +772,33 @@ def stop_batch(task_id: str | None = None) -> None:
     _log("收到停止请求")
 
 
-def _invite_one(
+def _invite_batch(
     *,
     target_group_id: int,
     source_group_id: int,
-    member: SourceMember,
+    members: list[SourceMember],
+    tokens: list[str],
     capture_dir,
-    context_token: str = "",
-) -> tuple[bool, int | None, str]:
-    del context_token
-    sync_fe1_selection(capture_dir, [member.token])
+) -> list[tuple[SourceMember, bool, int | None, str]]:
+    """One FE1 + one N-block 758 for this batch. Tokens must be picker-fresh."""
+    results: list[tuple[SourceMember, bool, int | None, str]] = []
+    if len(members) != len(tokens) or not members:
+        return [
+            (m, False, None, "当前选择器会话没有返回该成员的邀请凭证")
+            for m in members
+        ]
+    if len(tokens) < 2:
+        return [
+            (m, False, None, "缺少真实成功的单人跨群邀请抓包，未发送邀请")
+            for m in members
+        ]
+    if not sync_fe1_selection(capture_dir, tokens):
+        reason = "跨群选择同步失败，未发送邀请"
+        return [(m, False, None, reason) for m in members]
     ok, resp = send_cross_group_invite(
         target_group_id=target_group_id,
         source_group_id=source_group_id,
-        invitee_token=member.token,
+        invitee_tokens=tokens,
         capture_dir=capture_dir,
     )
     rsp_hex = _rsp_hex(resp)
@@ -792,17 +806,26 @@ def _invite_one(
     msg = _extract_error_text(rsp_hex)
     if not ok:
         if not msg and isinstance(resp, dict):
-            msg = str(resp.get("message") or resp.get("wording") or "")
+            msg = str(resp.get("message") or resp.get("wording") or resp.get("error") or "")
         if not msg and code is None:
             msg = "758 返回无法确认邀请成功"
-        return False, code, msg
-    time.sleep(0.8)
-    present = target_group_has_member(target_group_id, member.qq)
-    if present is True:
-        return True, code, ""
-    if present is False:
-        return False, code, "服务器响应已返回，但目标群成员未出现"
-    return False, code, "758 已返回，但无法确认目标群成员"
+        return [(m, False, code, msg) for m in members]
+    for member in members:
+        if _state._stop.is_set():
+            results.append((member, False, code, "758 已返回，但无法确认目标群成员"))
+            continue
+        present = wait_target_membership(
+            target_group_id,
+            member.qq,
+            stop_event=_state._stop,
+        )
+        if present is True:
+            results.append((member, True, code, ""))
+        elif present is False:
+            results.append((member, False, code, "服务器响应已返回，但目标群成员未出现"))
+        else:
+            results.append((member, False, code, "758 已返回，但无法确认目标群成员"))
+    return results
 
 
 def _update_result(qq: int, **fields: Any) -> None:
@@ -1005,79 +1028,52 @@ def start_batch(
                     "来源群成员已加载，但跨群邀请凭证未准备成功"
                 )
             picker = open_cross_group_picker(cap, target_group_id, source_group_id)
-            if not picker:
+            if picker is None:
                 raise RuntimeError(
                     "来源群成员已加载，但跨群邀请凭证未准备成功"
                 )
+            picker_map = dict(getattr(picker, "token_map", None) or {})
 
-            for idx, member in enumerate(invite_members):
+            batches = [
+                invite_members[i : i + resolved_batch_size]
+                for i in range(0, len(invite_members), resolved_batch_size)
+            ]
+            for batch_idx, chunk in enumerate(batches):
                 if _state._stop.is_set():
                     final_status = TaskRunStatus.STOPPED
                     final_message = "已停止"
                     break
 
-                started_at = _now()
+                started_at_by_qq: dict[int, float] = {}
                 with _state_lock:
-                    if idx % resolved_batch_size == 0:
-                        batch_no = (idx // resolved_batch_size) + 1
-                        remaining = len(invite_members) - idx
-                        _state.batch_number = batch_no
-                        _state.batch_done = 0
-                        _state.batch_total_count = min(resolved_batch_size, remaining)
-                        _append_timeline("batch_start", f"开始第 {batch_no} 批")
-                    _state.current_qq = member.qq
-                    _state.current_nickname = member.nickname
-                    _state.message = f"邀请 {member.nickname}({member.qq})"
-                    _update_result(
-                        member.qq,
-                        status=InviteResultStatus.INVITING,
-                        started_at=started_at,
-                    )
+                    _state.batch_number = batch_idx + 1
+                    _state.batch_done = 0
+                    _state.batch_total_count = len(chunk)
+                    _append_timeline("batch_start", f"开始第 {batch_idx + 1} 批")
+                    if chunk:
+                        _state.current_qq = chunk[0].qq
+                        _state.current_nickname = chunk[0].nickname
+                        _state.message = f"邀请 {chunk[0].nickname}({chunk[0].qq})"
 
-                token = member.token
-                if not token or not token_owner_safe(cap, member.qq, token):
-                    fresh = query_invitee_token(cap, source_group_id, member.qq)
-                    if fresh and token_owner_safe(cap, member.qq, fresh):
-                        token = fresh
-                        member.token = fresh
-                    else:
-                        token = ""
-                        member.token = ""
-                if not token:
-                    reason = "找不到这个人的邀请信息，先跳过"
-                    _finish_member(
-                        member,
-                        status=InviteResultStatus.FAILED,
-                        reason=reason,
-                        started_at=started_at,
-                    )
-                    _log(f"失败 {member.nickname}({member.qq}): {reason}")
-                else:
-                    ok, code, msg = _invite_one(
-                        target_group_id=target_group_id,
-                        source_group_id=source_group_id,
-                        member=member,
-                        capture_dir=cap,
-                    )
-                    reason = msg or _failure_reason(code)
-                    kind = _classify_failure(code, reason)
-                    if ok:
-                        _finish_member(
-                            member,
-                            status=InviteResultStatus.SUCCESS,
-                            reason="",
+                ready: list[SourceMember] = []
+                ready_tokens: list[str] = []
+                for member in chunk:
+                    started_at = _now()
+                    started_at_by_qq[member.qq] = started_at
+                    with _state_lock:
+                        _update_result(
+                            member.qq,
+                            status=InviteResultStatus.INVITING,
                             started_at=started_at,
                         )
-                        _log(f"成功 {member.nickname}({member.qq})")
-                    elif kind == "frequent":
-                        _finish_member(
-                            member,
-                            status=InviteResultStatus.RATE_LIMITED,
-                            reason=reason,
-                            started_at=started_at,
+                    fresh = picker_map.get(int(member.qq)) or ""
+                    if member.token and fresh and member.token != fresh:
+                        _log(
+                            f"picker token 覆盖旧凭证 {member.nickname}({member.qq}) "
+                            f"stale={describe_token(member.token)} fresh={describe_token(fresh)}"
                         )
-                        _log(f"频繁 {member.nickname}({member.qq}): {reason}")
-                    else:
+                    if not fresh:
+                        reason = "当前选择器会话没有返回该成员的邀请凭证"
                         _finish_member(
                             member,
                             status=InviteResultStatus.FAILED,
@@ -1085,13 +1081,66 @@ def start_batch(
                             started_at=started_at,
                         )
                         _log(f"失败 {member.nickname}({member.qq}): {reason}")
+                        continue
+                    ready.append(member)
+                    ready_tokens.append(fresh)
+
+                if ready and len(ready) < 2:
+                    reason = "缺少真实成功的单人跨群邀请抓包，未发送邀请"
+                    for member in ready:
+                        _finish_member(
+                            member,
+                            status=InviteResultStatus.FAILED,
+                            reason=reason,
+                            started_at=started_at_by_qq.get(member.qq, _now()),
+                        )
+                        _log(f"失败 {member.nickname}({member.qq}): {reason}")
+                    ready = []
+                    ready_tokens = []
+
+                if ready:
+                    batch_results = _invite_batch(
+                        target_group_id=target_group_id,
+                        source_group_id=source_group_id,
+                        members=ready,
+                        tokens=ready_tokens,
+                        capture_dir=cap,
+                    )
+                    for member, ok, code, msg in batch_results:
+                        reason = msg or _failure_reason(code)
+                        kind = _classify_failure(code, reason)
+                        started_at = started_at_by_qq.get(member.qq, _now())
+                        if ok:
+                            _finish_member(
+                                member,
+                                status=InviteResultStatus.SUCCESS,
+                                reason="",
+                                started_at=started_at,
+                            )
+                            _log(f"成功 {member.nickname}({member.qq})")
+                        elif kind == "frequent":
+                            _finish_member(
+                                member,
+                                status=InviteResultStatus.RATE_LIMITED,
+                                reason=reason,
+                                started_at=started_at,
+                            )
+                            _log(f"频繁 {member.nickname}({member.qq}): {reason}")
+                        else:
+                            _finish_member(
+                                member,
+                                status=InviteResultStatus.FAILED,
+                                reason=reason,
+                                started_at=started_at,
+                            )
+                            _log(f"失败 {member.nickname}({member.qq}): {reason}")
 
                 if _state._stop.is_set():
                     final_status = TaskRunStatus.STOPPED
                     final_message = "已停止"
                     break
 
-                if interval_ms > 0 and idx < len(invite_members) - 1:
+                if interval_ms > 0 and batch_idx < len(batches) - 1:
                     with _state_lock:
                         _state.next_invite_at = _now() + (interval_ms / 1000.0)
                     if _interruptible_wait(interval_ms / 1000.0):

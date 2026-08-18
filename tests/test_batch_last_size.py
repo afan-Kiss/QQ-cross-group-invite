@@ -18,10 +18,19 @@ def _members(n: int) -> list[SourceMember]:
 def _patch_invite(monkeypatch, members):
     monkeypatch.setattr(cgb, "load_source_members", lambda *a, **k: list(members))
     monkeypatch.setattr(cgb, "missing_picker_templates", lambda *a, **k: [])
-    monkeypatch.setattr(cgb, "open_cross_group_picker", lambda *a, **k: "fe7")
+    monkeypatch.setattr(
+        cgb,
+        "open_cross_group_picker",
+        lambda *a, **k: cgb.PickerSession(
+            token_map={m.qq: m.token for m in members if m.token},
+            fe7_pages=1,
+        ),
+    )
     monkeypatch.setattr(cgb, "token_owner_safe", lambda *a, **k: True)
     monkeypatch.setattr(cgb, "query_invitee_token", lambda *a, **k: "")
-    monkeypatch.setattr(cgb, "_invite_one", lambda **k: (True, None, ""))
+    monkeypatch.setattr(
+        cgb, "_invite_batch", lambda **k: [(m, True, None, "") for m in k["members"]]
+    )
 
 
 @pytest.mark.parametrize(

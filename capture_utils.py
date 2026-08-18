@@ -8,7 +8,17 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-from pb_utils import decode_oidb_packet, encode_varint, extract_field_bytes, normalize_hex, parse_758_recv_status, read_varint
+from pb_utils import (
+    decode_oidb_packet,
+    encode_varint,
+    extract_field_bytes,
+    normalize_hex,
+    parse_758_recv_status,
+    parse_cross_group_758_entries,
+    read_varint,
+    replace_field_bytes,
+    replace_field_varint,
+)
 
 ROOT = Path(__file__).resolve().parent
 DEFAULT_CAPTURE_DIR = (
@@ -640,39 +650,141 @@ PICKER_FE7_TEMPLATES: list[tuple[str, int]] = [
 ]
 
 
+@dataclass
+class AnchoredPickerChain:
+    log_path: Path
+    anchor_seq: int
+    packets: list[tuple[str, str]]
+
+
+def _entry_seq(entry: dict) -> int:
+    try:
+        return int(entry.get("seq") or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _is_cross_group_758_send(entry: dict) -> bool:
+    """True for 95B/232B-style cross-group 758 (2+ mapped blocks), not 55/59B."""
+    if str(entry.get("dir") or "").upper() != "SEND":
+        return False
+    if "0x758_1" not in str(entry.get("cmd") or ""):
+        return False
+    hx = str(entry.get("hex") or "")
+    if not hx:
+        return False
+    try:
+        data = bytes.fromhex(normalize_hex(hx))
+    except ValueError:
+        return False
+    if len(data) < 90:
+        return False
+    body = extract_field_bytes(data, 4)
+    if not body:
+        return False
+    _tgt, src, toks = parse_cross_group_758_entries(body)
+    return bool(src) and len(toks) >= 2
+
+
+def find_anchored_picker_chain(capture_dir: Path) -> AnchoredPickerChain | None:
+    """Templates from one successful cross-group 758 window in a single log.
+
+    Does not splice 88d_111 from session A with 11ec from session B.
+    """
+    best: AnchoredPickerChain | None = None
+    for log in iter_capture_logs(capture_dir):
+        entries = load_log_entries(log)
+        by_seq = index_by_seq(entries)
+        sends = [
+            e
+            for e in entries
+            if str(e.get("dir") or "").upper() == "SEND" and _entry_seq(e) > 0
+        ]
+        sends.sort(key=_entry_seq)
+        anchors = [e for e in sends if _is_cross_group_758_send(e)]
+        for anchor in reversed(anchors):
+            aseq = _entry_seq(anchor)
+            recv = (by_seq.get(aseq) or {}).get("RECV") or {}
+            _code, ok = parse_758_recv_status(str(recv.get("hex") or ""))
+            if not ok:
+                continue
+            prev_cross = max(
+                (_entry_seq(e) for e in anchors if _entry_seq(e) < aseq),
+                default=0,
+            )
+            window = [
+                e
+                for e in sends
+                if prev_cross < _entry_seq(e) < aseq
+            ]
+            def last_cmd(marker: str, before: int | None = None) -> dict | None:
+                found = None
+                for e in window:
+                    seq = _entry_seq(e)
+                    if before is not None and seq >= before:
+                        continue
+                    if marker in str(e.get("cmd") or ""):
+                        found = e
+                return found
+
+            p11ec = last_cmd("0x11ec_1")
+            if not p11ec:
+                continue
+            p111 = last_cmd("0x88d_111", before=_entry_seq(p11ec))
+            if not p111:
+                continue
+            p14 = last_cmd("0x88d_14", before=_entry_seq(p111))
+            fe7s = [
+                e
+                for e in window
+                if "0xfe7_4" in str(e.get("cmd") or "")
+                and _entry_seq(p11ec) < _entry_seq(e) < aseq
+            ]
+            if not fe7s:
+                continue
+            packets: list[tuple[str, str]] = []
+            if p14:
+                packets.append((str(p14.get("cmd")), normalize_hex(str(p14.get("hex") or ""))))
+            packets.append((str(p111.get("cmd")), normalize_hex(str(p111.get("hex") or ""))))
+            packets.append((str(p11ec.get("cmd")), normalize_hex(str(p11ec.get("hex") or ""))))
+            for e in fe7s:
+                hx = normalize_hex(str(e.get("hex") or ""))
+                if hx:
+                    packets.append((str(e.get("cmd")), hx))
+            if any(not hx for _cmd, hx in packets):
+                continue
+            chain = AnchoredPickerChain(log_path=log, anchor_seq=aseq, packets=packets)
+            if best is None or aseq >= best.anchor_seq:
+                best = chain
+                # Prefer the newest log that already yielded a chain.
+                return best
+    return best
+
+
 def missing_picker_templates(capture_dir: Path) -> list[str]:
-    """Required picker packets that are not in capture. Empty means chain usable."""
+    """Required picker packets missing from an anchored same-session chain."""
+    chain = find_anchored_picker_chain(capture_dir)
+    if chain is None:
+        return ["anchored_picker_chain"]
+    cmds = ",".join(cmd for cmd, _hx in chain.packets)
     missing: list[str] = []
-    for cmd_marker, data_len in REQUIRED_PICKER_TEMPLATES:
-        if not find_packet_template(capture_dir, cmd_marker, data_len, len_slop=16):
-            missing.append(f"{cmd_marker}({data_len}B)")
+    if "0x88d_111" not in cmds:
+        missing.append("0x88d_111")
+    if "0x11ec_1" not in cmds:
+        missing.append("0x11ec_1")
+    if "0xfe7_4" not in cmds:
+        missing.append("0xfe7_4")
     return missing
 
 
 def find_cross_group_chain_templates(
     capture_dir: Path,
 ) -> list[tuple[str, str]]:
-    """Templates for a fresh picker open. Missing required steps yield []."""
-    missing = missing_picker_templates(capture_dir)
-    if missing:
+    """Picker templates from one anchored successful session only."""
+    chain = find_anchored_picker_chain(capture_dir)
+    if chain is None:
         return []
-    out: list[tuple[str, str]] = []
-    for cmd_marker, data_len in OPTIONAL_PICKER_PREFIX + REQUIRED_PICKER_TEMPLATES:
-        tpl = find_packet_template(capture_dir, cmd_marker, data_len, len_slop=16)
-        if tpl:
-            out.append((f"OidbSvcTrpcTcp.{cmd_marker}", tpl))
-    for cmd_marker, data_len in PICKER_FE7_TEMPLATES:
-        tpl = find_packet_template(capture_dir, cmd_marker, data_len, len_slop=16)
-        if tpl:
-            out.append((f"OidbSvcTrpcTcp.{cmd_marker}", tpl))
-    if not any("0xfe7_4" in cmd for cmd, _ in out):
-        pages = find_fe7_pagination_templates_generic(capture_dir)
-        if pages:
-            out.append(("OidbSvcTrpcTcp.0xfe7_4", pages[0]))
-        else:
-            # Built 96-byte list is byte-identical to UI capture field layout.
-            out.append(("OidbSvcTrpcTcp.0xfe7_4", build_fe7_group_list(1)))
-    return out
+    return list(chain.packets)
 
 
 def nested_group_in_88d_111(hex_data: str) -> int | None:
@@ -692,16 +804,21 @@ def nested_group_in_88d_111(hex_data: str) -> int | None:
 
 
 def patch_88d_111_target(hex_data: str, target_group_id: int) -> str:
-    """Replace nested target group; refuse if varint length would change."""
-    h = normalize_hex(hex_data)
-    old = nested_group_in_88d_111(h)
-    if old is None:
-        return h
-    old_b = encode_varint(int(old))
-    new_b = encode_varint(int(target_group_id))
-    if len(old_b) != len(new_b):
-        return h
-    return h.replace(old_b.hex(), new_b.hex(), 1)
+    """Rebuild nested body.field2.field1. Never bytes.replace the whole packet."""
+    data = bytes.fromhex(normalize_hex(hex_data))
+    body = extract_field_bytes(data, 4)
+    if not body:
+        raise ValueError("88d_111 missing body")
+    inner = extract_field_bytes(body, 2)
+    if not inner:
+        raise ValueError("88d_111 missing nested target")
+    new_inner = replace_field_varint(inner, 1, int(target_group_id))
+    new_body = replace_field_bytes(body, 2, new_inner)
+    patched = replace_field_bytes(data, 4, new_body)
+    verified = nested_group_in_88d_111(patched.hex())
+    if verified != int(target_group_id):
+        raise ValueError("88d_111 nested target patch failed verification")
+    return patched.hex()
 
 
 def find_cross_group_758_template(

@@ -60,16 +60,20 @@ def test_log_while_holding_lock_does_not_deadlock():
 def test_start_batch_success_fail_frequent_finishes(monkeypatch, patch_network):
     call = {"n": 0}
 
-    def invite(**_kwargs):
-        call["n"] += 1
-        n = call["n"]
-        if n == 1:
-            return True, None, ""
-        if n == 2:
-            return False, 1, "邀请失败"
-        return False, 1289, "操作太频繁"
+    def invite(**kwargs):
+        out = []
+        for m in kwargs["members"]:
+            call["n"] += 1
+            n = call["n"]
+            if n == 1:
+                out.append((m, True, None, ""))
+            elif n == 2:
+                out.append((m, False, 1, "邀请失败"))
+            else:
+                out.append((m, False, 1289, "操作太频繁"))
+        return out
 
-    monkeypatch.setattr(cgb, "_invite_one", invite)
+    monkeypatch.setattr(cgb, "_invite_batch", invite)
 
     # Only first 3 eligible members
     members = [m for m in patch_network if m.eligible][:3]

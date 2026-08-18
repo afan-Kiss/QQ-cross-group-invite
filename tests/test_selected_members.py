@@ -22,10 +22,10 @@ def test_qq_list_filters_members(monkeypatch, patch_network):
     invited: list[int] = []
 
     def capture_invite(**kwargs):
-        invited.append(kwargs["member"].qq)
-        return True, None, ""
+        invited.extend(m.qq for m in kwargs["members"])
+        return [(m, True, None, "") for m in kwargs["members"]]
 
-    monkeypatch.setattr(cgb, "_invite_one", capture_invite)
+    monkeypatch.setattr(cgb, "_invite_batch", capture_invite)
 
     cgb.start_batch(
         target_group_id=200,
@@ -47,10 +47,10 @@ def test_qq_list_rejects_ineligible_staff_selection(monkeypatch, patch_network, 
     invited: list[int] = []
 
     def capture_invite(**kwargs):
-        invited.append(kwargs["member"].qq)
-        return True, None, ""
+        invited.extend(m.qq for m in kwargs["members"])
+        return [(m, True, None, "") for m in kwargs["members"]]
 
-    monkeypatch.setattr(cgb, "_invite_one", capture_invite)
+    monkeypatch.setattr(cgb, "_invite_batch", capture_invite)
     snap = cgb.MembersCacheSnapshot(
         source_group_id=100,
         filter_staff=True,

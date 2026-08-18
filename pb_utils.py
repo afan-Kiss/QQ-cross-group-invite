@@ -485,6 +485,90 @@ def replace_field_bytes(data: bytes, field_num: int, new_content: bytes) -> byte
     return bytes(out)
 
 
+def replace_field_varint(data: bytes, field_num: int, new_value: int) -> bytes:
+    """Replace the first varint field_num; re-encode so length may change."""
+    out = bytearray()
+    i = 0
+    replaced = False
+    while i < len(data):
+        tag = data[i]
+        i += 1
+        fn = tag >> 3
+        wt = tag & 7
+        if wt == 0:
+            _val, j = read_varint(data, i)
+            if fn == field_num and not replaced:
+                out.extend(encode_field_varint(field_num, int(new_value)))
+                replaced = True
+            else:
+                out.append(tag)
+                out.extend(data[i:j])
+            i = j
+        elif wt == 2:
+            ln, j = read_varint(data, i)
+            chunk = data[j : j + ln]
+            i = j + ln
+            out.append(tag)
+            out.extend(encode_varint(ln))
+            out.extend(chunk)
+        elif wt == 5:
+            out.extend(data[i - 1 : i + 4])
+            i += 4
+        elif wt == 1:
+            out.extend(data[i - 1 : i + 8])
+            i += 8
+        else:
+            out.extend(data[i - 1 :])
+            break
+    if not replaced:
+        out.extend(encode_field_varint(field_num, int(new_value)))
+    return bytes(out)
+
+
+def build_cross_group_fe1_pb(tokens: list[str]) -> str:
+    """0xfe1_8 selection sync from capture-1786860477114.
+
+    SEND layout (seq 9957014 41B / seq 9957025 and 9957134 276B):
+      top.field1=0xfe1 top.field2=8 top.field4=body top.field12=0
+      body.field1 = repeated u_ tokens
+      body.field3 = {field1=101, field3=2}
+
+    1 token -> 41B; 10 tokens -> 276B. Same repeated field1 for any N.
+    """
+    cleaned = [t for t in tokens if t]
+    if not cleaned:
+        raise ValueError("fe1 requires at least one token")
+    body_fields: dict[int, list[Any]] = {
+        1: [tok.encode("utf-8") for tok in cleaned],
+        3: [{1: [101], 3: [2]}],
+    }
+    top_fields = {
+        1: [0xFE1],
+        2: [8],
+        4: [encode_pb_message(body_fields)],
+        12: [0],
+    }
+    return encode_pb_message(top_fields).hex()
+
+
+def parse_fe1_tokens(hex_data: str) -> list[str]:
+    """Return body.field1 tokens from a 0xfe1_8 SEND."""
+    if not hex_data:
+        return []
+    data = bytes.fromhex(normalize_hex(hex_data))
+    body = extract_field_bytes(data, 4) or data
+    fields = decode_pb_message(body)
+    out: list[str] = []
+    for val in fields.get(1) or []:
+        if isinstance(val, bytes) and val.startswith(b"u_"):
+            out.append(val.decode("utf-8", errors="replace"))
+        elif isinstance(val, dict):
+            inner = _first(val, 1)
+            if isinstance(inner, bytes) and inner.startswith(b"u_"):
+                out.append(inner.decode("utf-8", errors="replace"))
+    return out
+
+
 def read_varint(data: bytes, i: int) -> tuple[int, int]:
     val = 0
     shift = 0

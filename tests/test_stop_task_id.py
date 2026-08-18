@@ -9,15 +9,17 @@ from tests.conftest import wait_not_running, wait_until
 
 
 def test_stop_batch_mismatch_raises(monkeypatch, patch_network):
-    members = [m for m in patch_network if m.eligible][:2]
+    members = [m for m in patch_network if m.eligible][:3]
     monkeypatch.setattr(cgb, "load_source_members", lambda *a, **k: list(members))
-    monkeypatch.setattr(cgb, "_invite_one", lambda **k: (True, None, ""))
+    monkeypatch.setattr(
+        cgb, "_invite_batch", lambda **k: [(m, True, None, "") for m in k["members"]]
+    )
 
     tid = cgb.start_batch(
         target_group_id=200,
         source_group_id=100,
         interval_ms=60_000,
-        batch_size=10,
+        batch_size=2,
         qq_list=[m.qq for m in members],
     )
     assert wait_until(
@@ -38,15 +40,17 @@ def test_stop_batch_mismatch_raises(monkeypatch, patch_network):
 
 
 def test_stop_batch_none_stops_current(monkeypatch, patch_network):
-    members = [m for m in patch_network if m.eligible][:2]
+    members = [m for m in patch_network if m.eligible][:3]
     monkeypatch.setattr(cgb, "load_source_members", lambda *a, **k: list(members))
-    monkeypatch.setattr(cgb, "_invite_one", lambda **k: (True, None, ""))
+    monkeypatch.setattr(
+        cgb, "_invite_batch", lambda **k: [(m, True, None, "") for m in k["members"]]
+    )
 
     cgb.start_batch(
         target_group_id=200,
         source_group_id=100,
         interval_ms=60_000,
-        batch_size=10,
+        batch_size=2,
         qq_list=[m.qq for m in members],
     )
     assert wait_until(lambda: cgb.get_state()["done"] >= 1, timeout=2.0)

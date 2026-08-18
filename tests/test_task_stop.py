@@ -16,13 +16,15 @@ def test_stop_batch_interrupts_long_interval(monkeypatch, patch_network):
         lambda *a, **k: list(members),
     )
     # Instant invites; long wait between them exercises interruptible wait
-    monkeypatch.setattr(cgb, "_invite_one", lambda **k: (True, None, ""))
+    monkeypatch.setattr(
+        cgb, "_invite_batch", lambda **k: [(m, True, None, "") for m in k["members"]]
+    )
 
     cgb.start_batch(
         target_group_id=200,
         source_group_id=100,
         interval_ms=60_000,
-        batch_size=10,
+        batch_size=2,
         qq_list=[m.qq for m in members],
     )
 

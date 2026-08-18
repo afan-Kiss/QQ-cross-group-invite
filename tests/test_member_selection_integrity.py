@@ -78,8 +78,9 @@ def test_partial_invalid_selection_rejects_whole_start(monkeypatch, patch_networ
     invited: list[int] = []
     monkeypatch.setattr(
         cgb,
-        "_invite_one",
-        lambda **kwargs: invited.append(kwargs["member"].qq) or (True, None, ""),
+        "_invite_batch",
+        lambda **kwargs: invited.extend(m.qq for m in kwargs["members"])
+        or [(m, True, None, "") for m in kwargs["members"]],
     )
     snap = cgb.MembersCacheSnapshot(
         source_group_id=100,

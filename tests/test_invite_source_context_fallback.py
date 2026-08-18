@@ -43,7 +43,7 @@ def test_invite_errors_when_picker_chain_missing(monkeypatch, sample_members):
         invited.append(kwargs["member"].qq)
         return True, None, ""
 
-    monkeypatch.setattr(cgb, "_invite_one", capture_invite)
+    monkeypatch.setattr(cgb, "_invite_batch", capture_invite)
 
     eligible = tuple(m for m in sample_members if m.eligible)
     snap = MembersCacheSnapshot(
@@ -70,18 +70,55 @@ def test_invite_errors_when_picker_chain_missing(monkeypatch, sample_members):
     assert "\u6765\u6e90\u7fa4\u6210\u5458\u5df2\u52a0\u8f7d\uff0c\u4f46\u8de8\u7fa4\u9080\u8bf7\u51ed\u8bc1\u672a\u51c6\u5907\u6210\u529f" in (st["message"] or "")
 
 
-def test_find_cross_group_chain_rejects_partial_templates(monkeypatch):
-    def fake_template(_cap, cmd_marker, data_len, **_k):
-        if cmd_marker == "0xfe7_4":
-            return "aa" * max(int(data_len), 96)
-        return None
-
+def test_find_cross_group_chain_rejects_partial_templates(tmp_path):
     import capture_utils as cu
+    from pb_utils import build_cross_group_758_pb, encode_field_varint
 
-    monkeypatch.setattr(cu, "find_packet_template", fake_template)
-    monkeypatch.setattr(cu, "find_fe7_pagination_templates_generic", lambda *_a, **_k: [])
-    chain = cu.find_cross_group_chain_templates(Path("."))
-    assert chain == []
+    hx758 = build_cross_group_758_pb(
+        target_group_id=1111111111,
+        source_group_id=2222222222,
+        invitee_tokens=["u_REDACTaAAAAAAAAAAAAAAA", "u_REDACTbAAAAAAAAAAAAAAA"],
+    )
+    recv = encode_field_varint(3, 0).hex()
+
+    def row(seq, cmd, hx, direction="SEND"):
+        return {
+            "seq": seq,
+            "cmd": cmd,
+            "dir": direction,
+            "hex": hx,
+            "dataLen": len(hx) // 2,
+        }
+
+    a = tmp_path / "capture-a.log"
+    a.write_text(
+        "\n".join(
+            json.dumps(x)
+            for x in (
+                row(1, "OidbSvcTrpcTcp.0x88d_111", "08aa01"),
+                row(2, "OidbSvcTrpcTcp.0x11ec_1", "08aa02"),
+                row(10, "OidbSvcTrpcTcp.0x758_1", hx758),
+                row(10, "OidbSvcTrpcTcp.0x758_1", recv, "RECV"),
+            )
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    b = tmp_path / "capture-b.log"
+    b.write_text(
+        "\n".join(
+            json.dumps(x)
+            for x in (
+                row(3, "OidbSvcTrpcTcp.0xfe7_4", "aa" * 96),
+                row(20, "OidbSvcTrpcTcp.0x758_1", hx758),
+                row(20, "OidbSvcTrpcTcp.0x758_1", recv, "RECV"),
+            )
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    assert cu.find_cross_group_chain_templates(tmp_path) == []
+    assert cu.missing_picker_templates(tmp_path) == ["anchored_picker_chain"]
 
 
 def test_build_fe7_group_list_matches_ui_capture():
@@ -233,20 +270,20 @@ def test_88d_111_patches_nested_target_not_outer():
     assert val == outer
 
 
-def test_invite_one_requires_target_membership(monkeypatch, sample_members):
+def test_invite_batch_requires_target_membership(monkeypatch, sample_members):
     monkeypatch.setattr(cgb, "sync_fe1_selection", lambda *_a, **_k: True)
     monkeypatch.setattr(
         cgb,
         "send_cross_group_invite",
         lambda **_k: (True, {"code": 0, "data": "1800"}),
     )
-    monkeypatch.setattr(cgb, "target_group_has_member", lambda *_a, **_k: False)
-    monkeypatch.setattr(cgb.time, "sleep", lambda *_a, **_k: None)
-    ok, _code, msg = cgb._invite_one(
+    monkeypatch.setattr(cgb, "wait_target_membership", lambda *_a, **_k: False)
+    results = cgb._invite_batch(
         target_group_id=200,
         source_group_id=100,
-        member=sample_members[0],
+        members=sample_members[:2],
+        tokens=["u_REDACTaAAAAAAAAAAAAAAA", "u_REDACTbAAAAAAAAAAAAAAA"],
         capture_dir=Path("."),
     )
-    assert ok is False
-    assert msg == "\u670d\u52a1\u5668\u54cd\u5e94\u5df2\u8fd4\u56de\uff0c\u4f46\u76ee\u6807\u7fa4\u6210\u5458\u672a\u51fa\u73b0"
+    assert [ok for _m, ok, _c, _msg in results] == [False, False]
+    assert results[0][3] == "\u670d\u52a1\u5668\u54cd\u5e94\u5df2\u8fd4\u56de\uff0c\u4f46\u76ee\u6807\u7fa4\u6210\u5458\u672a\u51fa\u73b0"
