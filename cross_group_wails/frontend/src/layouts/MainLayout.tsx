@@ -23,7 +23,7 @@ export function MainLayout() {
   const page = useNavigationStore((s) => s.page);
 
   return (
-    <div className="relative flex h-full flex-col overflow-hidden rounded-[12px] border border-border bg-page-bg shadow-[0_8px_32px_rgba(28,36,24,0.08)]">
+    <div className="relative flex h-full flex-col overflow-hidden bg-page-bg">
       <BootstrapOverlay />
       <ToastContainer />
       <AppTitleBar />

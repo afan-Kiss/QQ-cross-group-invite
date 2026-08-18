@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Users } from "lucide-react";
+import appIcon from "@/assets/app-icon.png";
 import { wailsBridge } from "@/lib/wails-bridge";
 import { useServiceStore } from "@/store/useServiceStore";
 
@@ -30,9 +30,7 @@ export function AboutPage() {
   return (
     <div className="flex h-full items-center justify-center">
       <div className="w-full max-w-md rounded-[16px] border border-border bg-white p-8 shadow-[var(--shadow-card)] text-center">
-        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-[16px] bg-primary text-white">
-          <Users className="h-8 w-8" />
-        </div>
+        <img src={appIcon} alt="" className="mx-auto h-16 w-16 rounded-[16px]" draggable={false} />
         <h2 className="mt-4 text-[22px] font-semibold text-[#242824]">QQ跨群邀请工具</h2>
         <p className="mt-1 text-[14px] text-muted-foreground">版本 {info.appVersion}</p>
 
