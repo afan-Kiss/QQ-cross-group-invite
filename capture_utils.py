@@ -10,6 +10,9 @@ from pathlib import Path
 
 from pb_utils import (
     decode_oidb_packet,
+    encode_field_bytes,
+    encode_field_varint,
+    encode_pb_message,
     encode_varint,
     extract_field_bytes,
     normalize_hex,
@@ -389,17 +392,84 @@ FE7_MEMBER_FIELD_MASK = bytes.fromhex(
     "b80601c00601c80601d00601d80601c00c01c80c01"
 )
 
+# 0x88d_111 body.field1 is the same on every SEND in the verified picker log (not a group id).
+OIDB_88D_111_BODY_TYPE = 537099973
 
-def build_fe7_group_list(group_code: int) -> str:
-    """Build 0xfe7_4 group member-list page (96-byte UI capture) without a log template."""
-    from pb_utils import encode_field_bytes, encode_field_varint, encode_pb_message
+# Fixed flag blob inside 0x88d_111 body.field2.field2 (no QQ / group / token).
+_88D_111_GROUP_FLAGS = bytes.fromhex("280138014001920100c20100e80401")
 
+# 0x11ec_1 body.field2.field4: stock QQ "new member joined" XML card, not a user credential.
+_11EC_MSG_TEMPLATE = bytes.fromhex(
+    "3c3f786d6c2076657273696f6e3d22312e302220656e636f64696e673d227574662d38223f3e0a"
+    "3c6d73672074656d706c61746549443d2231222062726965663d2222207365727669636549443d22313034223e"
+    "3c6974656d206c61796f75743d2232223e3c7069637475726520636f7665723d22222f3e"
+    "3c7469746c653ee696b0e4babae585a5e7bea43c2f7469746c653e3c2f6974656d3e3c736f757263652f3e3c2f6d73673e"
+)
+
+# 0x11ec_1 body.field2.field5: opaque invite-card style blob (not u_ token / QQ / group).
+_11EC_STYLE_BLOB = bytes.fromhex(
+    "682b38794d417336335256386c58346b3674627366512b7973396c747466597277474677386e5667"
+    "6e4b5633624b74666776496b4b786f685776326750574f2f"
+)
+
+
+def build_fe7_group_list(group_code: int, page_cursor: bytes | None = None) -> str:
+    """Build 0xfe7_4 group member-list page. First page is 96B; next page adds body.field15 cursor."""
     body = bytearray()
     body.extend(encode_field_varint(1, int(group_code)))
     body.extend(encode_field_varint(2, 5))
     body.extend(encode_field_varint(3, 2))
     body.extend(encode_field_bytes(4, FE7_MEMBER_FIELD_MASK))
+    if page_cursor:
+        body.extend(encode_field_bytes(15, page_cursor))
     top = encode_pb_message({1: [0xfe7], 2: [4], 4: [bytes(body)], 12: [0]})
+    return top.hex()
+
+
+def extract_fe7_page_cursor(hex_data: str) -> bytes | None:
+    """body.field15 from a live 0xfe7_4 RECV. Opaque cursor for the next list page."""
+    if not hex_data:
+        return None
+    try:
+        data = bytes.fromhex(normalize_hex(hex_data))
+    except ValueError:
+        return None
+    body = extract_field_bytes(data, 4) or data
+    cur = extract_field_bytes(body, 15)
+    if cur and len(cur) >= 8:
+        return cur
+    return None
+
+
+def build_88d_111(target_group_id: int) -> str:
+    """Build 0x88d_111 from the verified picker SEND (48B). body.field2.field1 = target group."""
+    group_block = bytearray()
+    group_block.extend(encode_field_varint(1, int(target_group_id)))
+    group_block.extend(encode_field_bytes(2, _88D_111_GROUP_FLAGS))
+    group_block.extend(encode_field_varint(3, 0))
+    group_block.extend(encode_field_varint(4, 0))
+    group_block.extend(encode_field_varint(5, 0))
+    group_block.extend(encode_field_bytes(6, b""))
+    body = bytearray()
+    body.extend(encode_field_varint(1, OIDB_88D_111_BODY_TYPE))
+    body.extend(encode_field_bytes(2, bytes(group_block)))
+    top = encode_pb_message({1: [0x88D], 2: [111], 4: [bytes(body)], 12: [0]})
+    return top.hex()
+
+
+def build_11ec_1(target_group_id: int) -> str:
+    """Build 0x11ec_1 from the verified picker SEND (266B). body.field1 = target group."""
+    inner = bytearray()
+    inner.extend(encode_field_varint(1, 1))
+    inner.extend(encode_field_varint(2, 4005))
+    inner.extend(encode_field_bytes(3, b""))
+    inner.extend(encode_field_bytes(4, _11EC_MSG_TEMPLATE))
+    inner.extend(encode_field_bytes(5, _11EC_STYLE_BLOB))
+    inner.extend(encode_field_bytes(6, b""))
+    body = bytearray()
+    body.extend(encode_field_varint(1, int(target_group_id)))
+    body.extend(encode_field_bytes(2, bytes(inner)))
+    top = encode_pb_message({1: [0x11EC], 2: [1], 4: [bytes(body)], 12: [1]})
     return top.hex()
 
 

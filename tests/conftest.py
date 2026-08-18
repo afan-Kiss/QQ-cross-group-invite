@@ -76,7 +76,6 @@ def patch_network(monkeypatch, sample_members):
         return list(sample_members)
 
     monkeypatch.setattr(cgb, "load_source_members", fake_load)
-    monkeypatch.setattr(cgb, "missing_picker_templates", lambda *a, **k: [])
     monkeypatch.setattr(
         cgb,
         "open_cross_group_picker",

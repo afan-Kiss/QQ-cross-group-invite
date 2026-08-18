@@ -12,14 +12,13 @@ from tests.conftest import wait_not_running
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "cross_group_758_95b.json"
 
 
-def test_open_picker_returns_none_without_chain(monkeypatch):
-    monkeypatch.setattr(pcg, "missing_picker_templates", lambda *_a, **_k: ["0x88d_111(48B)"])
-    monkeypatch.setattr(pcg, "find_cross_group_chain_templates", lambda *_a, **_k: [])
+def test_open_picker_returns_none_on_send_failure(monkeypatch):
     monkeypatch.setattr(
         pcg,
-        "probe_source_group_fe7",
-        lambda *_a, **_k: ({10001: "tok-a"}, "u_groupctx", "fe7rsp"),
+        "_send_packet",
+        lambda *_a, **_k: {"code": 1, "message": "fail"},
     )
+    monkeypatch.setattr(pcg.time, "sleep", lambda *_a, **_k: None)
     assert pcg.open_cross_group_picker(Path("."), 200, 100) is None
 
 
@@ -30,18 +29,22 @@ def test_query_context_token_falls_back_to_live(monkeypatch):
     assert pcg.query_source_context_token(Path("."), 100, live_rsp=None) == "u_live"
 
 
-def test_invite_errors_when_picker_chain_missing(monkeypatch, sample_members):
+def test_invite_continues_when_capture_templates_missing(monkeypatch, sample_members):
     monkeypatch.setattr(
-        cgb, "missing_picker_templates", lambda *_a, **_k: ["0x88d_111(48B)"]
+        cgb,
+        "open_cross_group_picker",
+        lambda *_a, **_k: pcg.PickerSession(
+            token_map={m.qq: m.token for m in sample_members if m.token},
+            fe7_pages=1,
+        ),
     )
-    monkeypatch.setattr(cgb, "open_cross_group_picker", lambda *_a, **_k: "should-not-run")
     monkeypatch.setattr(cgb, "token_owner_safe", lambda *_a, **_k: True)
     monkeypatch.setattr(cgb, "query_invitee_token", lambda *_a, **_k: "")
-    invited: list[int] = []
+    invited: list[list[int]] = []
 
     def capture_invite(**kwargs):
-        invited.append(kwargs["member"].qq)
-        return True, None, ""
+        invited.append([m.qq for m in kwargs["members"]])
+        return [(m, True, None, "") for m in kwargs["members"]]
 
     monkeypatch.setattr(cgb, "_invite_batch", capture_invite)
 
@@ -60,14 +63,14 @@ def test_invite_errors_when_picker_chain_missing(monkeypatch, sample_members):
         source_group_id=100,
         interval_ms=100,
         qq_list=[eligible[0].qq],
-        batch_size=10,
+        batch_size=1,
         filter_staff=True,
     )
     assert wait_not_running(timeout=2.0)
     st = cgb.get_state()
-    assert st["status"] == "error"
-    assert invited == []
-    assert "\u6765\u6e90\u7fa4\u6210\u5458\u5df2\u52a0\u8f7d\uff0c\u4f46\u8de8\u7fa4\u9080\u8bf7\u51ed\u8bc1\u672a\u51c6\u5907\u6210\u529f" in (st["message"] or "")
+    assert st["status"] == "completed"
+    assert invited == [[eligible[0].qq]]
+    assert st["success"] == 1
 
 
 def test_find_cross_group_chain_rejects_partial_templates(tmp_path):

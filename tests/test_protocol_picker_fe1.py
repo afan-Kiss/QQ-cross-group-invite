@@ -71,7 +71,6 @@ def test_picker_fresh_token_overrides_stale_member_token(monkeypatch, sample_mem
     monkeypatch.setattr(cgb, "sync_fe1_selection", fake_fe1)
     monkeypatch.setattr(cgb, "send_cross_group_invite", fake_758)
     monkeypatch.setattr(cgb, "wait_target_membership", lambda *_a, **_k: True)
-    monkeypatch.setattr(cgb, "missing_picker_templates", lambda *_a, **_k: [])
     monkeypatch.setattr(
         cgb,
         "open_cross_group_picker",
@@ -105,21 +104,21 @@ def test_picker_fresh_token_overrides_stale_member_token(monkeypatch, sample_mem
     assert TOK_OLD not in sent_758[0]
 
 
-def test_picker_missing_qq_does_not_send_758(monkeypatch):
+def test_picker_missing_qq_does_not_send_that_member(monkeypatch):
     sent = []
 
-    def boom_send(**kwargs):
+    def capture_send(**kwargs):
         sent.append(kwargs)
-        return True, {}
+        return True, {"code": 0, "data": "1800"}
 
-    monkeypatch.setattr(cgb, "missing_picker_templates", lambda *_a, **_k: [])
     monkeypatch.setattr(
         cgb,
         "open_cross_group_picker",
         lambda *_a, **_k: pcg.PickerSession(token_map={10002: TOK_B}, fe7_pages=1),
     )
     monkeypatch.setattr(cgb, "sync_fe1_selection", lambda *_a, **_k: True)
-    monkeypatch.setattr(cgb, "send_cross_group_invite", boom_send)
+    monkeypatch.setattr(cgb, "send_cross_group_invite", capture_send)
+    monkeypatch.setattr(cgb, "wait_target_membership", lambda *_a, **_k: True)
     snap = MembersCacheSnapshot(
         source_group_id=100,
         filter_staff=True,
@@ -139,10 +138,12 @@ def test_picker_missing_qq_does_not_send_758(monkeypatch):
         filter_staff=True,
     )
     assert wait_not_running(timeout=2.0)
-    assert sent == []
+    assert len(sent) == 1
+    assert sent[0].get("invitee_tokens") == [TOK_B]
     st = cgb.get_state()
-    reasons = [r.get("reason") or "" for r in st["results"]]
-    assert any("\u5f53\u524d\u9009\u62e9\u5668\u4f1a\u8bdd" in x for x in reasons)
+    by_qq = {r["qq"]: r for r in st["results"]}
+    assert "\u5f53\u524d\u9009\u62e9\u5668\u4f1a\u8bdd" in (by_qq[10001].get("reason") or "")
+    assert by_qq[10002]["status"] == "success"
 
 
 def test_fe1_false_does_not_send_758(monkeypatch, sample_members):
@@ -224,18 +225,48 @@ def test_runtime_6_token_758_is_232b():
     assert len(bytes.fromhex(hx)) == 232
 
 
-def test_send_refuses_1block(monkeypatch):
+def test_send_allows_1block(monkeypatch):
     sent = []
-    monkeypatch.setattr(pcg, "_send_packet", lambda *a, **k: sent.append(a) or {"code": 0, "data": "1800"})
+    monkeypatch.setattr(
+        pcg,
+        "_send_packet",
+        lambda *a, **k: sent.append(a) or {"code": 0, "data": "1800" + "00" * 8},
+    )
+    monkeypatch.setattr(pcg.time, "sleep", lambda *_a, **_k: None)
     ok, resp = pcg.send_cross_group_invite(
         target_group_id=1,
         source_group_id=2,
         invitee_token=TOK_A,
         capture_dir=Path("."),
     )
-    assert ok is False
-    assert sent == []
-    assert resp.get("error") == "unproven_1block"
+    assert ok is True
+    assert len(sent) == 1
+    assert sent[0][0] == pcg.CMD_758
+    from pb_utils import extract_field_bytes, parse_cross_group_758_entries
+
+    _t, _s, toks = parse_cross_group_758_entries(
+        extract_field_bytes(bytes.fromhex(sent[0][1]), 4) or b""
+    )
+    assert toks == [TOK_A]
+    assert "error" not in resp
+
+
+def test_runtime_1_token_758_has_one_block():
+    from pb_utils import (
+        build_cross_group_758_pb,
+        extract_field_bytes,
+        parse_cross_group_758_entries,
+    )
+
+    hx = build_cross_group_758_pb(
+        target_group_id=1111111111,
+        source_group_id=2222222222,
+        invitee_tokens=[TOK_A],
+    )
+    _t, _s, toks = parse_cross_group_758_entries(
+        extract_field_bytes(bytes.fromhex(hx), 4) or b""
+    )
+    assert toks == [TOK_A]
 
 
 def test_88d_nested_same_and_different_varint_and_prefix():
@@ -347,25 +378,24 @@ def test_membership_lookup_error_is_unknown(monkeypatch):
 
 
 def test_open_picker_merges_all_fe7_pages(monkeypatch, tmp_path):
-    chain = [
-        ("OidbSvcTrpcTcp.0x88d_111", _88d_packet(1, 1111111111)),
-        ("OidbSvcTrpcTcp.0x11ec_1", "aa" * 8),
-        ("OidbSvcTrpcTcp.0xfe7_4", "bb" * 8),
-        ("OidbSvcTrpcTcp.0xfe7_4", "cc" * 8),
-    ]
-    monkeypatch.setattr(pcg, "missing_picker_templates", lambda *_a, **_k: [])
-    monkeypatch.setattr(pcg, "find_cross_group_chain_templates", lambda *_a, **_k: chain)
-    monkeypatch.setattr(pcg, "patch_88d_111_target", lambda hx, _g: hx)
-    monkeypatch.setattr(pcg, "patch_group_code_in_hex", lambda hx, _g: hx)
-
     pages = [
         {10001: TOK_A},
         {10002: TOK_FRESH},
     ]
+    cursors = [b"cursor-page-1-xxxxxxxxxxxxxxxxxx", None]
+    sent_cmds: list[str] = []
 
     def fake_send(cmd, hex_data, **_k):
+        sent_cmds.append(cmd)
         if "0xfe7_4" in cmd:
-            return {"code": 0, "data": "fe7"}
+            from pb_utils import encode_field_bytes, encode_pb_message
+
+            cur = cursors.pop(0) if cursors else None
+            body = bytearray(b"\x08\x01")
+            if cur:
+                body.extend(encode_field_bytes(15, cur))
+            top = encode_pb_message({4: [bytes(body)]})
+            return {"code": 0, "data": top.hex()}
         return {"code": 0, "data": "ok"}
 
     monkeypatch.setattr(pcg, "_send_packet", fake_send)
@@ -375,6 +405,30 @@ def test_open_picker_merges_all_fe7_pages(monkeypatch, tmp_path):
     assert sess is not None
     assert sess.fe7_pages == 2
     assert sess.token_map == {10001: TOK_A, 10002: TOK_FRESH}
+    assert any("0x88d_111" in c for c in sent_cmds)
+    assert any("0x11ec_1" in c for c in sent_cmds)
+    assert sum(1 for c in sent_cmds if "0xfe7_4" in c) == 2
+
+
+def test_open_picker_works_without_capture_logs(monkeypatch, tmp_path):
+    empty = tmp_path / "empty_capture"
+    empty.mkdir()
+    sent: list[str] = []
+
+    def fake_send(cmd, hex_data, **_k):
+        sent.append(cmd)
+        if "0xfe7_4" in cmd:
+            return {"code": 0, "data": "fe7"}
+        return {"code": 0, "data": "ok"}
+
+    monkeypatch.setattr(pcg, "_send_packet", fake_send)
+    monkeypatch.setattr(pcg, "parse_fe7_token_map", lambda _rsp: {10001: TOK_A})
+    monkeypatch.setattr(pcg.time, "sleep", lambda *_a, **_k: None)
+    sess = pcg.open_cross_group_picker(empty, 200, 100)
+    assert sess is not None
+    assert sess.token_map == {10001: TOK_A}
+    assert not list(empty.glob("capture-*.log"))
+    assert any("0x88d_111" in c for c in sent)
 
 
 def test_sync_fe1_uses_builder_not_276_template(monkeypatch):

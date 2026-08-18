@@ -25,7 +25,6 @@ from pb_utils import describe_token, parse_758_recv_status
 from pull_cross_group import (
     PickerSession,
     _rsp_hex,
-    missing_picker_templates,
     open_cross_group_picker,
     probe_source_group_fe7,
     query_invitee_token,
@@ -787,11 +786,6 @@ def _invite_batch(
             (m, False, None, "当前选择器会话没有返回该成员的邀请凭证")
             for m in members
         ]
-    if len(tokens) < 2:
-        return [
-            (m, False, None, "缺少真实成功的单人跨群邀请抓包，未发送邀请")
-            for m in members
-        ]
     if not sync_fe1_selection(capture_dir, tokens):
         reason = "跨群选择同步失败，未发送邀请"
         return [(m, False, None, reason) for m in members]
@@ -1022,11 +1016,6 @@ def start_batch(
                 raise RuntimeError("没有可邀请成员")
 
             _log("正在准备跨群邀请...")
-            missing = missing_picker_templates(cap)
-            if missing:
-                raise RuntimeError(
-                    "来源群成员已加载，但跨群邀请凭证未准备成功"
-                )
             picker = open_cross_group_picker(cap, target_group_id, source_group_id)
             if picker is None:
                 raise RuntimeError(
@@ -1084,19 +1073,6 @@ def start_batch(
                         continue
                     ready.append(member)
                     ready_tokens.append(fresh)
-
-                if ready and len(ready) < 2:
-                    reason = "缺少真实成功的单人跨群邀请抓包，未发送邀请"
-                    for member in ready:
-                        _finish_member(
-                            member,
-                            status=InviteResultStatus.FAILED,
-                            reason=reason,
-                            started_at=started_at_by_qq.get(member.qq, _now()),
-                        )
-                        _log(f"失败 {member.nickname}({member.qq}): {reason}")
-                    ready = []
-                    ready_tokens = []
 
                 if ready:
                     batch_results = _invite_batch(

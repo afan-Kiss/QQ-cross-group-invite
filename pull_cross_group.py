@@ -9,20 +9,20 @@ from pathlib import Path
 
 from capture_utils import (
     DEFAULT_CAPTURE_DIR,
+    build_11ec_1,
+    build_88d_111,
     build_fe7_group_list,
     build_fe7_single_lookup,
+    extract_fe7_page_cursor,
     extract_group_token_from_fe7,
     extract_token_for_uin,
-    find_cross_group_chain_templates,
     find_fe7_pagination_templates,
     find_fe7_pagination_templates_generic,
     find_fe7_single_template,
     find_permanent_uid_from_capture,
     find_source_context_token,
     lookup_token_owner,
-    missing_picker_templates,
     parse_fe7_token_map,
-    patch_88d_111_target,
     patch_group_code_in_hex,
     patch_uid_in_fe7_hex,
     scan_capture_fe7_token,
@@ -43,9 +43,11 @@ from pb_utils import (
 CMD_758 = "OidbSvcTrpcTcp.0x758_1"
 CMD_FE7 = "OidbSvcTrpcTcp.0xfe7_4"
 CMD_FE1 = "OidbSvcTrpcTcp.0xfe1_8"
+CMD_88D_111 = "OidbSvcTrpcTcp.0x88d_111"
+CMD_11EC = "OidbSvcTrpcTcp.0x11ec_1"
 PACKET_SLEEP = 0.15
 FE7_SLEEP = 0.12
-MIN_CROSS_GROUP_BLOCKS = 2
+FE7_MAX_PAGES = 16
 MEMBERSHIP_RETRY_SEC = 5.0
 MEMBERSHIP_RETRY_INTERVAL = 0.8
 NOT_IN_GROUP_MARKERS = (
@@ -328,58 +330,63 @@ def patch_fe1_token_list(hex_data: str, tokens: list[str]) -> str:
 def open_cross_group_picker(
     capture_dir: Path, target_group_id: int, source_group_id: int
 ) -> PickerSession | None:
-    """Replay one anchored picker session and merge every FE7 RECV token map."""
-    missing = missing_picker_templates(capture_dir)
-    if missing:
-        protocol_log(
-            "PICKER_SESSION",
-            result="missing_templates",
-            missing=",".join(missing),
-        )
-        return None
-    chain = find_cross_group_chain_templates(capture_dir)
-    if not chain:
-        protocol_log("PICKER_SESSION", result="empty_chain")
-        return None
+    """Live picker: built 88d_111 + 11ec + paginated FE7. capture_dir is unused at runtime."""
+    del capture_dir
     token_map: dict[int, str] = {}
     fe7_pages = 0
-    print(f"open cross-group picker ({len(chain)} packets)...")
-    for cmd, tpl in chain:
-        label = cmd.rsplit(".", 1)[-1]
-        stage = "PICKER_FE7"
-        try:
-            if "0x88d_14" in cmd:
-                stage = "PICKER_88D"
-                hex_data = tpl
-            elif "0x88d_111" in cmd:
-                stage = "PICKER_88D"
-                hex_data = patch_88d_111_target(tpl, target_group_id)
-            elif "0x11ec_1" in cmd:
-                stage = "PICKER_11EC"
-                hex_data = patch_group_code_in_hex(tpl, target_group_id)
-            elif "0xfe7_4" in cmd:
-                hex_data = patch_group_code_in_hex(tpl, source_group_id)
-            else:
-                hex_data = tpl
-        except ValueError as exc:
-            protocol_log("PICKER_SESSION", result="patch_failed", cmd=label, err=type(exc).__name__)
-            return None
-        resp = _send_packet(cmd, hex_data, label=label, stage=stage)
+    print("open cross-group picker (live)...")
+    resp = _send_packet(
+        CMD_88D_111,
+        build_88d_111(target_group_id),
+        label="88d_111",
+        stage="PICKER_88D",
+    )
+    if _api_send_failed(resp):
+        protocol_log("PICKER_SESSION", result="send_failed", cmd="0x88d_111")
+        return None
+    time.sleep(PACKET_SLEEP)
+    resp = _send_packet(
+        CMD_11EC,
+        build_11ec_1(target_group_id),
+        label="11ec_1",
+        stage="PICKER_11EC",
+    )
+    if _api_send_failed(resp):
+        protocol_log("PICKER_SESSION", result="send_failed", cmd="0x11ec_1")
+        return None
+    time.sleep(PACKET_SLEEP)
+
+    cursor: bytes | None = None
+    seen_cursors: set[bytes] = set()
+    while fe7_pages < FE7_MAX_PAGES:
+        hx = build_fe7_group_list(source_group_id, page_cursor=cursor)
+        resp = _send_packet(
+            CMD_FE7,
+            hx,
+            label=f"fe7_4 page {fe7_pages + 1}",
+            stage="PICKER_FE7",
+        )
         if _api_send_failed(resp):
-            protocol_log("PICKER_SESSION", result="send_failed", cmd=label)
-            return None
+            if fe7_pages == 0:
+                protocol_log("PICKER_SESSION", result="send_failed", cmd="0xfe7_4")
+                return None
+            break
+        fe7_pages += 1
         rsp = _rsp_hex(resp)
-        if "0xfe7_4" in cmd:
-            fe7_pages += 1
-            if rsp:
-                page_map = parse_fe7_token_map(rsp)
-                token_map.update(page_map)
-                protocol_log(
-                    "PICKER_FE7",
-                    page=fe7_pages,
-                    mapped=len(page_map),
-                    merged=len(token_map),
-                )
+        page_map = parse_fe7_token_map(rsp) if rsp else {}
+        token_map.update(page_map)
+        protocol_log(
+            "PICKER_FE7",
+            page=fe7_pages,
+            mapped=len(page_map),
+            merged=len(token_map),
+        )
+        cursor = extract_fe7_page_cursor(rsp) if rsp else None
+        if not cursor:
+            break
+        if cursor in seen_cursors:
+            break
+        seen_cursors.add(cursor)
         time.sleep(PACKET_SLEEP)
     protocol_log(
         "PICKER_SESSION",
@@ -433,13 +440,9 @@ def send_cross_group_invite(
     tokens = [t for t in (invitee_tokens or []) if t]
     if invitee_token:
         tokens.append(invitee_token)
-    if len(tokens) < MIN_CROSS_GROUP_BLOCKS:
-        protocol_log(
-            "INVITE_758",
-            result="refused_unproven_1block",
-            n=len(tokens),
-        )
-        return False, {"error": "unproven_1block"}
+    if not tokens:
+        protocol_log("INVITE_758", result="no_tokens", n=0)
+        return False, {"error": "no_tokens"}
     pb_hex = build_cross_group_758_pb(
         target_group_id=target_group_id,
         source_group_id=source_group_id,
@@ -578,16 +581,34 @@ def run(cfg: dict | None = None) -> int:
 
     picker = open_cross_group_picker(capture_dir, target_group_id, source_group_id)
     if picker is None:
-        missing = missing_picker_templates(capture_dir)
-        raise RuntimeError(
-            "来源群成员已加载，但跨群邀请凭证未准备成功。"
-            + (f" 缺少抓包: {', '.join(missing)}" if missing else "")
-        )
+        raise RuntimeError("来源群成员已加载，但跨群邀请凭证未准备成功")
 
     invitee_token = picker.token_map.get(int(invitee))
     if not invitee_token:
         raise RuntimeError("当前选择器会话没有返回该成员的邀请凭证")
-    raise RuntimeError("缺少真实成功的单人跨群邀请抓包，未发送邀请")
+    if not sync_fe1_selection(capture_dir, [invitee_token]):
+        raise RuntimeError("跨群选择同步失败，未发送邀请")
+    ok, resp = send_cross_group_invite(
+        target_group_id=target_group_id,
+        source_group_id=source_group_id,
+        invitee_tokens=[invitee_token],
+        capture_dir=capture_dir,
+    )
+    data = _rsp_hex(resp)
+    code, _ = parse_758_recv_status(data) if data else (None, False)
+    protocol_log("INVITE_758", proto_ok=ok, proto_code=code)
+    if not ok:
+        print("failed: 758 返回无法确认邀请成功")
+        return 1
+    present = wait_target_membership(target_group_id, invitee)
+    if present is True:
+        print("ok: invitee is in target group")
+        return 0
+    if present is False:
+        print("failed: 服务器响应已返回，但目标群成员未出现")
+        return 1
+    print("failed: 758 已返回，但无法确认目标群成员")
+    return 1
 
 
 def main() -> int:

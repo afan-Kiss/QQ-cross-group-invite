@@ -17,7 +17,6 @@ def _members(n: int) -> list[SourceMember]:
 
 def _patch_invite(monkeypatch, members):
     monkeypatch.setattr(cgb, "load_source_members", lambda *a, **k: list(members))
-    monkeypatch.setattr(cgb, "missing_picker_templates", lambda *a, **k: [])
     monkeypatch.setattr(
         cgb,
         "open_cross_group_picker",
