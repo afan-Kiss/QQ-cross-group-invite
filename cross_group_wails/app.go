@@ -16,6 +16,7 @@ import (
 
 	"cross_group_wails/internal/applog"
 	"cross_group_wails/internal/config"
+	"cross_group_wails/internal/fanfan"
 	"cross_group_wails/internal/service"
 	"cross_group_wails/internal/tray"
 	"cross_group_wails/internal/window"
@@ -158,6 +159,32 @@ func (a *App) ProbeHealth() service.BootstrapStatus {
 
 func (a *App) ShutdownBackend() {
 	a.sidecar.Shutdown()
+}
+
+func (a *App) PickFanfanDirectory() (string, error) {
+	if a.ctx == nil {
+		return "", nil
+	}
+	return runtime.OpenDirectoryDialog(a.ctx, runtime.OpenDialogOptions{
+		Title: "\u9009\u62e9\u996d\u996d\u5b9a\u5236\u76ee\u5f55",
+	})
+}
+
+func (a *App) DetectFanfan(path string) fanfan.DetectResult {
+	return fanfan.Detect(path)
+}
+
+func (a *App) LaunchFanfan(path string) fanfan.DetectResult {
+	res := fanfan.Detect(path)
+	if !res.PathValid {
+		return res
+	}
+	if err := fanfan.Launch(path); err != nil {
+		res.Message = "\u542f\u52a8\u5931\u8d25\uff1a" + err.Error()
+		return res
+	}
+	res.Message = "\u5df2\u53d1\u51fa\u542f\u52a8\u547d\u4ee4"
+	return res
 }
 
 func (a *App) OpenLogsDir() error {

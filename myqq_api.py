@@ -326,7 +326,7 @@ def napcat_webui_login(
         auth_url = base + "/auth/login"
         debug_url = base + "/Debug/call"
     if not tok:
-        raise RuntimeError("missing NapCat WebUI token (config.json napcat_webui_token)")
+        raise RuntimeError("缺少饭饭定制 Token（请在设置中填写）")
     pwd_hash = hashlib.sha256((tok + ".napcat").encode()).hexdigest()
     req = urllib.request.Request(
         auth_url,
@@ -337,10 +337,10 @@ def napcat_webui_login(
     with urllib.request.urlopen(req, timeout=timeout) as r:
         obj = json.loads(r.read().decode("utf-8", errors="replace"))
     if obj.get("code") != 0:
-        raise RuntimeError(f"NapCat WebUI login failed: code={obj.get('code')}")
+        raise RuntimeError(f"饭饭定制登录失败: code={obj.get('code')}")
     cred = obj.get("data", {}).get("Credential")
     if not cred:
-        raise RuntimeError("NapCat WebUI login response missing Credential")
+        raise RuntimeError("饭饭定制登录响应无效")
     napcat_webui_login._cache = {cache_key: {"cred": str(cred), "debug_url": debug_url}}  # type: ignore[attr-defined]
     napcat_webui_login._debug_url = debug_url  # type: ignore[attr-defined]
     return str(cred)

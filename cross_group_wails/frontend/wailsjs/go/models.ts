@@ -1,3 +1,28 @@
+export namespace fanfan {
+	
+	export class DetectResult {
+	    resolvedPath: string;
+	    pathValid: boolean;
+	    pathKind: string;
+	    message: string;
+	    processRunning: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new DetectResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.resolvedPath = source["resolvedPath"];
+	        this.pathValid = source["pathValid"];
+	        this.pathKind = source["pathKind"];
+	        this.message = source["message"];
+	        this.processRunning = source["processRunning"];
+	    }
+	}
+
+}
+
 export namespace main {
 	
 	export class AppInfo {

@@ -9,6 +9,9 @@ type WailsApp = {
   ExportLogs?: (content: string) => Promise<string>;
   SaveFileDialog?: (defaultFilename: string) => Promise<string>;
   RunDiagnostics?: () => Promise<DiagnosticItemRaw[]>;
+  PickFanfanDirectory?: () => Promise<string>;
+  DetectFanfan?: (path: string) => Promise<FanfanDetectRaw>;
+  LaunchFanfan?: (path: string) => Promise<FanfanDetectRaw>;
 };
 
 type BootstrapStatusRaw = {
@@ -38,6 +41,14 @@ type DiagnosticItemRaw = {
   ok: boolean;
 };
 
+export type FanfanDetectRaw = {
+  resolvedPath: string;
+  pathValid: boolean;
+  pathKind: string;
+  message: string;
+  processRunning: boolean;
+};
+
 const NOT_IN_WAILS = "\u5f53\u524d\u672a\u8fd0\u884c\u5728 Wails \u684c\u9762\u73af\u5883\u4e2d";
 
 function mapBootstrap(raw: BootstrapStatusRaw): BootstrapStatus {
@@ -54,7 +65,7 @@ function mapBootstrap(raw: BootstrapStatusRaw): BootstrapStatus {
 
   let message = raw.message;
   if (message === "service ready") message = "\u670d\u52a1\u5df2\u5c31\u7eea";
-  else if (message === "service started, waiting for NapCat...")
+  else if (message === "service started, waiting for NapCat..." || message === "service started, waiting for 饭饭定制...")
     message = "\u670d\u52a1\u5df2\u542f\u52a8\uff0c\u6b63\u5728\u7b49\u5f85\u996d\u996d\u5b9a\u5236...";
   else if (message === "connecting to local service...") message = "\u6b63\u5728\u8fde\u63a5\u672c\u5730\u670d\u52a1...";
   else if (message === "starting local service...") message = "\u6b63\u5728\u542f\u52a8\u672c\u5730\u670d\u52a1...";
@@ -127,5 +138,23 @@ export const wailsBridge = {
     const app = getApp();
     if (!app?.RunDiagnostics) throw new Error(NOT_IN_WAILS);
     return app.RunDiagnostics();
+  },
+
+  async pickFanfanDirectory(): Promise<string> {
+    const app = getApp();
+    if (!app?.PickFanfanDirectory) throw new Error(NOT_IN_WAILS);
+    return (await app.PickFanfanDirectory()) || "";
+  },
+
+  async detectFanfan(path: string): Promise<FanfanDetectRaw> {
+    const app = getApp();
+    if (!app?.DetectFanfan) throw new Error(NOT_IN_WAILS);
+    return app.DetectFanfan(path);
+  },
+
+  async launchFanfan(path: string): Promise<FanfanDetectRaw> {
+    const app = getApp();
+    if (!app?.LaunchFanfan) throw new Error(NOT_IN_WAILS);
+    return app.LaunchFanfan(path);
   },
 };

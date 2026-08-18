@@ -16,6 +16,7 @@ export interface AppSettings {
   serviceAddress: string;
   onebotUrl: string;
   napcatWebuiToken: string;
+  fanfanPath: string;
 }
 
 const defaults: AppSettings = {
@@ -34,6 +35,7 @@ const defaults: AppSettings = {
   serviceAddress: "127.0.0.1:17888",
   onebotUrl: "http://127.0.0.1:3000",
   napcatWebuiToken: "",
+  fanfanPath: "",
 };
 
 interface SettingsStore {

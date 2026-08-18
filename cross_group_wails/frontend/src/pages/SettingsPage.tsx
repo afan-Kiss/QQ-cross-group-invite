@@ -16,6 +16,9 @@ export function SettingsPage() {
   const napcatOnline = useServiceStore((s) => s.napcatOnline);
   const ensureBackend = useServiceStore((s) => s.ensureBackend);
   const setConfig = useInviteStore((s) => s.setConfig);
+  const [fanfanBusy, setFanfanBusy] = useState(false);
+  const [fanfanMsg, setFanfanMsg] = useState("");
+  const [fanfanRunning, setFanfanRunning] = useState(false);
   const [diagnosing, setDiagnosing] = useState(false);
   const [testing, setTesting] = useState(false);
   const [diag, setDiag] = useState<Array<{ label: string; value: string; ok?: boolean }> | null>(null);
@@ -136,6 +139,59 @@ export function SettingsPage() {
     }
   };
 
+  const applyFanfan = (raw: { resolvedPath?: string; pathValid?: boolean; message?: string; processRunning?: boolean }) => {
+    if (raw.resolvedPath && raw.pathValid) {
+      update({ fanfanPath: raw.resolvedPath });
+      persistSettings({ ...settings, fanfanPath: raw.resolvedPath });
+    }
+    setFanfanMsg(raw.message || "");
+    setFanfanRunning(!!raw.processRunning);
+  };
+
+  const pickFanfan = async () => {
+    setFanfanBusy(true);
+    try {
+      const dir = await wailsBridge.pickFanfanDirectory();
+      if (!dir) return;
+      update({ fanfanPath: dir });
+      persistSettings({ ...settings, fanfanPath: dir });
+      applyFanfan(await wailsBridge.detectFanfan(dir));
+    } catch (e) {
+      toast("error", e instanceof Error ? e.message : "选择目录失败");
+    } finally {
+      setFanfanBusy(false);
+    }
+  };
+
+  const detectFanfan = async () => {
+    setFanfanBusy(true);
+    try {
+      applyFanfan(await wailsBridge.detectFanfan(settings.fanfanPath));
+    } catch (e) {
+      toast("error", e instanceof Error ? e.message : "检测失败");
+    } finally {
+      setFanfanBusy(false);
+    }
+  };
+
+  const launchFanfan = async () => {
+    if (!settings.fanfanPath) {
+      toast("warning", "请先选择饭饭定制目录");
+      return;
+    }
+    setFanfanBusy(true);
+    try {
+      const raw = await wailsBridge.launchFanfan(settings.fanfanPath);
+      applyFanfan(raw);
+      if (raw.pathValid) toast("success", raw.message || "已启动");
+      else toast("error", raw.message || "启动失败");
+    } catch (e) {
+      toast("error", e instanceof Error ? e.message : "启动失败");
+    } finally {
+      setFanfanBusy(false);
+    }
+  };
+
   return (
     <div className="flex h-full min-h-0 flex-col gap-4 overflow-auto">
       <div>
@@ -202,6 +258,47 @@ export function SettingsPage() {
             <p className="mt-1">{napcatOnline ? "在线" : "离线"} · 本地服务 {localService}</p>
           </div>
           <Field label="OneBot 地址" value={settings.onebotUrl} onChange={(v) => update({ onebotUrl: v })} />
+          <div className="text-[13px]">
+            <span className="text-muted-foreground">饭饭定制路径</span>
+            <div className="mt-1 flex gap-2">
+              <input
+                value={settings.fanfanPath}
+                onChange={(e) => update({ fanfanPath: e.target.value })}
+                placeholder="选择饭饭定制安装目录"
+                className="w-full rounded-[8px] border border-border px-3 py-2 text-[13px] outline-none focus:border-primary"
+              />
+              <button
+                type="button"
+                disabled={fanfanBusy}
+                onClick={() => void pickFanfan()}
+                className="shrink-0 rounded-[10px] border border-border px-3 py-2 text-[13px] hover:bg-[#f7faf5] disabled:opacity-50"
+              >
+                浏览
+              </button>
+            </div>
+            <p className="mt-1 text-[12px] text-muted-foreground">
+              {fanfanRunning ? "进程：运行中" : "进程：未运行"}
+              {fanfanMsg ? ` · ${fanfanMsg}` : ""}
+            </p>
+            <div className="mt-2 flex gap-2">
+              <button
+                type="button"
+                disabled={fanfanBusy}
+                onClick={() => void detectFanfan()}
+                className="rounded-[10px] border border-border px-4 py-2 text-[13px] hover:bg-[#f7faf5] disabled:opacity-50"
+              >
+                {fanfanBusy ? "处理中..." : "检测"}
+              </button>
+              <button
+                type="button"
+                disabled={fanfanBusy}
+                onClick={() => void launchFanfan()}
+                className="rounded-[10px] bg-primary px-4 py-2 text-[13px] text-white hover:bg-primary-hover disabled:opacity-50"
+              >
+                启动饭饭定制
+              </button>
+            </div>
+          </div>
           <div className="text-[13px]">
             <span className="text-muted-foreground">饭饭定制 Token</span>
             <input

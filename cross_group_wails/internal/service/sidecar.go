@@ -69,7 +69,7 @@ func classifyReadyService(startedByUs bool, session string, result HealthResult)
 	if owned {
 		msg := "service ready"
 		if !result.NapcatOnline {
-			msg = "service started, waiting for NapCat..."
+			msg = "service started, waiting for 饭饭定制..."
 		}
 		return withBackendIdentity(BootstrapStatus{
 			LocalService:  "ready",
@@ -84,7 +84,7 @@ func classifyReadyService(startedByUs bool, session string, result HealthResult)
 	if !result.SessionRequired {
 		msg := "service ready"
 		if !result.NapcatOnline {
-			msg = "service started, waiting for NapCat..."
+			msg = "service started, waiting for 饭饭定制..."
 		}
 		return withBackendIdentity(BootstrapStatus{
 			LocalService:  "ready",

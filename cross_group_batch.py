@@ -648,7 +648,7 @@ def load_source_members(
         if token_map:
             log("实时拉不到成员，已从抓包记录恢复")
         else:
-            log("拉取成员列表失败，请确认群号正确且 NapCat 在线")
+            log("拉取成员列表失败，请确认群号正确且饭饭定制在线")
     ob_list = _onebot_members(source_group_id)
     by_qq: dict[int, SourceMember] = {}
 

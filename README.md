@@ -116,7 +116,7 @@ cross_group_wails\build\bin\
 
 ## NapCat 依赖
 
-- 加载成员 / 开始邀请需要 NapCat 在线
+- 加载成员 / 开始邀请需要饭饭定制在线
 - “测试连接”会验证 OneBot 登录身份与 WebUI Token（不写入正式配置）
 - NapCat 离线不阻塞窗口进入 Dashboard，仅禁用相关操作
 
