@@ -30,10 +30,7 @@ export function MemberContextMenu({ x, y, member, onClose }: Props) {
     };
   }, [onClose]);
 
-  const canQueue =
-    member.status === "waiting" ||
-    member.status === "failed" ||
-    member.status === "rate_limited";
+  const canQueue = member.status === "waiting";
 
   const items: Array<{
     label: string;

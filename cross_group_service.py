@@ -421,7 +421,14 @@ class Handler(BaseHTTPRequestHandler):
                     _json_response(self, code, body)
                     return
                 source = _validate_group_id(data.get("source_group_id") or 0, "来源群号")
-                filter_staff = bool(data.get("filter_staff", True))
+                if "filter_staff" in data:
+                    if not isinstance(data.get("filter_staff"), bool):
+                        code, body = _error("INVALID_ARGUMENT", "filter_staff must be boolean")
+                        _json_response(self, code, body)
+                        return
+                    filter_staff = bool(data.get("filter_staff"))
+                else:
+                    filter_staff = True
                 members = load_source_members(
                     source, filter_staff=filter_staff, record_logs=False
                 )
