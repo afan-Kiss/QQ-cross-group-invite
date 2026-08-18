@@ -109,3 +109,10 @@ func MustFocusOrExit() {
 		os.Exit(1)
 	}
 }
+
+func ReleaseSingleInstance() {
+	if instanceMutex != 0 {
+		_ = windows.CloseHandle(instanceMutex)
+		instanceMutex = 0
+	}
+}

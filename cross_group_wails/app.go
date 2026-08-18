@@ -2,12 +2,14 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	goruntime "runtime"
 	"strconv"
 	"strings"
+	"sync/atomic"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"golang.org/x/sys/windows/registry"
@@ -15,6 +17,7 @@ import (
 	"cross_group_wails/internal/applog"
 	"cross_group_wails/internal/config"
 	"cross_group_wails/internal/service"
+	"cross_group_wails/internal/tray"
 	"cross_group_wails/internal/window"
 )
 
@@ -40,8 +43,9 @@ type DiagnosticItem struct {
 }
 
 type App struct {
-	ctx     context.Context
-	sidecar *service.Manager
+	ctx      context.Context
+	sidecar  *service.Manager
+	quitting atomic.Bool
 }
 
 func NewApp() *App {
@@ -55,7 +59,12 @@ func (a *App) startup(ctx context.Context) {
 	applog.Init()
 	applog.Info("app startup")
 	window.StartFocusListener(func() {
-		window.FocusMain(a.ctx)
+		a.ShowMainWindow()
+	})
+	tray.Start(tray.Hooks{
+		OnShow:    a.ShowMainWindow,
+		OnRestart: a.RestartApp,
+		OnQuit:    a.QuitApp,
 	})
 }
 
@@ -63,10 +72,80 @@ func (a *App) domReady(ctx context.Context) {
 	a.ctx = ctx
 }
 
-func (a *App) beforeClose(ctx context.Context) bool {
-	applog.Info("app beforeClose: shutting down sidecar if owned")
+func (a *App) beforeClose(ctx context.Context) (prevent bool) {
+	if a.quitting.Load() {
+		applog.Info("app beforeClose: quitting, shutting down sidecar if owned")
+		a.sidecar.Shutdown()
+		return false
+	}
+	applog.Info("app beforeClose: hide to tray")
+	runtime.WindowHide(ctx)
+	return true
+}
+
+// ShowMainWindow brings the main window to the foreground.
+func (a *App) ShowMainWindow() {
+	if a.ctx == nil {
+		return
+	}
+	runtime.WindowUnminimise(a.ctx)
+	runtime.WindowShow(a.ctx)
+	window.FocusMain(a.ctx)
+}
+
+// HideToTray hides the main window; the app keeps running in the tray.
+func (a *App) HideToTray() {
+	if a.ctx == nil {
+		return
+	}
+	runtime.WindowHide(a.ctx)
+}
+
+// QuitApp fully exits the application (tray "退出").
+func (a *App) QuitApp() {
+	if !a.quitting.CompareAndSwap(false, true) {
+		return
+	}
+	applog.Info("quit from tray/request")
 	a.sidecar.Shutdown()
-	return false
+	tray.Quit()
+	if a.ctx != nil {
+		runtime.Quit(a.ctx)
+	}
+}
+
+// RestartApp relaunches this executable after a short delay, then quits.
+func (a *App) RestartApp() {
+	if !a.quitting.CompareAndSwap(false, true) {
+		return
+	}
+	applog.Info("restart requested")
+	a.sidecar.Shutdown()
+	tray.Quit()
+	window.ReleaseSingleInstance()
+
+	exe, err := os.Executable()
+	if err != nil {
+		applog.Error("restart: executable path: %v", err)
+		if a.ctx != nil {
+			runtime.Quit(a.ctx)
+		}
+		return
+	}
+	exe, _ = filepath.Abs(exe)
+	// Detach a delayed start so the new process starts after this instance exits.
+	script := fmt.Sprintf(
+		"Start-Sleep -Milliseconds 800; Start-Process -FilePath '%s' -WorkingDirectory '%s'",
+		strings.ReplaceAll(exe, "'", "''"),
+		strings.ReplaceAll(filepath.Dir(exe), "'", "''"),
+	)
+	cmd := exec.Command("powershell", "-NoProfile", "-WindowStyle", "Hidden", "-Command", script)
+	if err := cmd.Start(); err != nil {
+		applog.Error("restart: start failed: %v", err)
+	}
+	if a.ctx != nil {
+		runtime.Quit(a.ctx)
+	}
 }
 
 func (a *App) EnsureBackend() service.BootstrapStatus {

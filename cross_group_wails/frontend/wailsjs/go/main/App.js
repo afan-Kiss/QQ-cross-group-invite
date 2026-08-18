@@ -14,6 +14,10 @@ export function GetAppInfo() {
   return window['go']['main']['App']['GetAppInfo']();
 }
 
+export function HideToTray() {
+  return window['go']['main']['App']['HideToTray']();
+}
+
 export function OpenLogsDir() {
   return window['go']['main']['App']['OpenLogsDir']();
 }
@@ -22,12 +26,24 @@ export function ProbeHealth() {
   return window['go']['main']['App']['ProbeHealth']();
 }
 
+export function QuitApp() {
+  return window['go']['main']['App']['QuitApp']();
+}
+
+export function RestartApp() {
+  return window['go']['main']['App']['RestartApp']();
+}
+
 export function RunDiagnostics() {
   return window['go']['main']['App']['RunDiagnostics']();
 }
 
 export function SaveFileDialog(arg1) {
   return window['go']['main']['App']['SaveFileDialog'](arg1);
+}
+
+export function ShowMainWindow() {
+  return window['go']['main']['App']['ShowMainWindow']();
 }
 
 export function ShutdownBackend() {

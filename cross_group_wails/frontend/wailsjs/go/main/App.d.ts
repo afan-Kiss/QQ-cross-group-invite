@@ -9,12 +9,20 @@ export function ExportLogs(arg1:string):Promise<string>;
 
 export function GetAppInfo():Promise<main.AppInfo>;
 
+export function HideToTray():Promise<void>;
+
 export function OpenLogsDir():Promise<void>;
 
 export function ProbeHealth():Promise<service.BootstrapStatus>;
 
+export function QuitApp():Promise<void>;
+
+export function RestartApp():Promise<void>;
+
 export function RunDiagnostics():Promise<Array<main.DiagnosticItem>>;
 
 export function SaveFileDialog(arg1:string):Promise<string>;
+
+export function ShowMainWindow():Promise<void>;
 
 export function ShutdownBackend():Promise<void>;

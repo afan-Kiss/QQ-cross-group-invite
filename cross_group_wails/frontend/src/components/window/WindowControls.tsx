@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Quit, WindowMinimise } from "../../../wailsjs/runtime/runtime";
+import { WindowHide, WindowMinimise } from "../../../wailsjs/runtime/runtime";
 import { subscribeMaximized, toggleMaximized } from "@/lib/window-state";
 
 export function WindowControls() {
@@ -7,12 +7,9 @@ export function WindowControls() {
 
   useEffect(() => subscribeMaximized(setMaximized), []);
 
-  const handleClose = async () => {
-    const w = window as Window & { go?: { main?: { App?: { ShutdownBackend: () => Promise<void> } } } };
-    if (w.go?.main?.App) {
-      await w.go.main.App.ShutdownBackend();
-    }
-    await Quit();
+  const handleClose = () => {
+    // Close to tray; full exit is via tray menu "退出".
+    void WindowHide();
   };
 
   return (
