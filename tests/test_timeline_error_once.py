@@ -10,7 +10,7 @@ def test_timeline_error_once(monkeypatch, patch_network):
     def boom(*_a, **_k):
         raise RuntimeError("only-once-error")
 
-    monkeypatch.setattr(cgb, "query_source_context_token", boom)
+    monkeypatch.setattr(cgb, "open_cross_group_picker", boom)
 
     cgb.start_batch(
         target_group_id=200,

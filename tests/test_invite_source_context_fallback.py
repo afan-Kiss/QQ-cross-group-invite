@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import cross_group_batch as cgb
@@ -8,15 +9,18 @@ from cross_group_batch import MembersCacheSnapshot
 import pull_cross_group as pcg
 from tests.conftest import wait_not_running
 
+FIXTURE = Path(__file__).resolve().parent / "fixtures" / "cross_group_758_95b.json"
 
-def test_open_picker_falls_back_to_live_source_fe7(monkeypatch):
+
+def test_open_picker_returns_none_without_chain(monkeypatch):
+    monkeypatch.setattr(pcg, "missing_picker_templates", lambda *_a, **_k: ["0x88d_111(48B)"])
     monkeypatch.setattr(pcg, "find_cross_group_chain_templates", lambda *_a, **_k: [])
     monkeypatch.setattr(
         pcg,
         "probe_source_group_fe7",
         lambda *_a, **_k: ({10001: "tok-a"}, "u_groupctx", "fe7rsp"),
     )
-    assert pcg.open_cross_group_picker(Path("."), 200, 100) == "fe7rsp"
+    assert pcg.open_cross_group_picker(Path("."), 200, 100) is None
 
 
 def test_query_context_token_falls_back_to_live(monkeypatch):
@@ -26,21 +30,19 @@ def test_query_context_token_falls_back_to_live(monkeypatch):
     assert pcg.query_source_context_token(Path("."), 100, live_rsp=None) == "u_live"
 
 
-def test_invite_survives_missing_picker_chain(monkeypatch, sample_members):
-    invited: list[str] = []
-
-    def capture_invite(**kwargs):
-        invited.append(kwargs["context_token"])
-        return True, None, ""
-
+def test_invite_errors_when_picker_chain_missing(monkeypatch, sample_members):
     monkeypatch.setattr(
-        cgb,
-        "open_cross_group_picker",
-        lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("no picker chain")),
+        cgb, "missing_picker_templates", lambda *_a, **_k: ["0x88d_111(48B)"]
     )
-    monkeypatch.setattr(cgb, "query_source_context_token", lambda *_a, **_k: "")
+    monkeypatch.setattr(cgb, "open_cross_group_picker", lambda *_a, **_k: "should-not-run")
     monkeypatch.setattr(cgb, "token_owner_safe", lambda *_a, **_k: True)
     monkeypatch.setattr(cgb, "query_invitee_token", lambda *_a, **_k: "")
+    invited: list[int] = []
+
+    def capture_invite(**kwargs):
+        invited.append(kwargs["member"].qq)
+        return True, None, ""
+
     monkeypatch.setattr(cgb, "_invite_one", capture_invite)
 
     eligible = tuple(m for m in sample_members if m.eligible)
@@ -63,12 +65,12 @@ def test_invite_survives_missing_picker_chain(monkeypatch, sample_members):
     )
     assert wait_not_running(timeout=2.0)
     st = cgb.get_state()
-    assert st["status"] != "error"
-    assert invited == ["u_cached_ctx"]
-    assert st["success"] == 1
+    assert st["status"] == "error"
+    assert invited == []
+    assert "\u6765\u6e90\u7fa4\u6210\u5458\u5df2\u52a0\u8f7d\uff0c\u4f46\u8de8\u7fa4\u9080\u8bf7\u51ed\u8bc1\u672a\u51c6\u5907\u6210\u529f" in (st["message"] or "")
 
 
-def test_find_cross_group_chain_keeps_partial_templates(monkeypatch):
+def test_find_cross_group_chain_rejects_partial_templates(monkeypatch):
     def fake_template(_cap, cmd_marker, data_len, **_k):
         if cmd_marker == "0xfe7_4":
             return "aa" * max(int(data_len), 96)
@@ -79,8 +81,7 @@ def test_find_cross_group_chain_keeps_partial_templates(monkeypatch):
     monkeypatch.setattr(cu, "find_packet_template", fake_template)
     monkeypatch.setattr(cu, "find_fe7_pagination_templates_generic", lambda *_a, **_k: [])
     chain = cu.find_cross_group_chain_templates(Path("."))
-    assert chain
-    assert any("0xfe7_4" in cmd for cmd, _ in chain)
+    assert chain == []
 
 
 def test_build_fe7_group_list_matches_ui_capture():
@@ -95,18 +96,29 @@ def test_build_fe7_group_list_matches_ui_capture():
     )
 
 
-def test_extract_group_token_prefers_unpaired_uid():
+def _fe7_mapped(token: bytes, uin: int) -> bytes:
     from pb_utils import encode_field_bytes, encode_field_varint
+
+    return encode_field_bytes(2, token) + encode_field_varint(4, uin)
+
+
+def test_extract_group_token_prefers_unpaired_uid():
+    from pb_utils import encode_field_bytes
     import capture_utils as cu
 
     member = b"u_YJrHKtJ-EiYl6tj29EEe_Q"
     extra = b"u_L-kmmxaZHCAk0kDNlBp6Jg"
-    payload = (
-        encode_field_bytes(2, member)
-        + encode_field_varint(4, 86943)
-        + encode_field_bytes(2, extra)
-    )
+    payload = _fe7_mapped(member, 86943) + encode_field_bytes(2, extra)
     assert cu.extract_group_token_from_fe7(payload.hex(), 1009406709) == extra.decode()
+
+
+def test_extract_group_token_member_only_is_none():
+    import capture_utils as cu
+
+    member = b"u_YJrHKtJ-EiYl6tj29EEe_Q"
+    payload = _fe7_mapped(member, 86943)
+    assert cu.parse_fe7_token_map(payload.hex()) == {86943: member.decode()}
+    assert cu.extract_group_token_from_fe7(payload.hex(), 1009406709) is None
 
 
 def test_probe_uses_built_list_when_capture_empty(monkeypatch, tmp_path):
@@ -122,5 +134,119 @@ def test_probe_uses_built_list_when_capture_empty(monkeypatch, tmp_path):
     tokens, ctx, rsp = pcg.probe_source_group_fe7(tmp_path, 1009406709)
     assert sent
     assert len(bytes.fromhex(sent[0])) == 96
-    assert ctx
+    assert ctx == ""
     assert rsp
+
+
+def test_response_ok_rejects_large_unparseable_body():
+    blob = "ab" * 220
+    assert pcg._response_ok({"code": 0, "data": blob}) is False
+    assert pcg._response_ok({"code": 0, "data": "0800"}) is False
+    ok_hex = (
+        __import__("pb_utils").encode_field_varint(1, 0)
+        + __import__("pb_utils").encode_field_varint(3, 0)
+    ).hex()
+    assert pcg._response_ok({"code": 0, "data": ok_hex}) is True
+    fail_hex = __import__("pb_utils").encode_field_varint(3, 1289).hex()
+    assert pcg._response_ok({"code": 0, "data": fail_hex}) is False
+
+
+def test_describe_token_never_includes_raw_value():
+    from pb_utils import describe_token, ParsedPacket
+
+    raw = "u_REDACTaAAAAAAAAAAAAAAA"
+    text = describe_token(raw)
+    assert raw not in text
+    assert "token_present=true" in text
+    pkt = ParsedPacket(cmd="OidbSvcTrpcTcp.0x758_1", pb_hex="00", invite_token=raw)
+    joined = "\n".join(pkt.summary_lines())
+    assert raw not in joined
+
+
+def test_golden_758_95b_matches_builder():
+    from pb_utils import (
+        build_cross_group_758_pb,
+        extract_field_bytes,
+        parse_cross_group_758_entries,
+        patch_cross_group_758_pb,
+    )
+
+    fixture = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    hx = fixture["pb_hex"]
+    assert len(bytes.fromhex(hx)) == 95
+    assert len(bytes.fromhex(hx)) == fixture["send_len"]
+    toks = fixture["invitee_tokens"]
+    assert len(toks) == 2
+    assert len(toks[0]) == len(toks[1]) == 24
+    built = build_cross_group_758_pb(
+        target_group_id=fixture["target_group_id"],
+        source_group_id=fixture["source_group_id"],
+        invitee_tokens=toks,
+    )
+    assert built == hx
+    body = extract_field_bytes(bytes.fromhex(hx), 4)
+    target, source, tokens = parse_cross_group_758_entries(body)
+    assert target == fixture["target_group_id"]
+    assert source == fixture["source_group_id"]
+    assert tokens == toks
+    rebuilt = patch_cross_group_758_pb(
+        "deadbeef",
+        target_group_id=fixture["target_group_id"],
+        source_group_id=fixture["source_group_id"],
+        invitee_token="",
+        invitee_tokens=toks,
+    )
+    assert rebuilt == hx
+
+
+def test_builder_six_invitees_is_232_bytes():
+    from pb_utils import build_cross_group_758_pb, extract_field_bytes, parse_cross_group_758_entries
+
+    toks = [f"u_REDACT{i:02d}AAAAAAAAAAAAAA" for i in range(6)]
+    assert all(len(t) == 24 for t in toks)
+    hx = build_cross_group_758_pb(
+        target_group_id=1111111111,
+        source_group_id=2222222222,
+        invitee_tokens=toks,
+    )
+    assert len(bytes.fromhex(hx)) == 232
+    _t, _s, parsed = parse_cross_group_758_entries(extract_field_bytes(bytes.fromhex(hx), 4))
+    assert parsed == toks
+
+
+def test_88d_111_patches_nested_target_not_outer():
+    from pb_utils import encode_pb_message, extract_field_bytes, read_varint
+    import capture_utils as cu
+
+    outer = 537099973
+    nested = 1111111111
+    body = encode_pb_message({1: [outer], 2: [{1: [nested]}]})
+    top = encode_pb_message({1: [0x88d], 2: [111], 4: [body]})
+    hx = top.hex()
+    assert cu.nested_group_in_88d_111(hx) == nested
+    patched = cu.patch_88d_111_target(hx, 1222222222)
+    assert cu.nested_group_in_88d_111(patched) == 1222222222
+    new_body = extract_field_bytes(bytes.fromhex(patched), 4)
+    assert new_body is not None
+    assert new_body[0] == 0x08
+    val, _ = read_varint(new_body, 1)
+    assert val == outer
+
+
+def test_invite_one_requires_target_membership(monkeypatch, sample_members):
+    monkeypatch.setattr(cgb, "sync_fe1_selection", lambda *_a, **_k: True)
+    monkeypatch.setattr(
+        cgb,
+        "send_cross_group_invite",
+        lambda **_k: (True, {"code": 0, "data": "1800"}),
+    )
+    monkeypatch.setattr(cgb, "target_group_has_member", lambda *_a, **_k: False)
+    monkeypatch.setattr(cgb.time, "sleep", lambda *_a, **_k: None)
+    ok, _code, msg = cgb._invite_one(
+        target_group_id=200,
+        source_group_id=100,
+        member=sample_members[0],
+        capture_dir=Path("."),
+    )
+    assert ok is False
+    assert msg == "\u670d\u52a1\u5668\u54cd\u5e94\u5df2\u8fd4\u56de\uff0c\u4f46\u76ee\u6807\u7fa4\u6210\u5458\u672a\u51fa\u73b0"

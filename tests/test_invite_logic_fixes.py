@@ -47,9 +47,6 @@ def test_mismatched_token_fails_without_invite(monkeypatch, patch_network):
     )
     with cgb._members_lock:
         cgb._members_snapshot = snap
-    monkeypatch.setattr(
-        cgb, "query_source_context_token", lambda *_a, **_k: "ctx-token"
-    )
 
     cgb.start_batch(
         target_group_id=200,

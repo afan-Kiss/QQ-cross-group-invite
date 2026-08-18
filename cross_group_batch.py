@@ -24,13 +24,14 @@ from myqq_api import load_cfg, onebot_action
 from pb_utils import parse_758_recv_status
 from pull_cross_group import (
     _rsp_hex,
+    missing_picker_templates,
     open_cross_group_picker,
     probe_source_group_fe7,
     query_invitee_token,
-    query_source_context_token,
     resolve_capture_dir,
     send_cross_group_invite,
     sync_fe1_selection,
+    target_group_has_member,
 )
 
 RATE_BUCKET_SEC = 5
@@ -774,24 +775,34 @@ def _invite_one(
     *,
     target_group_id: int,
     source_group_id: int,
-    context_token: str,
     member: SourceMember,
     capture_dir,
+    context_token: str = "",
 ) -> tuple[bool, int | None, str]:
-    sync_fe1_selection(capture_dir, [context_token, member.token])
+    del context_token
+    sync_fe1_selection(capture_dir, [member.token])
     ok, resp = send_cross_group_invite(
         target_group_id=target_group_id,
         source_group_id=source_group_id,
-        source_context_token=context_token,
         invitee_token=member.token,
         capture_dir=capture_dir,
     )
     rsp_hex = _rsp_hex(resp)
     code, _ = parse_758_recv_status(rsp_hex) if rsp_hex else (None, False)
     msg = _extract_error_text(rsp_hex)
-    if not ok and not msg and isinstance(resp, dict):
-        msg = str(resp.get("message") or resp.get("wording") or "")
-    return ok, code, msg
+    if not ok:
+        if not msg and isinstance(resp, dict):
+            msg = str(resp.get("message") or resp.get("wording") or "")
+        if not msg and code is None:
+            msg = "758 返回无法确认邀请成功"
+        return False, code, msg
+    time.sleep(0.8)
+    present = target_group_has_member(target_group_id, member.qq)
+    if present is True:
+        return True, code, ""
+    if present is False:
+        return False, code, "服务器响应已返回，但目标群成员未出现"
+    return False, code, "758 已返回，但无法确认目标群成员"
 
 
 def _update_result(qq: int, **fields: Any) -> None:
@@ -988,20 +999,15 @@ def start_batch(
                 raise RuntimeError("没有可邀请成员")
 
             _log("正在准备跨群邀请...")
-            live_fe7 = None
-            try:
-                live_fe7 = open_cross_group_picker(cap, target_group_id, source_group_id)
-            except Exception as exc:
-                _log(f"邀请面板准备失败，改用来源群实时信息: {exc}")
-            context_token = query_source_context_token(
-                cap, source_group_id, live_rsp=live_fe7
-            )
-            if not context_token and snap is not None:
-                context_token = snap.context_token
-            if not context_token:
+            missing = missing_picker_templates(cap)
+            if missing:
                 raise RuntimeError(
-                    "来源群成员已经能加载，但还拿不到邀请凭证。"
-                    "请确认饭饭定制在线后重新加载成员再试。"
+                    "来源群成员已加载，但跨群邀请凭证未准备成功"
+                )
+            picker = open_cross_group_picker(cap, target_group_id, source_group_id)
+            if not picker:
+                raise RuntimeError(
+                    "来源群成员已加载，但跨群邀请凭证未准备成功"
                 )
 
             for idx, member in enumerate(invite_members):
@@ -1046,20 +1052,10 @@ def start_batch(
                         started_at=started_at,
                     )
                     _log(f"失败 {member.nickname}({member.qq}): {reason}")
-                elif context_token == token:
-                    reason = "来源群和这个人对不上，请重新加载成员后再试"
-                    _finish_member(
-                        member,
-                        status=InviteResultStatus.FAILED,
-                        reason=reason,
-                        started_at=started_at,
-                    )
-                    _log(f"失败 {member.nickname}({member.qq}): {reason}")
                 else:
                     ok, code, msg = _invite_one(
                         target_group_id=target_group_id,
                         source_group_id=source_group_id,
-                        context_token=context_token,
                         member=member,
                         capture_dir=cap,
                     )

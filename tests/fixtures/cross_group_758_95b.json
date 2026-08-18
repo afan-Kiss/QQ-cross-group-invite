@@ -1,0 +1,11 @@
+{
+  "note": "Synthetic 95-byte 0x758_1 SEND. Token strings and group ids are fake; wire lengths match UI captures (24-char u_ tokens, 5-byte group varints).",
+  "send_len": 95,
+  "target_group_id": 1111111111,
+  "source_group_id": 2222222222,
+  "invitee_tokens": [
+    "u_REDACTaAAAAAAAAAAAAAAA",
+    "u_REDACTbAAAAAAAAAAAAAAA"
+  ],
+  "pb_hex": "08d80e1001225608c7ebe8910412200a18755f52454441435461414141414141414141414141414141108ed7d1a30812200a18755f52454441435462414141414141414141414141414141108ed7d1a3081a00200028003200380050006000"
+}

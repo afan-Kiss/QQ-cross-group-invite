@@ -6,6 +6,7 @@ import hashlib
 import threading
 import json
 import os
+import re
 import shutil
 import socket
 import sys
@@ -41,6 +42,23 @@ def cfg_path() -> Path:
 
 
 CFG_PATH = cfg_path()
+
+_U_TOKEN_RE = re.compile(r"u_[A-Za-z0-9_-]{16,}")
+
+
+def _redact_packet_error(text: str) -> str:
+    """Strip member tokens and WebUI credentials from API error text."""
+    if not text:
+        return text
+    out = _U_TOKEN_RE.sub("u_[redacted]", text)
+    out = re.sub(
+        r'(?i)"Credential"\s*:\s*"[^"]*"',
+        '"Credential":"[redacted]"',
+        out,
+    )
+    out = re.sub(r"(?i)Credential\s*[:=]\s*\S+", "Credential=[redacted]", out)
+    return out
+
 
 # 群验证方式（Api_GetGroupAddMode / Ex 文档）
 GROUP_ADD_MODE = {
@@ -378,7 +396,7 @@ def send_napcat_packet(
             return r.read().decode("utf-8", errors="replace")
     except urllib.error.HTTPError as e:
         err_body = e.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"HTTP {e.code}: {err_body}") from e
+        raise RuntimeError(f"HTTP {e.code}: {_redact_packet_error(err_body)}") from e
     except TimeoutError as e:
         raise RuntimeError(f"请求超时（{timeout}s）。") from e
     except urllib.error.URLError as e:

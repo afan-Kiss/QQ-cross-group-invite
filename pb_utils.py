@@ -186,21 +186,48 @@ def build_invite_758_pb(
     return encode_pb_message(top_fields).hex()
 
 
+def describe_token(tok: str | None) -> str:
+    """Log-safe token metadata. Never include the raw u_ value."""
+    import hashlib
+
+    if not tok:
+        return "token_present=false"
+    digest = hashlib.sha256(tok.encode("utf-8")).hexdigest()[:8]
+    return f"token_present=true token_len={len(tok)} token_hash={digest}"
+
+
 def build_cross_group_758_pb(
     *,
     target_group_id: int,
     source_group_id: int,
-    source_context_token: str,
-    invitee_token: str,
+    invitee_tokens: list[str] | None = None,
+    invitee_token: str | None = None,
+    source_context_token: str | None = None,
     subcmd: int = 1,
 ) -> str:
-    """Cross-group invite (95-byte UI capture): source member -> target group."""
+    """Cross-group 0x758_1 from successful UI captures (95B two invitees / 232B six).
+
+    Real SEND layout (capture-1786860477114 seq 9957015 / 9957026 / 9957135):
+      top.field1=0x758 top.field2=1 top.field4=body top.field12=0
+      body.field1=target_group_id
+      body.field2 repeated {field1=u_ member token, field2=source_group_id}
+      body.field3 empty, 4=0, 5=0, 6 empty, 7=0, 10=0
+
+    Each field2 block is an invitee, not a separate 'context' token.
+    source_context_token is ignored; kept only so old callers do not crash.
+    """
+    del source_context_token
+    tokens = [t for t in (invitee_tokens or []) if t]
+    if invitee_token:
+        tokens.append(invitee_token)
+    if not tokens:
+        raise ValueError("cross-group 758 requires at least one invitee token")
+    blocks = [
+        {1: [tok.encode("utf-8")], 2: [int(source_group_id)]} for tok in tokens
+    ]
     body_fields: dict[int, list[Any]] = {
         1: [int(target_group_id)],
-        2: [
-            {1: [source_context_token.encode("utf-8")], 2: [int(source_group_id)]},
-            {1: [invitee_token.encode("utf-8")], 2: [int(source_group_id)]},
-        ],
+        2: blocks,
         3: [b""],
         4: [0],
         5: [0],
@@ -217,12 +244,33 @@ def build_cross_group_758_pb(
     return encode_pb_message(top_fields).hex()
 
 
+def parse_cross_group_758_entries(
+    body: bytes,
+) -> tuple[int | None, int | None, list[str]]:
+    """Parse cross-group 758 body -> target, source_group, invitee tokens."""
+    target, source, tokens, _entries = _parse_cross_group_758_blocks(body)
+    return target, source, tokens
+
+
 def parse_cross_group_758_body(
     body: bytes,
 ) -> tuple[int | None, int | None, str | None, str | None]:
-    """Parse cross-group 758 -> target, source, context_token, invitee_token."""
+    """Parse cross-group 758 -> target, source, first_token, second_token.
+
+    First/second tokens are invitee blocks (captures use 2 or 6 members).
+    Names kept for callers; they are not a distinct context vs invitee pair.
+    """
+    target, source, tokens, _entries = _parse_cross_group_758_blocks(body)
+    first = tokens[0] if tokens else None
+    second = tokens[1] if len(tokens) > 1 else first
+    return target, source, first, second
+
+
+def _parse_cross_group_758_blocks(
+    body: bytes,
+) -> tuple[int | None, int | None, list[str], list[tuple[str | None, int | None]]]:
+    """Shared decoder for repeated body.field2 invitee blocks."""
     target = source = None
-    context_token = invitee_token = None
     entries: list[tuple[str | None, int | None]] = []
     i = 0
     while i < len(body):
@@ -261,10 +309,8 @@ def parse_cross_group_758_body(
                     source = src
         else:
             break
-    if entries:
-        context_token = entries[0][0]
-        invitee_token = entries[1][0] if len(entries) > 1 else entries[0][0]
-    return target, source, context_token, invitee_token
+    tokens = [tok for tok, _src in entries if tok]
+    return target, source, tokens, entries
 
 
 def patch_cross_group_758_pb(
@@ -272,46 +318,20 @@ def patch_cross_group_758_pb(
     *,
     target_group_id: int,
     source_group_id: int,
-    source_context_token: str,
     invitee_token: str,
+    source_context_token: str | None = None,
+    invitee_tokens: list[str] | None = None,
 ) -> str:
-    """Rewrite captured cross-group 758; rebuild if token lengths differ."""
-    data = bytes.fromhex(normalize_hex(pb_hex))
-    body_bytes = extract_field_bytes(data, 4)
-    if not body_bytes:
-        raise ValueError("missing field4 body")
-    _, _, ctx, inv = parse_cross_group_758_body(body_bytes)
-    if (
-        ctx
-        and inv
-        and len(ctx) == len(source_context_token)
-        and len(inv) == len(invitee_token)
-    ):
-        hex_out = bytes(
-            data.replace(ctx.encode(), source_context_token.encode()).replace(
-                inv.encode(), invitee_token.encode()
-            )
-        ).hex()
-        from capture_utils import encode_group_varint_hex
-
-        old_t = encode_group_varint_hex(
-            parse_cross_group_758_body(body_bytes)[0] or target_group_id
-        )
-        new_t = encode_group_varint_hex(target_group_id)
-        if old_t and new_t and old_t != new_t:
-            hex_out = hex_out.replace(old_t, new_t, 1)
-        old_s = encode_group_varint_hex(
-            parse_cross_group_758_body(body_bytes)[1] or source_group_id
-        )
-        new_s = encode_group_varint_hex(source_group_id)
-        if old_s and new_s and old_s != new_s:
-            hex_out = hex_out.replace(old_s, new_s)
-        return hex_out
+    """Rebuild 758 from the proven field layout instead of splicing captures."""
+    del pb_hex
+    del source_context_token
+    tokens = list(invitee_tokens or [])
+    if invitee_token:
+        tokens.append(invitee_token)
     return build_cross_group_758_pb(
         target_group_id=target_group_id,
         source_group_id=source_group_id,
-        source_context_token=source_context_token,
-        invitee_token=invitee_token,
+        invitee_tokens=tokens,
     )
 
 
@@ -572,7 +592,7 @@ class ParsedPacket:
         if self.group_code is not None:
             lines.append(f"group internal code: {self.group_code} (0x{self.group_code:x})")
         if self.invite_token:
-            lines.append(f"invite token: {self.invite_token}")
+            lines.append(f"invite token: {describe_token(self.invite_token)}")
         if self.invitee_uin is not None:
             lines.append(f"invitee uin: {self.invitee_uin}")
         return lines

@@ -8,7 +8,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-from pb_utils import decode_oidb_packet, normalize_hex, parse_758_recv_status
+from pb_utils import decode_oidb_packet, encode_varint, extract_field_bytes, normalize_hex, parse_758_recv_status, read_varint
 
 ROOT = Path(__file__).resolve().parent
 DEFAULT_CAPTURE_DIR = (
@@ -624,24 +624,84 @@ def find_invite_ui_chain_templates(capture_dir: Path) -> list[tuple[str, str]]:
     return out
 
 
+# Fresh picker open from successful capture-1786860477114 seq 9957064-9957135:
+# 88d_14 (group catalog) -> 88d_111 (nested target) -> 11ec_1 (target session)
+# -> fe7 pages (member tokens) -> fe1_8 -> 758.
+REQUIRED_PICKER_TEMPLATES: list[tuple[str, int]] = [
+    ("0x88d_111", 48),
+    ("0x11ec_1", 266),
+]
+OPTIONAL_PICKER_PREFIX: list[tuple[str, int]] = [
+    ("0x88d_14", 259),
+]
+PICKER_FE7_TEMPLATES: list[tuple[str, int]] = [
+    ("0xfe7_4", 96),
+    ("0xfe7_4", 124),
+]
+
+
+def missing_picker_templates(capture_dir: Path) -> list[str]:
+    """Required picker packets that are not in capture. Empty means chain usable."""
+    missing: list[str] = []
+    for cmd_marker, data_len in REQUIRED_PICKER_TEMPLATES:
+        if not find_packet_template(capture_dir, cmd_marker, data_len, len_slop=16):
+            missing.append(f"{cmd_marker}({data_len}B)")
+    return missing
+
+
 def find_cross_group_chain_templates(
     capture_dir: Path,
 ) -> list[tuple[str, str]]:
-    """Templates for cross-group picker open + prep (88d_14/111, 11ec, fe7).
-
-    Missing packets are skipped instead of dropping the whole chain: member
-    loading already works off generic fe7 pages, and invite should too.
-    """
+    """Templates for a fresh picker open. Missing required steps yield []."""
+    missing = missing_picker_templates(capture_dir)
+    if missing:
+        return []
     out: list[tuple[str, str]] = []
-    for cmd_marker, data_len in CROSS_GROUP_OPEN_CHAIN + CROSS_GROUP_PREP_CHAIN:
+    for cmd_marker, data_len in OPTIONAL_PICKER_PREFIX + REQUIRED_PICKER_TEMPLATES:
+        tpl = find_packet_template(capture_dir, cmd_marker, data_len, len_slop=16)
+        if tpl:
+            out.append((f"OidbSvcTrpcTcp.{cmd_marker}", tpl))
+    for cmd_marker, data_len in PICKER_FE7_TEMPLATES:
         tpl = find_packet_template(capture_dir, cmd_marker, data_len, len_slop=16)
         if tpl:
             out.append((f"OidbSvcTrpcTcp.{cmd_marker}", tpl))
     if not any("0xfe7_4" in cmd for cmd, _ in out):
         pages = find_fe7_pagination_templates_generic(capture_dir)
-        for page in pages[:2]:
-            out.append(("OidbSvcTrpcTcp.0xfe7_4", page))
+        if pages:
+            out.append(("OidbSvcTrpcTcp.0xfe7_4", pages[0]))
+        else:
+            # Built 96-byte list is byte-identical to UI capture field layout.
+            out.append(("OidbSvcTrpcTcp.0xfe7_4", build_fe7_group_list(1)))
     return out
+
+
+def nested_group_in_88d_111(hex_data: str) -> int | None:
+    """body.field2.field1 is the target group in successful 88d_111 captures."""
+    try:
+        data = bytes.fromhex(normalize_hex(hex_data))
+    except ValueError:
+        return None
+    body = extract_field_bytes(data, 4)
+    if not body:
+        return None
+    inner = extract_field_bytes(body, 2)
+    if not inner or inner[0] != 0x08:
+        return None
+    val, _ = read_varint(inner, 1)
+    return val
+
+
+def patch_88d_111_target(hex_data: str, target_group_id: int) -> str:
+    """Replace nested target group; refuse if varint length would change."""
+    h = normalize_hex(hex_data)
+    old = nested_group_in_88d_111(h)
+    if old is None:
+        return h
+    old_b = encode_varint(int(old))
+    new_b = encode_varint(int(target_group_id))
+    if len(old_b) != len(new_b):
+        return h
+    return h.replace(old_b.hex(), new_b.hex(), 1)
 
 
 def find_cross_group_758_template(
@@ -1024,10 +1084,10 @@ def latest_758_recv_for_invitee(
 
 
 def extract_group_token_from_fe7(hex_data: str, group_code: int | None = None) -> str | None:
-    """Context token from 0xfe7_4 RECV: extra uid not paired to a member, else first token.
+    """Return a token only when it is proven not to be a mapped member token.
 
-    The group-code proximity heuristic is last: it usually hits the first member
-    in the list, which is an invitee token, not the picker context.
+    Real cross-group 758 SEND blocks use mapped member tokens. An unpaired
+    extra uid is recorded for diagnostics only; it is not a 758 context.
     """
     del group_code
     if not hex_data:
@@ -1036,12 +1096,14 @@ def extract_group_token_from_fe7(hex_data: str, group_code: int | None = None) -
         normalize_hex(hex_data)
     except ValueError:
         return None
-    per_user = set(parse_fe7_token_map(hex_data).values())
-    toks = extract_invite_tokens_from_hex(hex_data)
-    for tok in toks:
-        if tok not in per_user:
+    per_user = parse_fe7_token_map(hex_data)
+    if not per_user:
+        return None
+    per_user_toks = set(per_user.values())
+    for tok in extract_invite_tokens_from_hex(hex_data):
+        if tok not in per_user_toks:
             return tok
-    return toks[0] if toks else None
+    return None
 
 
 def extract_group_token_from_af6(hex_data: str) -> str | None:
