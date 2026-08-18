@@ -6,6 +6,7 @@ import { useInviteStore } from "@/store/useInviteStore";
 import { api } from "@/lib/api";
 import { wailsBridge } from "@/lib/wails-bridge";
 import { parseInviteDefaults, parseLogSettings, LOG_LIMITS } from "@/lib/invite-config-schema";
+import { LOG_LEVEL_LABELS } from "@/store/useLogStore";
 import { toast } from "@/store/useToastStore";
 
 export function SettingsPage() {
@@ -57,7 +58,7 @@ export function SettingsPage() {
       return;
     }
     setLogErrors({});
-    const token = settings.napcatWebuiToken;
+    const token = (settings.napcatWebuiToken || "123456").trim() || "123456";
     if (localService !== "ready") {
       persistSettings(settings);
       setConfig({
@@ -93,7 +94,7 @@ export function SettingsPage() {
         interval_ms: settings.defaultIntervalMs,
         filter_staff: settings.defaultFilterStaff,
       });
-      if (token) update({ napcatWebuiToken: "" });
+      update({ napcatWebuiToken: token });
       toast("success", "\u8bbe\u7f6e\u5df2\u4fdd\u5b58");
     } catch (e) {
       toast("error", e instanceof Error ? e.message : "\u4fdd\u5b58\u5931\u8d25");
@@ -129,7 +130,7 @@ export function SettingsPage() {
     try {
       await api.testConnection({
         onebot_url: settings.onebotUrl,
-        napcat_webui_token: settings.napcatWebuiToken,
+        napcat_webui_token: (settings.napcatWebuiToken || "123456").trim() || "123456",
       });
       toast("success", "连接测试成功");
     } catch (e) {
@@ -139,13 +140,20 @@ export function SettingsPage() {
     }
   };
 
-  const applyFanfan = (raw: { resolvedPath?: string; pathValid?: boolean; message?: string; processRunning?: boolean }) => {
+  const applyFanfan = (raw: {
+    resolvedPath?: string;
+    pathValid?: boolean;
+    message?: string;
+    processRunning?: boolean;
+    apiOnline?: boolean;
+    apiEndpoint?: string;
+  }) => {
     if (raw.resolvedPath && raw.pathValid) {
       update({ fanfanPath: raw.resolvedPath });
       persistSettings({ ...settings, fanfanPath: raw.resolvedPath });
     }
     setFanfanMsg(raw.message || "");
-    setFanfanRunning(!!raw.processRunning);
+    setFanfanRunning(!!(raw.processRunning || raw.apiOnline));
   };
 
   const pickFanfan = async () => {
@@ -155,7 +163,10 @@ export function SettingsPage() {
       if (!dir) return;
       update({ fanfanPath: dir });
       persistSettings({ ...settings, fanfanPath: dir });
-      applyFanfan(await wailsBridge.detectFanfan(dir));
+      const raw = await wailsBridge.detectFanfan(dir, settings.onebotUrl);
+      applyFanfan(raw);
+      toast(raw.pathValid || raw.apiOnline ? "success" : "warning", raw.message || "检测完成");
+      await useServiceStore.getState().refreshNapcat().catch(() => undefined);
     } catch (e) {
       toast("error", e instanceof Error ? e.message : "选择目录失败");
     } finally {
@@ -166,7 +177,11 @@ export function SettingsPage() {
   const detectFanfan = async () => {
     setFanfanBusy(true);
     try {
-      applyFanfan(await wailsBridge.detectFanfan(settings.fanfanPath));
+      const raw = await wailsBridge.detectFanfan(settings.fanfanPath, settings.onebotUrl);
+      applyFanfan(raw);
+      toast(raw.apiOnline || raw.pathValid ? "success" : "warning", raw.message || "检测完成");
+      await useServiceStore.getState().refreshNapcat().catch(() => undefined);
+      await useServiceStore.getState().refreshHealth().catch(() => undefined);
     } catch (e) {
       toast("error", e instanceof Error ? e.message : "检测失败");
     } finally {
@@ -181,7 +196,7 @@ export function SettingsPage() {
     }
     setFanfanBusy(true);
     try {
-      const raw = await wailsBridge.launchFanfan(settings.fanfanPath);
+      const raw = await wailsBridge.launchFanfan(settings.fanfanPath, settings.onebotUrl);
       applyFanfan(raw);
       if (raw.pathValid) toast("success", raw.message || "已启动");
       else toast("error", raw.message || "启动失败");
@@ -239,7 +254,7 @@ export function SettingsPage() {
           <SelectField
             label="日志级别"
             value={settings.logLevel}
-            options={["INFO", "WARN", "ERROR"].map((l) => ({ v: l, l }))}
+            options={LOG_LIMITS.levels.map((l) => ({ v: l, l: LOG_LEVEL_LABELS[l] }))}
             onChange={(v) => update({ logLevel: v })}
           />
           <Field label="最大日志文件(MB)" value={settings.maxLogFileSize} type="number" min={LOG_LIMITS.maxFileMbMin} max={LOG_LIMITS.maxFileMbMax} onChange={(v) => update({ maxLogFileSize: v })} error={logErrors.maxLogFileSize} />
@@ -257,7 +272,12 @@ export function SettingsPage() {
             <span className="text-muted-foreground">饭饭定制状态</span>
             <p className="mt-1">{napcatOnline ? "在线" : "离线"} · 本地服务 {localService}</p>
           </div>
-          <Field label="OneBot 地址" value={settings.onebotUrl} onChange={(v) => update({ onebotUrl: v })} />
+          <Field
+            label="OneBot / WebUI 地址"
+            value={settings.onebotUrl}
+            onChange={(v) => update({ onebotUrl: v })}
+          />
+          <p className="text-[12px] text-muted-foreground">饭饭定制 Framework 默认一般为 http://127.0.0.1:6099/api</p>
           <div className="text-[13px]">
             <span className="text-muted-foreground">饭饭定制路径</span>
             <div className="mt-1 flex gap-2">
@@ -280,6 +300,9 @@ export function SettingsPage() {
               {fanfanRunning ? "进程：运行中" : "进程：未运行"}
               {fanfanMsg ? ` · ${fanfanMsg}` : ""}
             </p>
+            <p className="mt-1 text-[12px] text-muted-foreground">
+              启动为有界面模式：会先结束现有 QQ 再拉起，便于看到 QQ 窗口登录。
+            </p>
             <div className="mt-2 flex gap-2">
               <button
                 type="button"
@@ -295,19 +318,20 @@ export function SettingsPage() {
                 onClick={() => void launchFanfan()}
                 className="rounded-[10px] bg-primary px-4 py-2 text-[13px] text-white hover:bg-primary-hover disabled:opacity-50"
               >
-                启动饭饭定制
+                启动饭饭定制（有界面）
               </button>
             </div>
           </div>
           <div className="text-[13px]">
             <span className="text-muted-foreground">饭饭定制 Token</span>
             <input
-              type="password"
+              type="text"
               value={settings.napcatWebuiToken}
               onChange={(e) => update({ napcatWebuiToken: e.target.value })}
-              placeholder="留空表示不修改已保存 Token"
+              placeholder="123456"
               className="mt-1 w-full rounded-[8px] border border-border px-3 py-2 text-[13px] outline-none focus:border-primary"
             />
+            <p className="mt-1 text-[12px] text-muted-foreground">默认 123456，与饭饭定制 WebUI Token 保持一致。</p>
           </div>
           <button
             type="button"

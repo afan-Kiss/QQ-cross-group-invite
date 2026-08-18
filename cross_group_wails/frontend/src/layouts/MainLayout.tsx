@@ -15,6 +15,7 @@ import { FailedPage } from "@/pages/FailedPage";
 import { LogsPage } from "@/pages/LogsPage";
 import { SettingsPage } from "@/pages/SettingsPage";
 import { AboutPage } from "@/pages/AboutPage";
+import { MemberDetailDrawer } from "@/components/dashboard/MemberDetailDrawer";
 import { cn } from "@/lib/utils";
 
 export function MainLayout() {
@@ -46,6 +47,7 @@ export function MainLayout() {
         </main>
       </div>
       <GlobalStatusBar />
+      <MemberDetailDrawer />
     </div>
   );
 }

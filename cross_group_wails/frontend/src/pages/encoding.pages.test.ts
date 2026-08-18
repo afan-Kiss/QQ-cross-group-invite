@@ -4,10 +4,12 @@ import { describe, expect, it } from "vitest";
 
 const files = [
   "pages/TasksPage.tsx",
+  "pages/TaskDetailPage.tsx",
   "components/dashboard/MemberDetailDrawer.tsx",
   "pages/RateLimitPage.tsx",
   "pages/FailedPage.tsx",
   "pages/LogsPage.tsx",
+  "pages/SettingsPage.tsx",
 ];
 
 describe("critical pages have real Chinese labels", () => {
@@ -18,4 +20,16 @@ describe("critical pages have real Chinese labels", () => {
       expect(/[\u4e00-\u9fff]/.test(text)).toBe(true);
     });
   }
+
+  it("settings log level dropdown is Chinese", () => {
+    const text = readFileSync(resolve(__dirname, "..", "pages", "SettingsPage.tsx"), "utf8");
+    expect(text).toContain("LOG_LEVEL_LABELS");
+  });
+
+  it("FailedPage and RateLimitPage can open member drawer from layout", () => {
+    const layout = readFileSync(resolve(__dirname, "..", "layouts", "MainLayout.tsx"), "utf8");
+    expect(layout).toContain("MemberDetailDrawer");
+    const table = readFileSync(resolve(__dirname, "..", "components", "dashboard", "MemberTable.tsx"), "utf8");
+    expect(table).not.toContain("MemberDetailDrawer");
+  });
 });

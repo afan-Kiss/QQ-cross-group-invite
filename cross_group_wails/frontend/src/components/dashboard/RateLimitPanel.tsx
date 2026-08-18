@@ -60,7 +60,7 @@ export function RateLimitPanel() {
                         className="text-primary hover:underline"
                         onClick={() => requeueMember(item.qq)}
                       >
-                        重新邀请
+                        重新加入队列
                       </button>
                     </div>
                   </td>

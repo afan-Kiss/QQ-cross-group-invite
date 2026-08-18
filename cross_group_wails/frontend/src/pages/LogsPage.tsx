@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { FileText, Download, Trash2 } from "lucide-react";
-import { useLogStore } from "@/store/useLogStore";
+import { LOG_LEVEL_LABELS, LOG_MODULE_LABELS, type LogLevel, useLogStore } from "@/store/useLogStore";
 import { useInviteStore } from "@/store/useInviteStore";
 import { useServiceStore } from "@/store/useServiceStore";
 import { cn } from "@/lib/utils";
@@ -14,6 +14,14 @@ const levelColors = {
   ERROR: "bg-danger-light text-danger",
 } as const;
 
+const FILTERS: Array<{ v: string; l: string }> = [
+  { v: "all", l: "全部" },
+  { v: "INFO", l: LOG_LEVEL_LABELS.INFO },
+  { v: "SUCCESS", l: LOG_LEVEL_LABELS.SUCCESS },
+  { v: "WARN", l: LOG_LEVEL_LABELS.WARN },
+  { v: "ERROR", l: LOG_LEVEL_LABELS.ERROR },
+];
+
 export function LogsPage() {
   const entries = useLogStore((s) => s.entries);
   const autoScroll = useLogStore((s) => s.autoScroll);
@@ -23,6 +31,7 @@ export function LogsPage() {
   const napcatOnline = useServiceStore((s) => s.napcatOnline);
   const [filter, setFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   const filtered = entries.filter((e) => {
     if (filter !== "all" && e.level !== filter) return false;
@@ -30,8 +39,21 @@ export function LogsPage() {
     return true;
   });
 
+  useEffect(() => {
+    if (autoScroll && scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [filtered, autoScroll]);
+
+  const lastError = [...entries].reverse().find((e) => e.level === "ERROR")?.message ?? "—";
+
   const exportLogs = async () => {
-    const text = filtered.map((e) => `${e.time} [${e.level}] ${e.module} ${e.message}`).join("\n");
+    const text = filtered
+      .map(
+        (e) =>
+          `${e.time} ${LOG_LEVEL_LABELS[e.level]} [${LOG_MODULE_LABELS[e.module]}] ${e.message}`,
+      )
+      .join("\n");
     try {
       const path = await wailsBridge.exportLogs(text);
       if (!path) {
@@ -51,17 +73,17 @@ export function LogsPage() {
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        {["all", "INFO", "SUCCESS", "WARN", "ERROR"].map((f) => (
+        {FILTERS.map((f) => (
           <button
-            key={f}
+            key={f.v}
             type="button"
-            onClick={() => setFilter(f)}
+            onClick={() => setFilter(f.v)}
             className={cn(
               "rounded-[8px] px-3 py-1.5 text-[12px] transition-colors",
-              filter === f ? "bg-primary text-white" : "bg-white border border-border text-muted-foreground hover:bg-[#f7faf5]",
+              filter === f.v ? "bg-primary text-white" : "bg-white border border-border text-muted-foreground hover:bg-[#f7faf5]",
             )}
           >
-            {f === "all" ? "全部" : f}
+            {f.l}
           </button>
         ))}
         <input
@@ -100,7 +122,10 @@ export function LogsPage() {
       </div>
 
       <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[1fr_260px]">
-        <div className="min-h-0 overflow-auto rounded-[16px] border border-border bg-white p-4 shadow-[var(--shadow-card)] font-mono text-[12px]">
+        <div
+          ref={scrollRef}
+          className="min-h-0 overflow-auto rounded-[16px] border border-border bg-white p-4 shadow-[var(--shadow-card)] font-mono text-[12px]"
+        >
           {filtered.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center py-12 text-muted-foreground">
               <FileText className="mb-2 h-8 w-8 opacity-40" />
@@ -109,11 +134,11 @@ export function LogsPage() {
           ) : (
             filtered.map((e) => (
               <div key={e.id} className="flex gap-3 border-b border-border/50 py-2 last:border-0">
-                <span className="shrink-0 text-muted-foreground">{e.time}</span>
+                <span className="shrink-0 text-muted-foreground">{e.time || "—"}</span>
                 <span className={cn("shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium", levelColors[e.level as keyof typeof levelColors])}>
-                  {e.level}
+                  {LOG_LEVEL_LABELS[e.level as LogLevel]}
                 </span>
-                <span className="shrink-0 text-[#5c8fd8]">[{e.module}]</span>
+                <span className="shrink-0 text-[#5c8fd8]">[{LOG_MODULE_LABELS[e.module]}]</span>
                 <span className="text-[#242824]">{e.message}</span>
               </div>
             ))
@@ -125,7 +150,7 @@ export function LogsPage() {
           <ul className="space-y-2 text-[13px]">
             <li className="flex justify-between">
               <span className="text-muted-foreground">本地服务</span>
-              <span className={localService === "ready" ? "text-primary" : "text-danger"}>
+              <span className={localService === "ready" ? "text-primary" : localService === "manual" ? "text-warning" : "text-danger"}>
                 {localService === "ready" ? "正常" : localService === "manual" ? "手动" : "异常"}
               </span>
             </li>
@@ -142,7 +167,7 @@ export function LogsPage() {
             <li className="flex justify-between">
               <span className="text-muted-foreground">最近错误</span>
               <span className="text-danger truncate max-w-[120px]">
-                {entries.find((e) => e.level === "ERROR")?.message ?? "—"}
+                {lastError}
               </span>
             </li>
           </ul>

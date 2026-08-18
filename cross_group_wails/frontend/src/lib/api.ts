@@ -213,6 +213,13 @@ export function normalizeStatus(
     finished_at: Number(raw.finished_at ?? 0),
     napcat_online: Boolean(raw.napcat_online),
     napcat_message: String(raw.napcat_message ?? ""),
+    timeline: Array.isArray(raw.timeline)
+      ? (raw.timeline as Array<{ at?: number; event?: string; detail?: string }>).map((ev) => ({
+          at: Number(ev.at || 0),
+          event: String(ev.event || ""),
+          detail: ev.detail != null ? String(ev.detail) : undefined,
+        }))
+      : [],
     batch: {
       batchNumber,
       batchTotal: Number(raw.batch_total_count ?? batchSize) || batchSize,

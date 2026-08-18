@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { ArrowLeft, Square } from "lucide-react";
 import { useInviteStore } from "@/store/useInviteStore";
 import { useNavigationStore } from "@/store/useNavigationStore";
-import { formatDateTime, formatNumber, toEpochMs } from "@/lib/utils";
+import { formatDateTime, formatNumber, formatTimelineText, toEpochMs } from "@/lib/utils";
 import { Progress } from "@/components/ui/progress";
 import { api } from "@/lib/api";
 import type { PersistedTask } from "@/lib/types";
@@ -111,7 +111,7 @@ export function TaskDetailPage() {
             <div>开始时间：{formatDateTime(startTime)}</div>
             <div>结束时间：{endTime ? formatDateTime(endTime) : "—"}</div>
             <div>耗时：{durationMs ? `${(durationMs / 1000).toFixed(1)} 秒` : "—"}</div>
-            {!isLive && <div className="text-[12px]">历史任务仅展示持久化数据</div>}
+            {!isLive && <div className="text-[12px]">这是已经结束的任务，显示当时保存下来的结果</div>}
           </div>
         </div>
         <div className="rounded-[16px] border border-border bg-white p-5 shadow-[var(--shadow-card)]">
@@ -123,7 +123,7 @@ export function TaskDetailPage() {
               timeline.map((ev, idx) => (
                 <div key={`${ev.at}-${idx}`} className="border-b border-border/50 pb-2">
                   <span className="text-muted-foreground">{formatDateTime(ev.at)} </span>
-                  <span>{ev.detail || ev.event || ""}</span>
+                  <span>{formatTimelineText(ev.event, ev.detail)}</span>
                 </div>
               ))
             )}

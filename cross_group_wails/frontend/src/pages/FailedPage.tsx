@@ -29,7 +29,7 @@ export function FailedPage() {
   const todayMs = todayStart.getTime();
   const todayCount = failedList.filter((r) => toEpochMs(r.at) >= todayMs).length;
   const permCount = failedList.filter((r) => /权限/i.test(r.reason)).length;
-  const tokenCount = failedList.filter((r) => /token/i.test(r.reason)).length;
+  const tokenCount = failedList.filter((r) => /token|邀请信息/i.test(r.reason)).length;
   const otherCount = failedList.length - permCount - tokenCount;
 
   const canRequeue = (r: FailedRecord) => {
@@ -63,7 +63,7 @@ export function FailedPage() {
         {[
           { label: "今日失败", value: todayCount },
           { label: "权限问题", value: permCount },
-          { label: "Token问题", value: tokenCount },
+          { label: "邀请信息", value: tokenCount },
           { label: "其他错误", value: otherCount },
         ].map((c) => (
           <div key={c.label} className="rounded-[14px] border border-border bg-white p-4 shadow-[var(--shadow-card)]">

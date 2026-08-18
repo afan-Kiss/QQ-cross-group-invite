@@ -11,16 +11,36 @@ export interface LogEntry {
   message: string;
 }
 
+export const LOG_LEVEL_LABELS: Record<LogLevel, string> = {
+  INFO: "信息",
+  SUCCESS: "成功",
+  WARN: "警告",
+  ERROR: "错误",
+};
+
+export const LOG_MODULE_LABELS: Record<LogModule, string> = {
+  SERVICE: "服务",
+  NAPCAT: "饭饭定制",
+  MEMBERS: "成员",
+  INVITE: "邀请",
+  TOKEN: "邀请信息",
+  SYSTEM: "系统",
+};
+
 let logId = 0;
 
-function parseLogLine(line: string): LogEntry | null {
-  const match = line.match(/^(\d{2}:\d{2}:\d{2})\s*(.*)$/);
-  const time = match?.[1] ?? new Date().toLocaleTimeString("zh-CN", { hour12: false });
-  const body = match?.[2] ?? line;
+const TIME_PREFIX = /^(?:\[(\d{2}:\d{2}:\d{2})\]|(\d{2}:\d{2}:\d{2}))\s*(.*)$/;
+
+export function parseLogLine(line: string): LogEntry | null {
+  const raw = String(line ?? "").replace(/\s+$/, "");
+  if (!raw.trim()) return null;
+  const match = raw.match(TIME_PREFIX);
+  const time = match?.[1] || match?.[2] || "";
+  const body = (match?.[3] ?? raw).trim();
   let level: LogLevel = "INFO";
   if (/成功|SUCCESS/i.test(body)) level = "SUCCESS";
   else if (/WARN|警告|频繁/i.test(body)) level = "WARN";
-  else if (/ERROR|失败|错误/i.test(body)) level = "ERROR";
+  else if (/ERROR|失败|错误|异常/i.test(body)) level = "ERROR";
   let module: LogModule = "SYSTEM";
   if (/饭饭定制|NapCat|napcat/i.test(body)) module = "NAPCAT";
   else if (/成员|member/i.test(body)) module = "MEMBERS";
@@ -49,8 +69,20 @@ export const useLogStore = create<LogStore>((set) => ({
   entries: [],
   autoScroll: true,
   setFromRaw: (lines) => {
-    const entries = lines.map((line) => parseLogLine(line)).filter(Boolean) as LogEntry[];
-    set({ entries });
+    set((s) => {
+      const prevByKey = new Map<string, string>();
+      for (const e of s.entries) {
+        if (e.time && e.message) prevByKey.set(e.message, e.time);
+      }
+      const entries: LogEntry[] = [];
+      for (const line of lines) {
+        const parsed = parseLogLine(line);
+        if (!parsed) continue;
+        if (!parsed.time) parsed.time = prevByKey.get(parsed.message) ?? "";
+        entries.push(parsed);
+      }
+      return { entries };
+    });
   },
   add: (entry) =>
     set((s) => ({

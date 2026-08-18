@@ -22,6 +22,10 @@ export function RateLimitPage() {
   const todayCount = rateLimitList.filter((r) => toEpochMs(r.at) >= todayMs).length;
   const sorted = [...rateLimitList].sort((a, b) => toEpochMs(b.at) - toEpochMs(a.at));
   const last = sorted[0];
+  const pendingCount = rateLimitList.filter((r) => {
+    const m = getMember(r.qq);
+    return !m || m.status === "rate_limited" || m.status === "failed";
+  }).length;
 
   const canRequeue = (r: RateLimitRecord) => {
     const m = getMember(r.qq);
@@ -54,7 +58,7 @@ export function RateLimitPage() {
         {[
           { label: "今日频繁", value: todayCount },
           { label: "总频繁", value: rateLimitList.length },
-          { label: "待处理", value: rateLimitList.length },
+          { label: "可重新入队", value: pendingCount },
           { label: "最近一次", value: last ? formatTime(last.at) : "—" },
         ].map((c) => (
           <div key={c.label} className="rounded-[14px] border border-border bg-white p-4 shadow-[var(--shadow-card)]">
@@ -93,7 +97,9 @@ export function RateLimitPage() {
                   <td className="px-4 py-3">{r.source_group_id || "—"}</td>
                   <td className="px-4 py-3">{r.target_group_id || "—"}</td>
                   <td className="px-4 py-3 text-[13px] text-muted-foreground">{formatDateTime(r.at)}</td>
-                  <td className="px-4 py-3 text-warning">待冷却</td>
+                  <td className="px-4 py-3 text-warning">
+                    {getMember(r.qq)?.status === "waiting" ? "已入队" : "已记录"}
+                  </td>
                   <td className="px-4 py-3 text-[13px] text-muted-foreground">{r.reason ?? "—"}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1">

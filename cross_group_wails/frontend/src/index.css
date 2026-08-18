@@ -82,6 +82,19 @@ body {
   animation: fade-in 0.18s ease-out both;
 }
 
+/* Wails frameless window drag regions */
+.wails-drag {
+  --wails-draggable: drag;
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+
+.wails-no-drag {
+  --wails-draggable: no-drag;
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
 .reduce-motion .animate-fade-up,
 .reduce-motion .animate-fade-in,
 .reduce-motion * {

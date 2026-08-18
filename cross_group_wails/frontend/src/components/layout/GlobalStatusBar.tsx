@@ -8,14 +8,14 @@ export function GlobalStatusBar() {
 
   const serviceOk = localService === "ready";
   const napcatOk = napcatOnline;
+  const statusLabel = inviting ? "正在邀请" : serviceOk ? "就绪" : localService === "manual" ? "未自动连接" : "服务异常";
+  const statusClass = inviting || serviceOk ? "text-primary" : localService === "manual" ? "text-warning" : "text-danger";
 
   return (
     <footer className="flex h-8 shrink-0 items-center justify-between border-t border-border bg-white px-4 text-[12px] text-muted-foreground">
       <div className="flex items-center gap-2">
-        <span
-          className={inviting ? "text-primary" : "text-primary"}
-        >
-          ● {inviting ? "正在邀请" : "就绪"}
+        <span className={statusClass}>
+          ● {statusLabel}
         </span>
       </div>
       <div className="flex items-center gap-4">

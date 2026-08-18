@@ -9,6 +9,7 @@ from pathlib import Path
 
 from capture_utils import (
     DEFAULT_CAPTURE_DIR,
+    build_fe7_group_list,
     build_fe7_single_lookup,
     extract_group_token_from_fe7,
     extract_token_for_uin,
@@ -16,6 +17,7 @@ from capture_utils import (
     find_cross_group_chain_templates,
     find_fe1_multi_select_template,
     find_fe7_pagination_templates,
+    find_fe7_pagination_templates_generic,
     find_fe7_single_template,
     find_permanent_uid_from_capture,
     find_source_context_token,
@@ -132,11 +134,7 @@ def query_invitee_token(
             print(f"invitee token from fe7 single: {token}")
             return token
 
-    pages = find_fe7_pagination_templates(capture_dir, source_group_id)
-    if not pages:
-        from capture_utils import find_fe7_pagination_templates_generic
-
-        pages = find_fe7_pagination_templates_generic(capture_dir)
+    pages = _fe7_list_pages(capture_dir, source_group_id)
     if pages:
         merged: dict[int, str] = {}
         for i, page_hex in enumerate(pages, 1):
@@ -155,6 +153,56 @@ def query_invitee_token(
     return token
 
 
+def _fe7_list_pages(capture_dir: Path, source_group_id: int) -> list[str]:
+    """Captured list pages, or a built 96-byte 0xfe7_4 that does not need packet logs."""
+    pages = find_fe7_pagination_templates(capture_dir, source_group_id)
+    if not pages:
+        pages = find_fe7_pagination_templates_generic(capture_dir)
+    if not pages:
+        pages = [build_fe7_group_list(source_group_id)]
+        print("no fe7 templates in capture; using built group-list packet")
+    return pages
+
+
+def probe_source_group_fe7(
+    capture_dir: Path, source_group_id: int, *, max_pages: int = 8
+) -> tuple[dict[int, str], str, str | None]:
+    """Live 0xfe7_4 against the source group: member tokens + group context token."""
+    pages = _fe7_list_pages(capture_dir, source_group_id)
+    merged: dict[int, str] = {}
+    context = ""
+    last_rsp: str | None = None
+    for i, page_hex in enumerate(pages, 1):
+        patched = patch_group_code_in_hex(page_hex, source_group_id)
+        rsp = _send_fe7(patched, label=f"fe7 source page {i}")
+        if rsp:
+            last_rsp = rsp
+            merged.update(parse_fe7_token_map(rsp))
+            if not context:
+                context = extract_group_token_from_fe7(rsp, source_group_id) or ""
+        if i >= max_pages:
+            break
+    return merged, context, last_rsp
+
+
+def fetch_source_context_token_live(
+    capture_dir: Path, source_group_id: int
+) -> str | None:
+    """Same live fe7 path used when loading members; does not need a full picker chain."""
+    try:
+        _tokens, context, last_rsp = probe_source_group_fe7(
+            capture_dir, source_group_id, max_pages=4
+        )
+    except Exception as exc:
+        print(f"live source fe7 failed: {exc}")
+        return None
+    if context:
+        return context
+    if last_rsp:
+        return extract_group_token_from_fe7(last_rsp, source_group_id)
+    return None
+
+
 def query_source_context_token(
     capture_dir: Path, source_group_id: int, *, live_rsp: str | None = None
 ) -> str | None:
@@ -167,7 +215,8 @@ def query_source_context_token(
     tok = find_source_context_token(capture_dir, source_group_id)
     if tok:
         print(f"source context token from capture: {tok}")
-    return tok
+        return tok
+    return fetch_source_context_token_live(capture_dir, source_group_id)
 
 
 def patch_fe1_token_list(hex_data: str, tokens: list[str]) -> str:
@@ -194,24 +243,31 @@ def patch_fe1_token_list(hex_data: str, tokens: list[str]) -> str:
 def open_cross_group_picker(
     capture_dir: Path, target_group_id: int, source_group_id: int
 ) -> str | None:
-    """Replay cross-group picker open chain; return first fe7 rsp for context token."""
+    """Replay cross-group picker open chain; return first fe7 rsp for context token.
+
+    If the captured picker chain is incomplete, fall back to the same live fe7
+    pages used to load source-group members.
+    """
     chain = find_cross_group_chain_templates(capture_dir)
-    if not chain:
-        print("no cross-group chain templates in capture; skipping picker open")
-        return None
-    print(f"open cross-group picker ({len(chain)} packets)...")
     live_fe7 = None
-    for cmd, tpl in chain:
-        label = cmd.rsplit(".", 1)[-1]
-        hex_data = patch_group_code_in_hex(tpl, target_group_id)
-        if "0xfe7_4" in cmd:
-            hex_data = patch_group_code_in_hex(hex_data, source_group_id)
-        resp = _send_packet(cmd, hex_data, label=label)
-        rsp = _rsp_hex(resp)
-        if "0xfe7_4" in cmd and rsp:
-            live_fe7 = rsp
-        time.sleep(PACKET_SLEEP)
-    return live_fe7
+    if chain:
+        print(f"open cross-group picker ({len(chain)} packets)...")
+        for cmd, tpl in chain:
+            label = cmd.rsplit(".", 1)[-1]
+            hex_data = patch_group_code_in_hex(tpl, target_group_id)
+            if "0xfe7_4" in cmd:
+                hex_data = patch_group_code_in_hex(hex_data, source_group_id)
+            resp = _send_packet(cmd, hex_data, label=label)
+            rsp = _rsp_hex(resp)
+            if "0xfe7_4" in cmd and rsp:
+                live_fe7 = rsp
+            time.sleep(PACKET_SLEEP)
+    else:
+        print("no complete picker chain in capture; using live source-group fe7")
+    if live_fe7:
+        return live_fe7
+    _tokens, _ctx, last_rsp = probe_source_group_fe7(capture_dir, source_group_id)
+    return last_rsp
 
 
 def sync_fe1_selection(capture_dir: Path, tokens: list[str]) -> bool:

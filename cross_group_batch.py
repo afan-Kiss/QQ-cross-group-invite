@@ -18,19 +18,14 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 from capture_utils import (
-    find_fe7_pagination_templates,
-    find_fe7_pagination_templates_generic,
-    parse_fe7_token_map,
-    patch_group_code_in_hex,
     scan_capture_fe7_token_map,
 )
-from myqq_api import load_cfg, onebot_action, send_napcat_packet
+from myqq_api import load_cfg, onebot_action
 from pb_utils import parse_758_recv_status
 from pull_cross_group import (
-    CMD_FE7,
-    _parse_api_response,
     _rsp_hex,
     open_cross_group_picker,
+    probe_source_group_fe7,
     query_invitee_token,
     query_source_context_token,
     resolve_capture_dir,
@@ -38,7 +33,6 @@ from pull_cross_group import (
     sync_fe1_selection,
 )
 
-FE7_SLEEP = 0.12
 RATE_BUCKET_SEC = 5
 RATE_RETENTION_SEC = 5 * 60
 DATA_DIR = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "QQCrossGroupInvite" / "data"
@@ -145,6 +139,7 @@ class MembersCacheSnapshot:
     source_group_id: int
     filter_staff: bool
     members: tuple[SourceMember, ...]
+    context_token: str = ""
 
     @property
     def key(self) -> tuple[int, bool]:
@@ -589,36 +584,47 @@ def _classify_failure(code: int | None, msg: str) -> str:
 def fetch_fe7_token_map_live(
     capture_dir, source_group_id: int
 ) -> dict[int, str]:
-    pages = find_fe7_pagination_templates(capture_dir, source_group_id)
-    if not pages:
-        pages = find_fe7_pagination_templates_generic(capture_dir)
-    if not pages:
-        return {}
-    merged: dict[int, str] = {}
-    for i, page_hex in enumerate(pages, 1):
-        patched = patch_group_code_in_hex(page_hex, source_group_id)
-        raw = send_napcat_packet(CMD_FE7, patched, wait_rsp=True)
-        resp = _parse_api_response(raw)
-        rsp_hex = _rsp_hex(resp)
-        if rsp_hex:
-            merged.update(parse_fe7_token_map(rsp_hex))
-        time.sleep(FE7_SLEEP)
-        if i >= 8:
-            break
-    return merged
+    token_map, context, _rsp = probe_source_group_fe7(capture_dir, source_group_id)
+    fetch_fe7_token_map_live.last_context = (int(source_group_id), context or "")
+    return token_map
+
+
+def _onebot_error_message(raw: Any) -> str:
+    if not isinstance(raw, dict):
+        return ""
+    code = raw.get("code")
+    status = str(raw.get("status") or "").lower()
+    retcode = raw.get("retcode")
+    failed = False
+    if code not in (None, 0, "0"):
+        failed = True
+    if status in {"failed", "error"}:
+        failed = True
+    if retcode not in (None, 0, "0") and status != "ok":
+        failed = True
+    if not failed:
+        return ""
+    return str(raw.get("message") or raw.get("wording") or raw.get("msg") or raw)
 
 
 def _onebot_members(source_group_id: int) -> list[dict[str, Any]]:
     try:
         raw = onebot_action(
-            "get_group_member_list", {"group_id": int(source_group_id)}
+            "get_group_member_list",
+            {"group_id": int(source_group_id)},
+            timeout=60,
         )
-    except Exception:
-        return []
+    except Exception as exc:
+        raise RuntimeError(f"拉取成员列表失败: {exc}") from exc
+    err = _onebot_error_message(raw)
+    if err:
+        raise RuntimeError(f"拉取成员列表失败: {err}")
     if isinstance(raw, list):
         return [x for x in raw if isinstance(x, dict)]
     if isinstance(raw, dict):
         inner = raw.get("data")
+        if isinstance(inner, dict) and isinstance(inner.get("data"), list):
+            inner = inner.get("data")
         if isinstance(inner, list):
             return [x for x in inner if isinstance(x, dict)]
     return []
@@ -642,14 +648,22 @@ def load_source_members(
 
     log(f"正在加载来源群成员，群号={source_group_id}...")
 
-    token_map = fetch_fe7_token_map_live(cap, source_group_id)
-    if not token_map:
-        token_map = scan_capture_fe7_token_map(cap)
-        if token_map:
-            log("实时拉不到成员，已从抓包记录恢复")
-        else:
-            log("拉取成员列表失败，请确认群号正确且饭饭定制在线")
     ob_list = _onebot_members(source_group_id)
+    token_map: dict[int, str] = {}
+    try:
+        token_map = fetch_fe7_token_map_live(cap, source_group_id) or {}
+    except Exception as exc:
+        log(f"实时邀请 Token 拉取失败，继续用来源群成员列表: {exc}")
+        token_map = {}
+    if not token_map:
+        try:
+            token_map = scan_capture_fe7_token_map(cap) or {}
+            if token_map:
+                log("实时拉不到 Token，已从抓包记录恢复")
+        except Exception:
+            token_map = {}
+    if not ob_list and not token_map:
+        log("拉取成员列表失败，请确认来源群号正确且饭饭定制在线")
     by_qq: dict[int, SourceMember] = {}
 
     for item in ob_list:
@@ -701,10 +715,19 @@ def load_source_members(
             )
 
     members = sorted(by_qq.values(), key=lambda m: m.qq)
+    context_token = ""
+    last_ctx = getattr(fetch_fe7_token_map_live, "last_context", None)
+    if (
+        isinstance(last_ctx, tuple)
+        and len(last_ctx) == 2
+        and last_ctx[0] == int(source_group_id)
+    ):
+        context_token = str(last_ctx[1] or "")
     snapshot = MembersCacheSnapshot(
         source_group_id=int(source_group_id),
         filter_staff=bool(filter_staff),
         members=tuple(members),
+        context_token=context_token,
     )
     with _members_lock:
         _members_snapshot = snapshot
@@ -907,7 +930,7 @@ def start_batch(
         _state.total_batches = 0
         _state.next_invite_at = 0.0
         _owned_task_id = task_id
-        _append_timeline("created", task_id)
+        _append_timeline("created", "任务已创建")
 
     _persist_current_task()
 
@@ -930,8 +953,10 @@ def start_batch(
                     capture_dir=cap,
                     record_logs=True,
                 )
+                with _members_lock:
+                    snap = _members_snapshot
                 with _state_lock:
-                    _append_timeline("members_loaded", str(len(members)))
+                    _append_timeline("members_loaded", f"已加载 {len(members)} 名成员")
 
             # Only invite eligible members; honor qq_list selection.
             # Never silently drop selected QQs: any invalid selection rejects the whole start.
@@ -956,20 +981,27 @@ def start_batch(
                 ]
                 _state.status = TaskRunStatus.RUNNING
                 _state.message = "邀请运行中"
-                _append_timeline("started", f"total={len(invite_members)}")
+                _append_timeline("started", f"开始邀请，一共 {len(invite_members)} 人")
             _persist_current_task()
 
             if not invite_members:
                 raise RuntimeError("没有可邀请成员")
 
             _log("正在准备跨群邀请...")
-            live_fe7 = open_cross_group_picker(cap, target_group_id, source_group_id)
+            live_fe7 = None
+            try:
+                live_fe7 = open_cross_group_picker(cap, target_group_id, source_group_id)
+            except Exception as exc:
+                _log(f"邀请面板准备失败，改用来源群实时信息: {exc}")
             context_token = query_source_context_token(
                 cap, source_group_id, live_rsp=live_fe7
             )
+            if not context_token and snap is not None:
+                context_token = snap.context_token
             if not context_token:
                 raise RuntimeError(
-                    "无法获取来源群信息，请确认群号正确，并保留过跨群邀请的抓包记录"
+                    "来源群成员已经能加载，但还拿不到邀请凭证。"
+                    "请确认饭饭定制在线后重新加载成员再试。"
                 )
 
             for idx, member in enumerate(invite_members):
@@ -986,7 +1018,7 @@ def start_batch(
                         _state.batch_number = batch_no
                         _state.batch_done = 0
                         _state.batch_total_count = min(resolved_batch_size, remaining)
-                        _append_timeline("batch_start", f"batch={batch_no}")
+                        _append_timeline("batch_start", f"开始第 {batch_no} 批")
                     _state.current_qq = member.qq
                     _state.current_nickname = member.nickname
                     _state.message = f"邀请 {member.nickname}({member.qq})"
@@ -1006,7 +1038,7 @@ def start_batch(
                         token = ""
                         member.token = ""
                 if not token:
-                    reason = "找不到该成员的邀请信息"
+                    reason = "找不到这个人的邀请信息，先跳过"
                     _finish_member(
                         member,
                         status=InviteResultStatus.FAILED,
@@ -1015,7 +1047,7 @@ def start_batch(
                     )
                     _log(f"失败 {member.nickname}({member.qq}): {reason}")
                 elif context_token == token:
-                    reason = "来源群信息与成员信息冲突，请重新加载成员"
+                    reason = "来源群和这个人对不上，请重新加载成员后再试"
                     _finish_member(
                         member,
                         status=InviteResultStatus.FAILED,

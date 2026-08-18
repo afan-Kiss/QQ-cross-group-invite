@@ -93,6 +93,70 @@ def test_test_napcat_connection_missing_token(monkeypatch, tmp_path):
         "_onebot_full_response",
         lambda *a, **k: {"status": "ok", "retcode": 0, "data": {"user_id": 1}},
     )
+    seen = {"tok": None}
+
+    def fake_login(tok, **kwargs):
+        seen["tok"] = tok
+        return "cred"
+
+    monkeypatch.setattr(api, "napcat_webui_login", fake_login)
     ok, msg, code = api.test_napcat_connection(napcat_webui_token="")
+    assert ok is True
+    assert code == "OK"
+    assert seen["tok"] == "123456"
+
+
+def test_extract_login_identity_unwraps_nested_webui():
+    import myqq_api as api
+
+    uid = api._extract_login_identity(
+        {
+            "code": 0,
+            "message": "success",
+            "data": {
+                "status": "ok",
+                "retcode": 0,
+                "data": {"user_id": 2249237761, "nickname": "萝卜"},
+            },
+        }
+    )
+    assert uid == "2249237761"
+
+
+def test_extract_login_identity_rejects_webui_error():
+    import myqq_api as api
+    import pytest
+
+    with pytest.raises(RuntimeError, match="未初始化"):
+        api._extract_login_identity({"code": -1, "message": "OneBot 未初始化，无法调用该API"})
+
+
+def test_extract_login_identity_rejects_zero_uin():
+    import myqq_api as api
+    import pytest
+
+    with pytest.raises(RuntimeError, match="missing user_id"):
+        api._extract_login_identity({"status": "ok", "retcode": 0, "data": {"user_id": 0, "nickname": ""}})
+
+
+def test_test_connection_onebot_not_ready_is_not_token(monkeypatch, tmp_path):
+    import myqq_api as api
+
+    cfg_file = tmp_path / "config.json"
+    cfg_file.write_text(
+        json.dumps({"onebot_url": "http://127.0.0.1:6099/api", "napcat_webui_token": "123456"}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(api, "cfg_path", lambda: cfg_file)
+    monkeypatch.setattr(api, "port_open", lambda *a, **k: True)
+    monkeypatch.setattr(api, "napcat_webui_login", lambda *a, **k: "cred")
+
+    def boom(*_a, **_k):
+        raise RuntimeError("OneBot 未初始化，无法创建调试适配器")
+
+    monkeypatch.setattr(api, "_onebot_full_response", boom)
+    ok, msg, code = api.test_napcat_connection(napcat_webui_token="123456")
     assert ok is False
-    assert code == "WEBUI_TOKEN_MISSING"
+    assert code == "ONEBOT_UNAVAILABLE"
+    assert "Token 正确" in msg
+    assert "QQ not logged in" not in msg

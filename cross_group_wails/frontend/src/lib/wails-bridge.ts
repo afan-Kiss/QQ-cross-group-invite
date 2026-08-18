@@ -10,8 +10,8 @@ type WailsApp = {
   SaveFileDialog?: (defaultFilename: string) => Promise<string>;
   RunDiagnostics?: () => Promise<DiagnosticItemRaw[]>;
   PickFanfanDirectory?: () => Promise<string>;
-  DetectFanfan?: (path: string) => Promise<FanfanDetectRaw>;
-  LaunchFanfan?: (path: string) => Promise<FanfanDetectRaw>;
+  DetectFanfan?: (path: string, onebotURL: string) => Promise<FanfanDetectRaw>;
+  LaunchFanfan?: (path: string, onebotURL: string) => Promise<FanfanDetectRaw>;
 };
 
 type BootstrapStatusRaw = {
@@ -47,6 +47,8 @@ export type FanfanDetectRaw = {
   pathKind: string;
   message: string;
   processRunning: boolean;
+  apiOnline?: boolean;
+  apiEndpoint?: string;
 };
 
 const NOT_IN_WAILS = "\u5f53\u524d\u672a\u8fd0\u884c\u5728 Wails \u684c\u9762\u73af\u5883\u4e2d";
@@ -146,15 +148,15 @@ export const wailsBridge = {
     return (await app.PickFanfanDirectory()) || "";
   },
 
-  async detectFanfan(path: string): Promise<FanfanDetectRaw> {
+  async detectFanfan(path: string, onebotURL = ""): Promise<FanfanDetectRaw> {
     const app = getApp();
     if (!app?.DetectFanfan) throw new Error(NOT_IN_WAILS);
-    return app.DetectFanfan(path);
+    return app.DetectFanfan(path, onebotURL);
   },
 
-  async launchFanfan(path: string): Promise<FanfanDetectRaw> {
+  async launchFanfan(path: string, onebotURL = ""): Promise<FanfanDetectRaw> {
     const app = getApp();
     if (!app?.LaunchFanfan) throw new Error(NOT_IN_WAILS);
-    return app.LaunchFanfan(path);
+    return app.LaunchFanfan(path, onebotURL);
   },
 };

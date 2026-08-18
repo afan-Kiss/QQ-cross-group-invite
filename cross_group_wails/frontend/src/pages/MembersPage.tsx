@@ -8,6 +8,9 @@ export function MembersPage() {
   const membersLoaded = useInviteStore((s) => s.membersLoaded);
   const loadMembers = useInviteStore((s) => s.loadMembers);
   const config = useInviteStore((s) => s.config);
+  const inviting = useInviteStore((s) => s.inviting);
+  const invitePhase = useInviteStore((s) => s.invitePhase);
+  const loadBusy = inviting || invitePhase === "starting" || invitePhase === "stopping";
 
   const normalCount = members.filter((m) => m.role === "member").length;
   const staffCount = members.filter((m) => m.role === "owner" || m.role === "admin").length;
@@ -27,7 +30,7 @@ export function MembersPage() {
           { label: "总成员", value: members.length, icon: Users },
           { label: "普通成员", value: normalCount, icon: User },
           { label: "管理人员", value: staffCount, icon: Shield },
-          { label: "有效Token", value: tokenCount, icon: Key },
+          { label: "已有邀请信息", value: tokenCount, icon: Key },
         ].map((c) => (
           <div
             key={c.label}
@@ -51,7 +54,8 @@ export function MembersPage() {
         <button
           type="button"
           onClick={() => void loadMembers()}
-          className="rounded-[10px] bg-primary-light px-3 py-1.5 text-[13px] text-primary hover:bg-primary/10"
+          disabled={loadBusy || !config.source_group_id}
+          className="rounded-[10px] bg-primary-light px-3 py-1.5 text-[13px] text-primary hover:bg-primary/10 disabled:opacity-40"
         >
           重新加载
         </button>

@@ -62,7 +62,7 @@ describe("persistSettings", () => {
     );
     useSettingsStore.getState().load();
     expect(useSettingsStore.getState().hydrated).toBe(true);
-    expect(useSettingsStore.getState().settings.napcatWebuiToken).toBe("");
+    expect(useSettingsStore.getState().settings.napcatWebuiToken).toBe("123456");
     expect(useSettingsStore.getState().settings.autoConnectOnStart).toBe(false);
   });
 });

@@ -372,6 +372,27 @@ def find_group_share_token(capture_dir: Path, group_code: int) -> str | None:
     return None
 
 
+# Field mask from QQ NT 96-byte 0xfe7_4 group-list SEND (fields 10-21, 50-53, 70-71, 100-107, 200-201).
+FE7_MEMBER_FIELD_MASK = bytes.fromhex(
+    "500158016001680170017801800101880101900101a00101a80101"
+    "900301980301a00301a80301b00401b80401a00601a80601b00601"
+    "b80601c00601c80601d00601d80601c00c01c80c01"
+)
+
+
+def build_fe7_group_list(group_code: int) -> str:
+    """Build 0xfe7_4 group member-list page (96-byte UI capture) without a log template."""
+    from pb_utils import encode_field_bytes, encode_field_varint, encode_pb_message
+
+    body = bytearray()
+    body.extend(encode_field_varint(1, int(group_code)))
+    body.extend(encode_field_varint(2, 5))
+    body.extend(encode_field_varint(3, 2))
+    body.extend(encode_field_bytes(4, FE7_MEMBER_FIELD_MASK))
+    top = encode_pb_message({1: [0xfe7], 2: [4], 4: [bytes(body)], 12: [0]})
+    return top.hex()
+
+
 def build_fe7_single_lookup(group_code: int, uid: str) -> str:
     """Build 0xfe7_4 single-friend lookup PB (embed u_ uid)."""
     from pb_utils import encode_field_bytes, encode_field_varint, encode_pb_message
@@ -560,6 +581,7 @@ def find_packet_template(
     data_len: int,
     *,
     require_u_token: bool = False,
+    len_slop: int = 0,
 ) -> str | None:
     """Latest captured SEND template matching cmd suffix and payload size."""
     for log in iter_capture_logs(capture_dir):
@@ -569,10 +591,12 @@ def find_packet_template(
             cmd = str(entry.get("cmd", ""))
             if cmd_marker not in cmd:
                 continue
-            if int(entry.get("dataLen") or 0) != data_len:
-                continue
             hex_data = normalize_hex(str(entry.get("hex", "")))
             if not hex_data:
+                continue
+            reported = int(entry.get("dataLen") or 0)
+            actual = len(hex_data) // 2
+            if min(abs((reported or actual) - data_len), abs(actual - data_len)) > len_slop:
                 continue
             if require_u_token and not U_TOKEN_RE.search(bytes.fromhex(hex_data)):
                 continue
@@ -603,13 +627,20 @@ def find_invite_ui_chain_templates(capture_dir: Path) -> list[tuple[str, str]]:
 def find_cross_group_chain_templates(
     capture_dir: Path,
 ) -> list[tuple[str, str]]:
-    """Templates for cross-group picker open + prep (88d_14/111, 11ec, fe7)."""
+    """Templates for cross-group picker open + prep (88d_14/111, 11ec, fe7).
+
+    Missing packets are skipped instead of dropping the whole chain: member
+    loading already works off generic fe7 pages, and invite should too.
+    """
     out: list[tuple[str, str]] = []
     for cmd_marker, data_len in CROSS_GROUP_OPEN_CHAIN + CROSS_GROUP_PREP_CHAIN:
-        tpl = find_packet_template(capture_dir, cmd_marker, data_len)
-        if not tpl:
-            return []
-        out.append((f"OidbSvcTrpcTcp.{cmd_marker}", tpl))
+        tpl = find_packet_template(capture_dir, cmd_marker, data_len, len_slop=16)
+        if tpl:
+            out.append((f"OidbSvcTrpcTcp.{cmd_marker}", tpl))
+    if not any("0xfe7_4" in cmd for cmd, _ in out):
+        pages = find_fe7_pagination_templates_generic(capture_dir)
+        for page in pages[:2]:
+            out.append(("OidbSvcTrpcTcp.0xfe7_4", page))
     return out
 
 
@@ -993,28 +1024,24 @@ def latest_758_recv_for_invitee(
 
 
 def extract_group_token_from_fe7(hex_data: str, group_code: int | None = None) -> str | None:
-    """Group share invite token from 0xfe7_4 RECV (not per-invitee session token)."""
+    """Context token from 0xfe7_4 RECV: extra uid not paired to a member, else first token.
+
+    The group-code proximity heuristic is last: it usually hits the first member
+    in the list, which is an invitee token, not the picker context.
+    """
+    del group_code
     if not hex_data:
         return None
     try:
-        data = bytes.fromhex(normalize_hex(hex_data))
+        normalize_hex(hex_data)
     except ValueError:
         return None
-    if group_code is not None:
-        from pb_utils import encode_varint
-
-        gc_bytes = encode_varint(int(group_code))
-        idx = data.find(gc_bytes)
-        if idx >= 0:
-            window = data[max(0, idx - 24) : idx + 160]
-            m = U_TOKEN_RE.search(window)
-            if m:
-                return m.group(0).decode("utf-8", errors="replace")
     per_user = set(parse_fe7_token_map(hex_data).values())
-    for tok in extract_invite_tokens_from_hex(hex_data):
+    toks = extract_invite_tokens_from_hex(hex_data)
+    for tok in toks:
         if tok not in per_user:
             return tok
-    return None
+    return toks[0] if toks else None
 
 
 def extract_group_token_from_af6(hex_data: str) -> str | None:

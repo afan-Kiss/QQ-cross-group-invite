@@ -63,3 +63,63 @@ export function parseLogLevel(line: string): "info" | "success" | "warning" | "e
 export function hasMojibake(text: string): boolean {
   return text.includes(String.fromCharCode(0xfffd)) || /\?\?\?/.test(text);
 }
+
+function extractFirstNumber(text: string): string | null {
+  const m = String(text || "").match(/(\d+)/);
+  return m ? m[1] : null;
+}
+
+function rewriteTimelineReason(detail: string): string {
+  let text = String(detail || "").trim();
+  if (!text) return "";
+  if (text.includes("无法获取来源群信息") || text.includes("抓包")) {
+    return "打不开来源群，没法开始邀请。请核对来源群号是否填对；如果从没从这个群往外拉过人，请先在 QQ 里手动从该群邀请一次，再回来重试。";
+  }
+  text = text.replace(
+    /来源群信息与成员信息冲突，请重新加载成员/g,
+    "来源群和这个人对不上，请重新加载成员后再试",
+  );
+  text = text.replace(/找不到该成员的邀请信息/g, "找不到这个人的邀请信息，先跳过");
+  text = text.replace(/token/gi, "邀请信息");
+  return text;
+}
+
+/** 任务时间线：只显示大白话原因，不展示英文和技术用语。 */
+export function formatTimelineText(event: string, detail?: string): string {
+  const ev = String(event || "").trim();
+  const raw = String(detail || "").trim();
+  const count = extractFirstNumber(raw);
+
+  switch (ev) {
+    case "created":
+      return "任务已创建";
+    case "members_loaded":
+      return count ? `已加载 ${count} 名成员` : "成员已加载";
+    case "started":
+      return count ? `开始邀请，一共 ${count} 人` : "开始邀请";
+    case "batch_start":
+      return count ? `开始第 ${count} 批` : "开始下一批";
+    case "rate_limited":
+      return raw ? `操作太频繁，先跳过：${rewriteTimelineReason(raw)}` : "操作太频繁，先跳过";
+    case "failed":
+      return raw ? `邀请失败：${rewriteTimelineReason(raw)}` : "邀请失败";
+    case "stopped":
+      return raw && raw !== "已停止" ? `已停止：${rewriteTimelineReason(raw)}` : "已停止";
+    case "completed":
+      return raw && raw !== "已完成" ? rewriteTimelineReason(raw) : "已完成";
+    case "error":
+      return rewriteTimelineReason(raw) || "出错了，邀请没能开始";
+    default:
+      break;
+  }
+
+  const rewritten = rewriteTimelineReason(raw);
+  if (rewritten && !/^[a-z][a-z0-9_]*$/i.test(rewritten) && !/^[a-z_]+=/i.test(rewritten)) {
+    return rewritten;
+  }
+  if (ev) {
+    if (ev === "error") return "出错了，邀请没能开始";
+    return "任务有更新";
+  }
+  return rewritten || "任务有更新";
+}

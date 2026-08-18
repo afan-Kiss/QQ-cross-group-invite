@@ -124,6 +124,7 @@ export interface AppStatus extends InviteStats {
   napcat_online?: boolean;
   napcat_message?: string;
   batch: BatchProgress;
+  timeline?: Array<{ at: number; event: string; detail?: string }>;
 }
 
 export interface LoadMembersResponse {

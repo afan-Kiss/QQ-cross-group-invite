@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"golang.org/x/sys/windows/registry"
@@ -59,6 +60,7 @@ func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 	applog.Init()
 	applog.Info("app startup")
+	go fanfan.RevealQQWindows(8 * time.Second)
 	window.StartFocusListener(func() {
 		a.ShowMainWindow()
 	})
@@ -170,12 +172,12 @@ func (a *App) PickFanfanDirectory() (string, error) {
 	})
 }
 
-func (a *App) DetectFanfan(path string) fanfan.DetectResult {
-	return fanfan.Detect(path)
+func (a *App) DetectFanfan(path string, onebotURL string) fanfan.DetectResult {
+	return fanfan.Detect(path, onebotURL)
 }
 
-func (a *App) LaunchFanfan(path string) fanfan.DetectResult {
-	res := fanfan.Detect(path)
+func (a *App) LaunchFanfan(path string, onebotURL string) fanfan.DetectResult {
+	res := fanfan.Detect(path, onebotURL)
 	if !res.PathValid {
 		return res
 	}
@@ -183,7 +185,7 @@ func (a *App) LaunchFanfan(path string) fanfan.DetectResult {
 		res.Message = "\u542f\u52a8\u5931\u8d25\uff1a" + err.Error()
 		return res
 	}
-	res.Message = "\u5df2\u53d1\u51fa\u542f\u52a8\u547d\u4ee4"
+	res.Message = "\u5df2\u4ee5\u6709\u754c\u9762\u6a21\u5f0f\u542f\u52a8\uff08\u5df2\u91cd\u542f QQ\uff0c\u8bf7\u67e5\u770b QQ \u7a97\u53e3\uff09"
 	return res
 }
 

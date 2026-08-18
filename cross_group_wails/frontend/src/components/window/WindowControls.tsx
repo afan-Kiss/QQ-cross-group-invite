@@ -13,7 +13,7 @@ export function WindowControls() {
   };
 
   return (
-    <div className="flex items-center gap-1" style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}>
+    <div className="flex items-center gap-1">
       <button
         type="button"
         onClick={() => void WindowMinimise()}

@@ -23,7 +23,6 @@ import type { Member, MemberStatus } from "@/lib/types";
 import { cn, formatNumber } from "@/lib/utils";
 import { useInviteStore } from "@/store/useInviteStore";
 import { useSettingsStore } from "@/store/useSettingsStore";
-import { MemberDetailDrawer } from "@/components/dashboard/MemberDetailDrawer";
 import { MemberContextMenu } from "@/components/dashboard/MemberContextMenu";
 import { toast } from "@/store/useToastStore";
 
@@ -345,7 +344,6 @@ export function MemberTable() {
         </div>
       </div>
 
-      <MemberDetailDrawer />
       {menu && (
         <MemberContextMenu
           x={menu.x}

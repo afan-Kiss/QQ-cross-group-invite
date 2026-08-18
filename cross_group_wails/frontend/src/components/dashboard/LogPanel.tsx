@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { parseLogLevel } from "@/lib/utils";
 import { useInviteStore } from "@/store/useInviteStore";
+import { useServiceStore } from "@/store/useServiceStore";
 import { wailsBridge } from "@/lib/wails-bridge";
 import { toast } from "@/store/useToastStore";
 
@@ -18,6 +19,8 @@ export function LogPanel() {
   const autoScrollLogs = useInviteStore((s) => s.autoScrollLogs);
   const setAutoScrollLogs = useInviteStore((s) => s.setAutoScrollLogs);
   const clearLogs = useInviteStore((s) => s.clearLogs);
+  const serviceReady = useServiceStore((s) => s.localService === "ready");
+  const napcatOnline = useServiceStore((s) => s.napcatOnline);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -52,7 +55,23 @@ export function LogPanel() {
 
   return (
     <div className="animate-fade-up flex h-full min-h-0 flex-col overflow-hidden rounded-[16px] border border-border bg-white p-5 shadow-[var(--shadow-card)]">
-      <h3 className="mb-3 text-[15px] font-semibold text-[#2f352d]">运行日志</h3>
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <h3 className="text-[15px] font-semibold text-[#2f352d]">运行日志</h3>
+        <div className="flex shrink-0 items-center gap-3 text-[12px] text-muted-foreground">
+          <span>
+            本地服务{" "}
+            <span className={serviceReady ? "text-primary" : "text-danger"}>
+              ● {serviceReady ? "正常" : "异常"}
+            </span>
+          </span>
+          <span>
+            饭饭定制{" "}
+            <span className={napcatOnline ? "text-primary" : "text-warning"}>
+              ● {napcatOnline ? "在线" : "离线"}
+            </span>
+          </span>
+        </div>
+      </div>
 
       <div
         ref={scrollRef}

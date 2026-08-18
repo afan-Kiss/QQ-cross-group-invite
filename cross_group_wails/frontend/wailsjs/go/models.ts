@@ -6,6 +6,8 @@ export namespace fanfan {
 	    pathKind: string;
 	    message: string;
 	    processRunning: boolean;
+	    apiOnline: boolean;
+	    apiEndpoint: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new DetectResult(source);
@@ -18,6 +20,8 @@ export namespace fanfan {
 	        this.pathKind = source["pathKind"];
 	        this.message = source["message"];
 	        this.processRunning = source["processRunning"];
+	        this.apiOnline = source["apiOnline"];
+	        this.apiEndpoint = source["apiEndpoint"];
 	    }
 	}
 

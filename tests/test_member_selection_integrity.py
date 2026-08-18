@@ -31,6 +31,49 @@ def test_onebot_member_without_token_is_kept(monkeypatch):
     assert by[10002].nickname == "B"
 
 
+def test_onebot_error_does_not_invent_capture_members(monkeypatch):
+    monkeypatch.setattr(
+        cgb,
+        "onebot_action",
+        lambda *_a, **_k: {"code": -1, "message": "OneBot not ready"},
+    )
+    monkeypatch.setattr(cgb, "fetch_fe7_token_map_live", lambda *_a, **_k: {10001: "tok-a"})
+    monkeypatch.setattr(cgb, "scan_capture_fe7_token_map", lambda *_a, **_k: {10001: "tok-a"})
+    monkeypatch.setattr(cgb, "resolve_capture_dir", lambda *_a, **_k: None)
+    monkeypatch.setattr(cgb, "load_cfg", lambda: {})
+
+    import pytest
+
+    with pytest.raises(RuntimeError, match="OneBot not ready"):
+        cgb.load_source_members(100, filter_staff=True)
+
+
+def test_fe7_failure_still_loads_onebot_members(monkeypatch):
+    monkeypatch.setattr(
+        cgb,
+        "_onebot_members",
+        lambda *_a, **_k: [
+            {"user_id": 10001, "nickname": "A", "role": "member"},
+            {"user_id": 10002, "nickname": "B", "role": "admin"},
+        ],
+    )
+
+    def boom(*_a, **_k):
+        raise RuntimeError("webui down")
+
+    monkeypatch.setattr(cgb, "fetch_fe7_token_map_live", boom)
+    monkeypatch.setattr(cgb, "scan_capture_fe7_token_map", boom)
+    monkeypatch.setattr(cgb, "resolve_capture_dir", lambda *_a, **_k: None)
+    monkeypatch.setattr(cgb, "load_cfg", lambda: {})
+
+    members = cgb.load_source_members(100, filter_staff=True)
+    assert {m.qq for m in members} == {10001, 10002}
+    by = {m.qq: m for m in members}
+    assert by[10001].eligible is True
+    assert by[10002].eligible is False
+    assert by[10001].token == ""
+
+
 def test_partial_invalid_selection_rejects_whole_start(monkeypatch, patch_network):
     invited: list[int] = []
     monkeypatch.setattr(

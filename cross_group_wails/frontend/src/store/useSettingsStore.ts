@@ -33,8 +33,8 @@ const defaults: AppSettings = {
   logRetentionDays: "7",
   autoCleanLogs: true,
   serviceAddress: "127.0.0.1:17888",
-  onebotUrl: "http://127.0.0.1:3000",
-  napcatWebuiToken: "",
+  onebotUrl: "http://127.0.0.1:6099/api",
+  napcatWebuiToken: "123456",
   fanfanPath: "",
 };
 
@@ -82,7 +82,7 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
           parsed.onebotUrl = `http://127.0.0.1:${legacy.onebotPort}`;
         }
         // Never keep token in localStorage (migrate away legacy copies).
-        parsed.napcatWebuiToken = "";
+        parsed.napcatWebuiToken = "123456";
         applyUiSettings(parsed);
         localStorage.setItem("qq-cross-group-settings", JSON.stringify(stripToken(parsed)));
         set({ settings: parsed, hydrated: true });

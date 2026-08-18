@@ -4,7 +4,7 @@ import {fanfan} from '../models';
 import {service} from '../models';
 import {main} from '../models';
 
-export function DetectFanfan(arg1:string):Promise<fanfan.DetectResult>;
+export function DetectFanfan(arg1:string,arg2:string):Promise<fanfan.DetectResult>;
 
 export function EnsureBackend():Promise<service.BootstrapStatus>;
 
@@ -14,7 +14,7 @@ export function GetAppInfo():Promise<main.AppInfo>;
 
 export function HideToTray():Promise<void>;
 
-export function LaunchFanfan(arg1:string):Promise<fanfan.DetectResult>;
+export function LaunchFanfan(arg1:string,arg2:string):Promise<fanfan.DetectResult>;
 
 export function OpenLogsDir():Promise<void>;
 

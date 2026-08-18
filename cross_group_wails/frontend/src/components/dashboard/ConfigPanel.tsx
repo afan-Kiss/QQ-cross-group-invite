@@ -68,24 +68,6 @@ export function ConfigPanel() {
     <div className="animate-fade-up flex h-full min-h-0 flex-col overflow-y-auto rounded-[16px] border border-border bg-white p-5 shadow-[var(--shadow-card)]">
       <h2 className="mb-4 text-[16px] font-semibold text-[#242824]">邀请配置</h2>
 
-      <div className="mb-4 rounded-[12px] border border-border bg-[#f7faf5] p-3 text-[12px]">
-        <div className="mb-2 font-medium text-[#242824]">连接状态</div>
-        <div className="space-y-1.5 text-muted-foreground">
-          <div className="flex justify-between">
-            <span>本地服务</span>
-            <span className={serviceReady ? "text-primary" : "text-danger"}>
-              ● {serviceReady ? "正常" : "异常"}
-            </span>
-          </div>
-          <div className="flex justify-between">
-            <span>饭饭定制</span>
-            <span className={napcatOnline ? "text-primary" : "text-warning"}>
-              ● {napcatOnline ? "在线" : "离线"}
-            </span>
-          </div>
-        </div>
-      </div>
-
       {!napcatOnline && serviceReady && (
         <div className="mb-4 rounded-[10px] border border-[#f0dca0] bg-warning-light px-3 py-2 text-[12px] leading-5 text-[#9a7618]">
           <p>饭饭定制未连接，请启动饭饭定制后再加载成员或开始邀请。</p>
@@ -102,34 +84,42 @@ export function ConfigPanel() {
 
       <div className="space-y-4">
         <div className="space-y-2">
-          <Label htmlFor="target">目标群号</Label>
+          <Label htmlFor="source">来源群号（从哪个群拉人）</Label>
+          <Input
+            id="source"
+            placeholder="填当前要导出成员的群号"
+            disabled={!serviceReady}
+            className={cn(sameGroup && "border-danger focus-visible:ring-danger/30")}
+            {...register("source_group_id", {
+              onChange: (e) => setConfig({ source_group_id: e.target.value.replace(/\D/g, "") }),
+            })}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                void onLoadMembers();
+              }
+            }}
+          />
+          <p className="text-[12px] text-muted-foreground">填好后来源群号后点「加载成员」，不会自动加载。</p>
+          {errors.source_group_id && (
+            <p className="text-[12px] text-danger">{String(errors.source_group_id.message || "")}</p>
+          )}
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="target">目标群号（邀请进哪个群）</Label>
           <Input
             id="target"
-            placeholder="请输入目标群号"
+            placeholder="填成员要加入的群号"
             disabled={!serviceReady}
             className={cn(sameGroup && "border-danger focus-visible:ring-danger/30")}
             {...register("target_group_id", {
               onChange: (e) => setConfig({ target_group_id: e.target.value.replace(/\D/g, "") }),
             })}
           />
+          <p className="text-[12px] text-muted-foreground">开始邀请时才会用到，加载成员不需要填这个。</p>
           {errors.target_group_id && (
             <p className="text-[12px] text-danger">{String(errors.target_group_id.message || "")}</p>
-          )}
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="source">来源群号</Label>
-          <Input
-            id="source"
-            placeholder="请输入来源群号"
-            disabled={!serviceReady}
-            className={cn(sameGroup && "border-danger focus-visible:ring-danger/30")}
-            {...register("source_group_id", {
-              onChange: (e) => setConfig({ source_group_id: e.target.value.replace(/\D/g, "") }),
-            })}
-          />
-          {errors.source_group_id && (
-            <p className="text-[12px] text-danger">{String(errors.source_group_id.message || "")}</p>
           )}
           {sameGroup && (
             <p className="text-[12px] text-danger">目标群不能与来源群相同</p>

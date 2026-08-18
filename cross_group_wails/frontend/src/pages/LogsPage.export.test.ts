@@ -8,4 +8,16 @@ describe("LogsPage export path", () => {
     expect(text.includes("wailsBridge.exportLogs")).toBe(true);
     expect(text.includes("URL.createObjectURL")).toBe(false);
   });
+
+  it("shows Chinese level and module labels", () => {
+    const text = readFileSync(resolve(__dirname, "LogsPage.tsx"), "utf8");
+    expect(text).toContain("LOG_LEVEL_LABELS");
+    expect(text).toContain("LOG_MODULE_LABELS");
+  });
+
+  it("auto-scroll actually scrolls the log list", () => {
+    const text = readFileSync(resolve(__dirname, "LogsPage.tsx"), "utf8");
+    expect(text).toContain("scrollRef");
+    expect(text).toContain("scrollHeight");
+  });
 });

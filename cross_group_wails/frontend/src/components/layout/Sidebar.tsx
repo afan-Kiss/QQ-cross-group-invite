@@ -79,8 +79,8 @@ export function Sidebar() {
           <div className="space-y-2 text-[11px] text-muted-foreground">
             <div className="flex items-center justify-between">
               <span>本地服务</span>
-              <span className={localService === "ready" ? "text-primary" : "text-danger"}>
-                ● {localService === "ready" ? "正常" : "异常"}
+              <span className={localService === "ready" ? "text-primary" : localService === "manual" ? "text-warning" : "text-danger"}>
+                ● {localService === "ready" ? "正常" : localService === "manual" ? "手动" : "异常"}
               </span>
             </div>
             <div className="flex items-center justify-between">

@@ -313,7 +313,7 @@ def napcat_webui_login(
     """Login NapCat WebUI, return base64 Credential for /api/Debug/call."""
     cfg = load_cfg()
     base = (api_url or cfg.get("onebot_url") or "http://127.0.0.1:6099/api").rstrip("/")
-    tok = str(webui_token if webui_token is not None else cfg.get("napcat_webui_token") or cfg.get("onebot_token") or "")
+    tok = _default_fanfan_token(cfg, webui_token)
     cache_key = (base, tok)
     cached = getattr(napcat_webui_login, "_cache", {}).get(cache_key)
     if cached and not force:
@@ -397,7 +397,7 @@ def send_onebot_packet(
     """NapCat/OneBot send_packet。Framework 未开 OneBot HTTP 时自动走 WebUI Debug。"""
     cfg = load_cfg()
     url = (api_url or cfg.get("onebot_url") or "http://127.0.0.1:6099/api").rstrip("/")
-    tok = str(token if token is not None else cfg.get("onebot_token") or cfg.get("token") or "")
+    tok = _default_fanfan_token(cfg, token)
     if url.endswith("/api") and len(tok) <= 20:
         return send_napcat_packet(
             cmd,
@@ -436,6 +436,64 @@ def send_onebot_packet(
         raise RuntimeError(f"无法连接 OneBot API: {e.reason}") from e
 
 
+DEFAULT_FANFAN_TOKEN = "123456"
+
+
+def _is_webui_api(url: str) -> bool:
+    u = (url or "").rstrip("/")
+    return u.endswith("/api")
+
+
+def _default_fanfan_token(cfg: dict[str, Any], explicit: str | None = None) -> str:
+    if explicit is not None and str(explicit).strip():
+        return str(explicit).strip()
+    return str(
+        cfg.get("napcat_webui_token")
+        or cfg.get("onebot_token")
+        or cfg.get("token")
+        or DEFAULT_FANFAN_TOKEN
+    ).strip() or DEFAULT_FANFAN_TOKEN
+
+
+def _webui_debug_call(
+    action: str,
+    params: dict | None = None,
+    *,
+    api_url: str,
+    token: str | None,
+    timeout: float = 15,
+) -> dict[str, Any]:
+    """Call OneBot-style actions through Framework WebUI Debug API."""
+    cred = napcat_webui_login(token, api_url=api_url, timeout=min(timeout, 10))
+    debug_url = getattr(napcat_webui_login, "_debug_url", "")
+    if not debug_url:
+        base = api_url.rstrip("/")
+        debug_url = base + "/Debug/call" if base.endswith("/api") else base + "/api/Debug/call"
+    payload = {"action": action, "params": params or {}}
+    req = urllib.request.Request(
+        debug_url,
+        data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+        method="POST",
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {cred}",
+        },
+    )
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        obj = json.loads(r.read().decode("utf-8", errors="replace"))
+    if not isinstance(obj, dict):
+        return {"raw": obj}
+    code = obj.get("code")
+    if code not in (None, 0, "0"):
+        raise RuntimeError(str(obj.get("message") or obj.get("msg") or f"WebUI error code={code}"))
+    if "data" in obj:
+        data = obj.get("data")
+        if isinstance(data, dict):
+            return data
+        return {"data": data}
+    return obj
+
+
 def onebot_action(
     action: str,
     params: dict | None = None,
@@ -447,19 +505,22 @@ def onebot_action(
     """Call NapCat OneBot HTTP action (e.g. get_friend_list)."""
     cfg = load_cfg()
     url = (api_url or cfg.get("onebot_url") or "http://127.0.0.1:6099/api").rstrip("/")
-    tok = str(token if token is not None else cfg.get("onebot_token") or "")
-    payload = {"action": action, "params": params or {}}
-    headers = {"Content-Type": "application/json; charset=utf-8"}
-    if tok:
-        headers["Authorization"] = f"Bearer {tok}"
-    req = urllib.request.Request(
-        url,
-        data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
-        method="POST",
-        headers=headers,
-    )
-    with urllib.request.urlopen(req, timeout=timeout) as r:
-        obj = json.loads(r.read().decode("utf-8", errors="replace"))
+    tok = _default_fanfan_token(cfg, token)
+    if _is_webui_api(url):
+        obj = _webui_debug_call(action, params, api_url=url, token=tok, timeout=timeout)
+    else:
+        payload = {"action": action, "params": params or {}}
+        headers = {"Content-Type": "application/json; charset=utf-8"}
+        if tok:
+            headers["Authorization"] = f"Bearer {tok}"
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+            method="POST",
+            headers=headers,
+        )
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            obj = json.loads(r.read().decode("utf-8", errors="replace"))
     if isinstance(obj, dict) and isinstance(obj.get("data"), dict):
         return obj["data"]
     return obj if isinstance(obj, dict) else {"raw": obj}
@@ -537,12 +598,16 @@ def _onebot_full_response(
     params: dict | None = None,
     *,
     api_url: str | None = None,
+    token: str | None = None,
     timeout: float = 15,
 ) -> dict[str, Any]:
     """Call OneBot HTTP and return the full JSON object (not only data)."""
     cfg = load_cfg()
     url = (api_url or cfg.get("onebot_url") or "http://127.0.0.1:6099/api").rstrip("/")
-    tok = str(cfg.get("onebot_token") or "")
+    tok = _default_fanfan_token(cfg, token)
+    if _is_webui_api(url):
+        obj = _webui_debug_call(action, params, api_url=url, token=tok, timeout=timeout)
+        return obj if isinstance(obj, dict) else {"raw": obj}
     payload = {"action": action, "params": params or {}}
     headers = {"Content-Type": "application/json; charset=utf-8"}
     if tok:
@@ -558,38 +623,109 @@ def _onebot_full_response(
     return obj if isinstance(obj, dict) else {"raw": obj}
 
 
+def _login_uid_from_mapping(data: dict[str, Any]) -> str:
+    for key in ("user_id", "uin", "self_id"):
+        if key not in data:
+            continue
+        raw = data.get(key)
+        if raw in (None, "", 0, "0"):
+            continue
+        text = str(raw).strip()
+        if text and text.lower() != "nan":
+            return text
+    return ""
+
+
 def _extract_login_identity(payload: dict[str, Any]) -> str:
-    status = str(payload.get("status") or "").lower()
-    if status in {"failed", "error"}:
-        raise RuntimeError(f"OneBot get_login_info failed: status={status}")
-    retcode = payload.get("retcode")
-    if retcode is not None and str(retcode) not in {"0", "ok"}:
-        raise RuntimeError(f"OneBot get_login_info retcode={retcode}")
-    data = payload.get("data") if isinstance(payload.get("data"), dict) else payload
-    if not isinstance(data, dict):
+    if not isinstance(payload, dict):
         raise RuntimeError("OneBot get_login_info returned no data")
-    if data.get("error") or data.get("message") in {"failed", "error"}:
-        raise RuntimeError(f"OneBot get_login_info error-shaped: {data.get('error') or data.get('message')}")
-    uid = str(data.get("user_id") or data.get("uin") or "").strip()
-    if not uid:
-        raise RuntimeError("OneBot get_login_info missing user_id/uin")
-    return uid
+    cur: Any = payload
+    for _ in range(5):
+        if not isinstance(cur, dict):
+            break
+        code = cur.get("code")
+        if code not in (None, 0, "0"):
+            raise RuntimeError(
+                str(cur.get("message") or cur.get("msg") or f"get_login_info error code={code}")
+            )
+        status = str(cur.get("status") or "").lower()
+        if status in {"failed", "error"}:
+            raise RuntimeError(
+                str(cur.get("message") or cur.get("wording") or f"OneBot get_login_info failed: status={status}")
+            )
+        retcode = cur.get("retcode")
+        if retcode is not None and str(retcode) not in {"0", "ok"}:
+            raise RuntimeError(
+                str(cur.get("message") or cur.get("wording") or f"OneBot get_login_info retcode={retcode}")
+            )
+        uid = _login_uid_from_mapping(cur)
+        if uid:
+            return uid
+        inner = cur.get("data")
+        if isinstance(inner, dict):
+            cur = inner
+            continue
+        break
+    raise RuntimeError("OneBot get_login_info missing user_id/uin")
+
+
+def _webui_root(api_url: str) -> str:
+    u = str(api_url or "").rstrip("/")
+    if u.endswith("/api"):
+        return u[: -len("/api")]
+    return u
+
+
+def _probe_webui_alive(api_url: str, timeout: float = 2.0) -> bool:
+    """True when Framework/Shell WebUI responds (OneBot HTTP may be disabled)."""
+    root = _webui_root(api_url)
+    for u in (root + "/", root + "/webui/", str(api_url).rstrip("/") + "/"):
+        try:
+            req = urllib.request.Request(u, method="GET", headers={"User-Agent": "qq-cross-group"})
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                if 200 <= int(r.status) < 500:
+                    return True
+        except urllib.error.HTTPError:
+            return True
+        except Exception:
+            continue
+    try:
+        auth = root + "/api/auth/login"
+        data = json.dumps({"hash": "0"}).encode("utf-8")
+        req = urllib.request.Request(
+            auth,
+            data=data,
+            method="POST",
+            headers={"Content-Type": "application/json", "User-Agent": "qq-cross-group"},
+        )
+        try:
+            urllib.request.urlopen(req, timeout=timeout)
+            return True
+        except urllib.error.HTTPError:
+            return True
+    except Exception:
+        return False
 
 
 def check_napcat_online(
     timeout: float = 3.0, *,
     onebot_url: str | None = None,
 ) -> tuple[bool, str]:
-    """Return (online, message) for NapCat OneBot HTTP."""
+    """Return (online, message). Accepts OneBot HTTP or Framework WebUI on the same URL."""
     try:
         cfg = load_cfg()
         url = str(onebot_url or cfg.get("onebot_url") or "http://127.0.0.1:6099/api").rstrip("/")
         host, port = parse_host_port(url)
         if not port_open(host, port, timeout=min(timeout, 1.5)):
             return False, f"饭饭定制 offline ({host}:{port} no response)"
-        payload = _onebot_full_response("get_login_info", timeout=timeout, api_url=url)
-        uid = _extract_login_identity(payload)
-        return True, f"饭饭定制 online (QQ {uid})"
+        try:
+            payload = _onebot_full_response("get_login_info", timeout=timeout, api_url=url)
+            uid = _extract_login_identity(payload)
+            return True, f"饭饭定制 online (QQ {uid})"
+        except Exception as onebot_exc:
+            if _probe_webui_alive(url, timeout=min(timeout, 2.0)):
+                return True, "饭饭定制 online (WebUI)"
+            return False, f"饭饭定制 offline: {onebot_exc}"
     except Exception as exc:
         return False, f"饭饭定制 offline: {exc}"
 
@@ -610,28 +746,37 @@ def test_napcat_connection(
     url = str(onebot_url or "").strip() or str(cfg.get("onebot_url") or "http://127.0.0.1:6099/api").rstrip("/")
     url = url.rstrip("/")
     req_tok = str(napcat_webui_token or "").strip()
-    token = req_tok if req_tok else str(cfg.get("napcat_webui_token") or cfg.get("onebot_token") or "")
+    token = req_tok if req_tok else str(cfg.get("napcat_webui_token") or cfg.get("onebot_token") or DEFAULT_FANFAN_TOKEN)
 
     host, port = parse_host_port(url)
     if not port_open(host, port, timeout=min(timeout, 1.5)):
         return False, f"饭饭定制 port unreachable ({host}:{port})", "PORT_UNREACHABLE"
 
-    try:
-        payload = _onebot_full_response("get_login_info", timeout=timeout, api_url=url)
-        uid = _extract_login_identity(payload)
-    except Exception as exc:
-        msg = str(exc)
-        if "missing user_id" in msg or "NOT_LOGGED" in msg.upper():
-            return False, f"QQ not logged in: {exc}", "NOT_LOGGED_IN"
-        return False, f"OneBot API unavailable: {exc}", "ONEBOT_UNAVAILABLE"
-
     if not token:
         return False, "饭饭定制 Token missing", "WEBUI_TOKEN_MISSING"
 
+    if _is_webui_api(url):
+        try:
+            napcat_webui_login(token, api_url=url, timeout=min(timeout, 10), force=True)
+        except Exception as exc:
+            # Never include raw token in message.
+            return False, f"饭饭定制 Token 不正确: {exc}", "WEBUI_TOKEN_INVALID"
+
     try:
-        napcat_webui_login(token, api_url=url, timeout=min(timeout, 10), force=True)
+        payload = _onebot_full_response(
+            "get_login_info", timeout=timeout, api_url=url, token=token
+        )
+        uid = _extract_login_identity(payload)
     except Exception as exc:
-        # Never include raw token in message.
-        return False, f"饭饭定制 Token invalid: {exc}", "WEBUI_TOKEN_INVALID"
+        msg = str(exc)
+        if "登录失败" in msg or "Token invalid" in msg or "Token 不正确" in msg:
+            return False, f"饭饭定制 Token 不正确: {exc}", "WEBUI_TOKEN_INVALID"
+        if "未初始化" in msg:
+            return False, "Token 正确，但 OneBot 尚未就绪。请等 QQ 登录完成后再测。", "ONEBOT_UNAVAILABLE"
+        if "missing user_id" in msg or "NOT_LOGGED" in msg.upper():
+            return False, "Token 正确，但 QQ 尚未登录（get_login_info 没有账号）。", "NOT_LOGGED_IN"
+        if not _probe_webui_alive(url, timeout=min(timeout, 2.0)):
+            return False, f"OneBot API unavailable: {exc}", "ONEBOT_UNAVAILABLE"
+        return False, f"无法获取登录号: {exc}", "NOT_LOGGED_IN"
 
     return True, f"饭饭定制 connection ok (QQ {uid})", "OK"

@@ -64,7 +64,7 @@ export function MemberContextMenu({ x, y, member, onClose }: Props) {
       },
     },
     {
-      label: "重新邀请",
+      label: "重新加入队列",
       disabled: !(member.status === "failed" || member.status === "rate_limited"),
       onClick: () => requeueMember(member.qq),
     },

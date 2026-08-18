@@ -55,6 +55,7 @@ const emptyStats: AppStatus = {
   napcat_online: false,
   napcat_message: "",
   batch: emptyBatch,
+  timeline: [],
 };
 
 let membersLoadGeneration = 0;
@@ -385,7 +386,7 @@ export const useInviteStore = create<InviteStore>((set, get) => ({
         selectedQqs: selected,
         statusText: `成员加载完成，共 ${res.count} 人（可邀请 ${res.eligible ?? selected.size}）`,
       }));
-      toast("success", "成员加载完成");
+      toast(res.count > 0 ? "success" : "warning", res.count > 0 ? "成员加载完成" : "未加载到成员，请确认来源群号正确、已登录 QQ，且 Token 为 123456");
       await get().refreshStatus();
     } catch (e) {
       if (generation !== membersLoadGeneration) return;
@@ -613,6 +614,7 @@ export const useInviteStore = create<InviteStore>((set, get) => ({
           status: mappedStatus,
           endTime: status.finished_at ? toEpochMs(status.finished_at) : task.endTime,
           errorMessage: status.error_message || task.errorMessage,
+          timeline: status.timeline?.length ? status.timeline : task.timeline,
         };
       });
       if (ownedTask && taskIdForUi && !updatedTasks.some((x) => x.id === taskIdForUi)) {
@@ -629,6 +631,7 @@ export const useInviteStore = create<InviteStore>((set, get) => ({
             status: mappedStatus,
             endTime: status.finished_at ? toEpochMs(status.finished_at) : undefined,
             errorMessage: status.error_message,
+            timeline: status.timeline,
           },
           ...updatedTasks,
         ];
