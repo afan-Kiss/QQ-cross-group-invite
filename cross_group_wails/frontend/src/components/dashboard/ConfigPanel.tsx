@@ -65,7 +65,7 @@ export function ConfigPanel() {
   };
 
   return (
-    <div className="animate-fade-up flex h-full flex-col rounded-[16px] border border-border bg-white p-5 shadow-[var(--shadow-card)]">
+    <div className="animate-fade-up flex h-full min-h-0 flex-col overflow-y-auto rounded-[16px] border border-border bg-white p-5 shadow-[var(--shadow-card)]">
       <h2 className="mb-4 text-[16px] font-semibold text-[#242824]">邀请配置</h2>
 
       <div className="mb-4 rounded-[12px] border border-border bg-[#f7faf5] p-3 text-[12px]">

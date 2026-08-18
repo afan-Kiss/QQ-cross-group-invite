@@ -51,7 +51,7 @@ export function LogPanel() {
   };
 
   return (
-    <div className="animate-fade-up flex h-full min-h-[220px] flex-col rounded-[16px] border border-border bg-white p-5 shadow-[var(--shadow-card)]">
+    <div className="animate-fade-up flex h-full min-h-0 flex-col overflow-hidden rounded-[16px] border border-border bg-white p-5 shadow-[var(--shadow-card)]">
       <h3 className="mb-3 text-[15px] font-semibold text-[#2f352d]">运行日志</h3>
 
       <div

@@ -10,7 +10,7 @@ export function FailedPanel() {
   const setDetailMemberQq = useInviteStore((s) => s.setDetailMemberQq);
 
   return (
-    <div className="flex h-full min-h-[220px] flex-col rounded-[16px] border border-border bg-white p-5 shadow-[var(--shadow-card)]">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-[16px] border border-border bg-white p-5 shadow-[var(--shadow-card)]">
       <div className="mb-3 flex items-center justify-between">
         <h3 className="text-[15px] font-semibold text-[#2f352d]">邀请失败</h3>
         <Button variant="secondary" size="sm" onClick={() => void clearFailed()}>
