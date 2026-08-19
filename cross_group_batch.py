@@ -10,7 +10,7 @@ import secrets
 import threading
 import time
 import uuid
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, wait as futures_wait
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
@@ -284,6 +284,7 @@ _members_lock = threading.RLock()
 _members_snapshot: MembersCacheSnapshot | None = None
 _owned_task_id: str | None = None
 _758_auth_seq = 0
+_last_758_send_mono = 0.0
 _tasks_io_lock = threading.Lock()
 _STALE_STATUSES = frozenset(
     {
@@ -601,7 +602,11 @@ def classify_invite_failure(code: int | None, msg: str) -> str:
     if any(k in text for k in ("频繁", "操作频繁")):
         return "rate_limited"
     lower = text.lower()
-    if any(k in lower for k in ("too fast", "rate")):
+    if "too fast" in lower:
+        return "rate_limited"
+    if re.search(r"rate[_\s-]*limit(?:ed)?", lower):
+        return "rate_limited"
+    if re.search(r"\brate\b", lower):
         return "rate_limited"
     return "failed"
 
@@ -646,6 +651,36 @@ def authorize_758_send() -> int | None:
         seq = _758_auth_seq
         _send_gate_log("758_authorized", seq)
         return seq
+
+
+def _mark_758_network_send_started(seq: int) -> None:
+    """Called immediately before the real 758 HTTP/_send_packet."""
+    global _last_758_send_mono
+    _last_758_send_mono = time.monotonic()
+    with _state_lock:
+        if _state.interval_ms > 0:
+            _state.next_invite_at = _now() + (_state.interval_ms / 1000.0)
+    _send_gate_log("758_send_started", seq)
+
+
+def _mark_758_network_send_finished(seq: int) -> None:
+    _send_gate_log("758_send_finished", seq)
+
+
+def _wait_for_758_cadence(interval_ms: int) -> bool:
+    """Wait until interval_ms since last real 758 send. True if stop requested."""
+    if interval_ms <= 0 or _last_758_send_mono <= 0:
+        return _state._stop.is_set()
+    elapsed = time.monotonic() - _last_758_send_mono
+    remaining = (float(interval_ms) / 1000.0) - elapsed
+    if remaining <= 0:
+        return _state._stop.is_set()
+    with _state_lock:
+        _state.next_invite_at = _now() + remaining
+    stopped = _interruptible_wait(remaining)
+    with _state_lock:
+        _state.next_invite_at = 0.0
+    return stopped
 
 
 def _picker_missing_reason(picker: Any, qq: int) -> str:
@@ -864,7 +899,7 @@ def _verify_membership_chunk(
     sub_members: list[SourceMember],
     code: int | None,
 ) -> list[tuple[SourceMember, str, int | None, str]]:
-    """Shared deadline + concurrent lookup so N members do not stack full timeouts."""
+    """Shared monotonic deadline + concurrent lookup; HTTP timeouts respect remaining."""
     if not sub_members:
         return []
     deadline = time.monotonic() + float(MEMBERSHIP_RETRY_SEC)
@@ -883,92 +918,102 @@ def _verify_membership_chunk(
         return [_one(sub_members[0])]
     by_qq: dict[int, tuple[SourceMember, str, int | None, str]] = {}
     workers = min(len(sub_members), max(1, int(PROTOCOL_INVITE_PACKET_MAX)))
+    wall = max(0.05, deadline - time.monotonic())
     with ThreadPoolExecutor(max_workers=workers) as pool:
-        futs = {pool.submit(_one, m): m for m in sub_members}
-        for fut in as_completed(futs):
-            member, kind, c, msg = fut.result()
-            by_qq[member.qq] = (member, kind, c, msg)
+        futs = [pool.submit(_one, m) for m in sub_members]
+        done, not_done = futures_wait(futs, timeout=wall)
+        for fut in not_done:
+            fut.cancel()
+        for member, fut in zip(sub_members, futs):
+            if fut in done and not fut.cancelled():
+                try:
+                    by_qq[member.qq] = fut.result(timeout=0)
+                    continue
+                except Exception:  # noqa: BLE001
+                    pass
+            by_qq[member.qq] = _membership_outcome(member, None, code)
     return [by_qq[m.qq] for m in sub_members]
 
 
-def _invite_batch(
+def _invite_protocol_chunk(
     *,
     target_group_id: int,
     source_group_id: int,
     members: list[SourceMember],
     tokens: list[str],
     capture_dir,
+    interval_ms: int = 0,
 ) -> list[tuple[SourceMember, str, int | None, str]]:
-    """FE1 + 758 for this token list. Tokens must be picker-fresh for this send unit.
+    """One protocol send unit: FE1 + one 758. Caller must already fresh-pick tokens.
 
+    Requires 1 <= len(members) <= PROTOCOL_INVITE_PACKET_MAX. Never splits.
     Outcome kind: success | failed | rate_limited | cancelled
     cancelled = stopped before 758 was authorized (not a protocol failure).
-    After 758 is authorized/sent, membership verify always completes for this sub-packet.
-    Internal split is a safety cap; callers should already pass one protocol chunk.
+    After 758 is authorized/sent, membership verify always completes for this chunk.
     """
-    results: list[tuple[SourceMember, str, int | None, str]] = []
-    if len(members) != len(tokens) or not members:
+    n = len(members)
+    packet_max = max(1, int(PROTOCOL_INVITE_PACKET_MAX))
+    if n < 1:
+        return []
+    if n > packet_max:
+        raise ValueError(
+            f"protocol chunk size {n} exceeds PROTOCOL_INVITE_PACKET_MAX={packet_max}; "
+            "split only in the worker/scheduler layer"
+        )
+    if len(tokens) != n:
         return [
             (m, "failed", None, "当前选择器会话没有返回该成员的邀请凭证")
             for m in members
         ]
     stop_event = _state._stop
-    packet_max = max(1, int(PROTOCOL_INVITE_PACKET_MAX))
-    for offset in range(0, len(members), packet_max):
-        sub_members = members[offset : offset + packet_max]
-        sub_tokens = tokens[offset : offset + packet_max]
-        if stop_event.is_set():
-            results.extend(
-                (m, "cancelled", None, "已停止，未发送邀请") for m in sub_members
-            )
-            continue
-        try:
-            if not sync_fe1_selection(capture_dir, sub_tokens, stop_event=stop_event):
-                if stop_event.is_set():
-                    results.extend(
-                        (m, "cancelled", None, "已停止，未发送邀请") for m in sub_members
-                    )
-                    continue
-                reason = "跨群选择同步失败，未发送邀请"
-                results.extend((m, "failed", None, reason) for m in sub_members)
-                continue
-            auth_seq = authorize_758_send()
-            if auth_seq is None:
-                results.extend(
-                    (m, "cancelled", None, "已停止，未发送邀请") for m in sub_members
-                )
-                continue
-            _send_gate_log("758_send_started", auth_seq)
-            ok, resp = send_cross_group_invite(
-                target_group_id=target_group_id,
-                source_group_id=source_group_id,
-                invitee_tokens=sub_tokens,
-                capture_dir=capture_dir,
-                stop_event=None,
-            )
-        except PickerStopped:
-            results.extend(
-                (m, "cancelled", None, "已停止，未发送邀请") for m in sub_members
-            )
-            continue
-        rsp_hex = _rsp_hex(resp)
-        code, _ = parse_758_recv_status(rsp_hex) if rsp_hex else (None, False)
-        msg = _extract_error_text(rsp_hex)
-        if not ok:
-            if isinstance(resp, dict) and resp.get("error") == "stopped":
-                results.extend(
-                    (m, "cancelled", None, "已停止，未发送邀请") for m in sub_members
-                )
-                continue
-            if not msg and isinstance(resp, dict):
-                msg = str(resp.get("message") or resp.get("wording") or resp.get("error") or "")
-            if not msg and code is None:
-                msg = "758 返回无法确认邀请成功"
-            kind = classify_invite_failure(code, msg)
-            results.extend((m, kind, code, msg) for m in sub_members)
-            continue
-        results.extend(_verify_membership_chunk(target_group_id, sub_members, code))
-    return results
+    if stop_event.is_set():
+        return [(m, "cancelled", None, "已停止，未发送邀请") for m in members]
+    try:
+        if not sync_fe1_selection(capture_dir, tokens, stop_event=stop_event):
+            if stop_event.is_set():
+                return [(m, "cancelled", None, "已停止，未发送邀请") for m in members]
+            reason = "跨群选择同步失败，未发送邀请"
+            return [(m, "failed", None, reason) for m in members]
+        if _wait_for_758_cadence(int(interval_ms or 0)):
+            return [(m, "cancelled", None, "已停止，未发送邀请") for m in members]
+        auth_seq = authorize_758_send()
+        if auth_seq is None:
+            return [(m, "cancelled", None, "已停止，未发送邀请") for m in members]
+
+        def _before() -> None:
+            _mark_758_network_send_started(auth_seq)
+
+        def _after() -> None:
+            _mark_758_network_send_finished(auth_seq)
+
+        ok, resp = send_cross_group_invite(
+            target_group_id=target_group_id,
+            source_group_id=source_group_id,
+            invitee_tokens=tokens,
+            capture_dir=capture_dir,
+            stop_event=None,
+            before_network_send=_before,
+            after_network_send=_after,
+        )
+    except PickerStopped:
+        return [(m, "cancelled", None, "已停止，未发送邀请") for m in members]
+    rsp_hex = _rsp_hex(resp)
+    code, _ = parse_758_recv_status(rsp_hex) if rsp_hex else (None, False)
+    msg = _extract_error_text(rsp_hex)
+    if not ok:
+        if isinstance(resp, dict) and resp.get("error") == "stopped":
+            return [(m, "cancelled", None, "已停止，未发送邀请") for m in members]
+        if not msg and isinstance(resp, dict):
+            msg = str(resp.get("message") or resp.get("wording") or resp.get("error") or "")
+        if not msg and code is None:
+            msg = "758 返回无法确认邀请成功"
+        kind = classify_invite_failure(code, msg)
+        return [(m, kind, code, msg) for m in members]
+    return _verify_membership_chunk(target_group_id, members, code)
+
+
+# Alias for older call sites / monkeypatches; same single-chunk contract.
+_invite_batch = _invite_protocol_chunk
 
 
 def _update_result(qq: int, **fields: Any) -> None:
@@ -1059,17 +1104,59 @@ def _finish_member(
             _append_timeline("stopped", f"{member.nickname}({member.qq}): {reason}")
 
 
-def _cancel_remaining_unsent(reason: str = "已停止，未发送邀请") -> None:
-    """Mark WAITING/INVITING rows cancelled without counting them as protocol failures."""
+def finalize_unresolved_results(
+    terminal_status: TaskRunStatus,
+    reason: str = "",
+) -> None:
+    """Close WAITING/INVITING so COMPLETED/STOPPED/ERROR never leave live members.
+
+    STOPPED -> CANCELLED (user stop). ERROR/COMPLETED leftovers -> FAILED.
+    Already-terminal rows are not double-counted.
+    """
     with _state_lock:
         pending = [
             r
             for r in _state.results
             if r.status in (InviteResultStatus.WAITING, InviteResultStatus.INVITING)
         ]
+    if not pending:
+        return
+    if terminal_status == TaskRunStatus.STOPPED:
+        cancel_reason = reason or "已停止，未发送邀请"
+        for row in pending:
+            member = SourceMember(qq=row.qq, nickname=row.nickname, token="")
+            _mark_unsent_cancelled(
+                member,
+                reason=cancel_reason,
+                started_at=row.started_at or _now(),
+            )
+        return
+    root = (reason or "未知异常").strip()
+    fail_reason = (
+        root
+        if root.startswith("任务异常终止")
+        else f"任务异常终止，未完成邀请：{root}"
+    )
     for row in pending:
         member = SourceMember(qq=row.qq, nickname=row.nickname, token="")
-        _mark_unsent_cancelled(member, reason=reason, started_at=row.started_at or _now())
+        with _state_lock:
+            already = next((r for r in _state.results if r.qq == member.qq), None)
+            if already and already.status not in (
+                InviteResultStatus.WAITING,
+                InviteResultStatus.INVITING,
+            ):
+                continue
+        _finish_member(
+            member,
+            status=InviteResultStatus.FAILED,
+            reason=fail_reason,
+            started_at=row.started_at or _now(),
+        )
+
+
+def _cancel_remaining_unsent(reason: str = "已停止，未发送邀请") -> None:
+    """Mark WAITING/INVITING rows cancelled without counting them as protocol failures."""
+    finalize_unresolved_results(TaskRunStatus.STOPPED, reason)
 
 
 def _cancel_members_unsent(
@@ -1148,7 +1235,7 @@ def start_batch(
     """Start invite batch. count is ignored when qq_list is provided.
     batch_size = per-batch size (not total invite count).
     """
-    global _owned_task_id, _758_auth_seq
+    global _owned_task_id, _758_auth_seq, _last_758_send_mono
     resolved_batch_size = int(batch_size if batch_size is not None else (count or 20))
     if resolved_batch_size < 1 or resolved_batch_size > 1000:
         raise ValueError("batch_count must be 1-1000")
@@ -1219,6 +1306,7 @@ def start_batch(
         _state.next_invite_at = 0.0
         _owned_task_id = task_id
         _758_auth_seq = 0
+        _last_758_send_mono = 0.0
         _append_timeline("created", "任务已创建")
 
     _persist_current_task()
@@ -1292,10 +1380,6 @@ def start_batch(
                     _state.batch_done = 0
                     _state.batch_total_count = len(chunk)
                     _append_timeline("batch_start", f"开始第 {batch_idx + 1} 批")
-                    if chunk:
-                        _state.current_qq = chunk[0].qq
-                        _state.current_nickname = chunk[0].nickname
-                        _state.message = f"邀请 {chunk[0].nickname}({chunk[0].qq})"
 
                 for member in chunk:
                     started_at = _now()
@@ -1321,6 +1405,14 @@ def start_batch(
                         _cancel_members_unsent(rest, started_at_by_qq)
                         stopped_here = True
                         break
+
+                    with _state_lock:
+                        _state.current_qq = proto_chunk[0].qq
+                        _state.current_nickname = proto_chunk[0].nickname
+                        _state.message = (
+                            f"第 {batch_idx + 1} 批 · 协议子包 {proto_i}/{proto_total} · "
+                            f"正在邀请 {proto_chunk[0].nickname}({proto_chunk[0].qq})"
+                        )
 
                     desired = [m.qq for m in proto_chunk]
                     _log(
@@ -1398,6 +1490,7 @@ def start_batch(
                             members=ready,
                             tokens=ready_tokens,
                             capture_dir=cap,
+                            interval_ms=interval_ms,
                         )
                         _apply_invite_outcomes(batch_results, started_at_by_qq)
 
@@ -1414,15 +1507,8 @@ def start_batch(
                     final_message = "已停止"
                     break
 
-                if interval_ms > 0 and batch_idx < len(batches) - 1:
-                    with _state_lock:
-                        _state.next_invite_at = _now() + (interval_ms / 1000.0)
-                    if _interruptible_wait(interval_ms / 1000.0):
-                        final_status = TaskRunStatus.STOPPED
-                        final_message = "已停止"
-                        break
-                    with _state_lock:
-                        _state.next_invite_at = 0.0
+                # Interval is enforced between real 758 sends inside protocol chunks.
+                # Do not double-wait at UI batch boundaries.
 
         except Exception as exc:
             final_status = TaskRunStatus.ERROR
@@ -1431,7 +1517,18 @@ def start_batch(
             _log(f"异常终止: {exc}")
         finally:
             if final_status == TaskRunStatus.STOPPED:
-                _cancel_remaining_unsent()
+                finalize_unresolved_results(
+                    TaskRunStatus.STOPPED, "已停止，未发送邀请"
+                )
+            elif final_status == TaskRunStatus.ERROR:
+                finalize_unresolved_results(
+                    TaskRunStatus.ERROR, error_message or final_message
+                )
+            else:
+                finalize_unresolved_results(
+                    TaskRunStatus.COMPLETED,
+                    "任务结束时仍有未完成成员",
+                )
             with _state_lock:
                 _state.running = False
                 _state.current_qq = 0

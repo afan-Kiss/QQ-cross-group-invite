@@ -33,8 +33,27 @@ def _reset_engine() -> None:
     with cgb._state_lock:
         cgb._state = BatchState()
         cgb._owned_task_id = None
+        cgb._758_auth_seq = 0
+        cgb._last_758_send_mono = 0.0
     with cgb._members_lock:
         cgb._members_snapshot = None
+
+
+def invoke_758_send_hooks(fn):
+    """Test helper: monkeypatched 758 still fires production send-gate hooks."""
+
+    def wrapper(**kwargs):
+        before = kwargs.get("before_network_send")
+        after = kwargs.get("after_network_send")
+        if before is not None:
+            before()
+        try:
+            return fn(**kwargs)
+        finally:
+            if after is not None:
+                after()
+
+    return wrapper
 
 
 @pytest.fixture(autouse=True)
@@ -86,11 +105,11 @@ def patch_network(monkeypatch, sample_members):
     )
     monkeypatch.setattr(cgb, "token_owner_safe", lambda *a, **k: True)
     monkeypatch.setattr(cgb, "query_invitee_token", lambda *a, **k: "")
-    monkeypatch.setattr(
-        cgb,
-        "_invite_batch",
-        lambda **k: [(m, True, None, "") for m in k["members"]],
-    )
+    def _instant_invite(**k):
+        return [(m, True, None, "") for m in k["members"]]
+
+    monkeypatch.setattr(cgb, "_invite_protocol_chunk", _instant_invite)
+    monkeypatch.setattr(cgb, "_invite_batch", _instant_invite)
     return sample_members
 
 

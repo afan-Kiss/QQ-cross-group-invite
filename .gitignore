@@ -45,3 +45,6 @@ _r*_*.py
 _smoke_*.py
 enc_*.txt
 **/_enc_report.txt
+
+# Real E2E local secrets (never commit)
+tests/e2e.local.json

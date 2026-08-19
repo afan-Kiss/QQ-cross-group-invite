@@ -158,10 +158,11 @@ export function InviteProgressTab() {
             }
             className="mt-3 h-2"
           />
-          <div className="mt-2 flex gap-4 text-[12px]">
+          <div className="mt-2 flex flex-wrap gap-4 text-[12px]">
             <span className="text-primary">成功 {stats.success}</span>
             <span className="text-warning">频繁 {stats.rate_limited}</span>
             <span className="text-danger">失败 {stats.failed}</span>
+            <span className="text-muted-foreground">等待 {stats.waiting}</span>
             <span className="text-muted-foreground">已取消 {stats.cancelled}</span>
           </div>
         </div>

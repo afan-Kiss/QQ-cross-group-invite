@@ -1,0 +1,10 @@
+{
+  "source_group_id": 0,
+  "target_group_id": 0,
+  "single_qq": 0,
+  "odd_tail_qqs": [],
+  "protocol_7_qqs": [],
+  "interval_ms": 1500,
+  "allow_real_invite": false,
+  "_comment": "Copy to e2e.local.json and set allow_real_invite=true with real safe QQ numbers. e2e.local.json is gitignored."
+}

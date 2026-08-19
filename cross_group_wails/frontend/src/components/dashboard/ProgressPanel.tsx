@@ -18,10 +18,11 @@ export function ProgressPanel() {
         </div>
       </div>
       <Progress value={percent} className="mb-4 h-3" />
-      <div className="grid grid-cols-2 gap-2 text-[13px]">
+      <div className="grid grid-cols-2 gap-2 text-[13px] sm:grid-cols-3 lg:grid-cols-5">
         <div>成功 <span className="font-medium text-primary">{stats.success}</span></div>
         <div>频繁 <span className="font-medium text-warning">{stats.rate_limited}</span></div>
         <div>失败 <span className="font-medium text-danger">{stats.failed}</span></div>
+        <div>等待 <span className="font-medium">{stats.waiting}</span></div>
         <div>已取消 <span className="font-medium">{stats.cancelled}</span></div>
       </div>
       <p className="mt-3 text-[12px] text-muted-foreground">

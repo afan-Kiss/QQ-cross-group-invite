@@ -338,7 +338,7 @@ def test_anchored_chain_same_session_only(tmp_path):
 def test_membership_retries_until_present(monkeypatch):
     hits = {"n": 0}
 
-    def lookup(_g, _u):
+    def lookup(_g, _u, **_k):
         hits["n"] += 1
         return True if hits["n"] >= 3 else False
 

@@ -36,7 +36,7 @@ def test_stop_before_authorize_sends_zero_758(monkeypatch):
     )
     _ready_running()
     cgb.stop_batch()
-    results = cgb._invite_batch(
+    results = cgb._invite_protocol_chunk(
         target_group_id=200,
         source_group_id=100,
         members=_members(1),
@@ -56,29 +56,68 @@ def test_authorize_then_stop_blocks_subsequent_758(monkeypatch):
     monkeypatch.setattr(cgb, "wait_target_membership", lambda *_a, **_k: True)
 
     def fake_758(**kwargs):
+        before = kwargs.get("before_network_send")
+        after = kwargs.get("after_network_send")
+        if before:
+            before()
         sent.append(list(kwargs.get("invitee_tokens") or []))
         cgb.stop_batch()
+        if after:
+            after()
         return True, {"code": 0, "data": "1800"}
 
     monkeypatch.setattr(cgb, "send_cross_group_invite", fake_758)
     _ready_running()
-    members = _members(7)
-    toks = [f"u_REDACT{i:02d}AAAAAAAAAAAAAA" for i in range(7)]
-    results = cgb._invite_batch(
+    members = _members(6)
+    toks = [f"u_REDACT{i:02d}AAAAAAAAAAAAAA" for i in range(6)]
+    results1 = cgb._invite_protocol_chunk(
         target_group_id=200,
         source_group_id=100,
         members=members,
         tokens=toks,
         capture_dir=Path("."),
     )
+    results2 = cgb._invite_protocol_chunk(
+        target_group_id=200,
+        source_group_id=100,
+        members=_members(1),
+        tokens=[TOK],
+        capture_dir=Path("."),
+    )
     assert [len(x) for x in sent] == [6]
-    kinds = [k for _m, k, _c, _msg in results]
-    assert kinds[:6] == ["success"] * 6
-    assert kinds[6:] == ["cancelled"]
+    assert all(k == "success" for _m, k, _c, _msg in results1)
+    assert results2[0][1] == "cancelled"
     logs = "\n".join(cgb.get_state()["logs"])
     assert "758_authorized" in logs
     assert "758_send_started" in logs
+    assert "758_send_finished" in logs
     assert "stop_requested" in logs
+
+
+def test_builder_fail_after_authorize_has_no_send_started(monkeypatch):
+    monkeypatch.setattr(cgb, "sync_fe1_selection", lambda *_a, **_k: True)
+
+    def boom_send(**_k):
+        raise RuntimeError("pb build failed")
+
+    monkeypatch.setattr(cgb, "send_cross_group_invite", boom_send)
+    _ready_running()
+    try:
+        cgb._invite_protocol_chunk(
+            target_group_id=200,
+            source_group_id=100,
+            members=_members(1),
+            tokens=[TOK],
+            capture_dir=Path("."),
+        )
+        raised = False
+    except RuntimeError as exc:
+        raised = True
+        assert "pb build failed" in str(exc)
+    assert raised
+    logs = "\n".join(cgb.get_state()["logs"])
+    assert "758_authorized" in logs
+    assert "758_send_started" not in logs
 
 
 def test_stop_between_worker_chunks_skips_chunk2_picker_and_758(monkeypatch):

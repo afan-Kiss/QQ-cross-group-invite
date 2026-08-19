@@ -30,6 +30,15 @@ def test_classify_message_frequent_without_1289():
     assert cgb.classify_invite_failure(2, "rate limited") == "rate_limited"
 
 
+def test_classify_rate_word_boundary_not_substring():
+    assert cgb.classify_invite_failure(None, "rate limited") == "rate_limited"
+    assert cgb.classify_invite_failure(None, "too fast") == "rate_limited"
+    assert cgb.classify_invite_failure(None, "rate_limited") == "rate_limited"
+    assert cgb.classify_invite_failure(None, "rate-limit hit") == "rate_limited"
+    assert cgb.classify_invite_failure(None, "separate protocol error") == "failed"
+    assert cgb.classify_invite_failure(None, "generated packet failed") == "failed"
+
+
 def test_classify_ordinary_protocol_error_is_failed():
     assert cgb.classify_invite_failure(2, "\u9080\u8bf7\u5931\u8d25") == "failed"
     assert cgb.classify_invite_failure(None, "758 \u8fd4\u56de\u65e0\u6cd5\u786e\u8ba4\u9080\u8bf7\u6210\u529f") == "failed"

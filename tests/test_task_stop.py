@@ -4,21 +4,35 @@ from __future__ import annotations
 import time
 
 import cross_group_batch as cgb
-from cross_group_batch import TaskRunStatus
-from tests.conftest import wait_not_running, wait_until
+from cross_group_batch import MemberRole, MembersCacheSnapshot, SourceMember, TaskRunStatus
+from tests.conftest import invoke_758_send_hooks, wait_not_running, wait_until
+
+TOK = "u_REDACTaAAAAAAAAAAAAAAA"
 
 
-def test_stop_batch_interrupts_long_interval(monkeypatch, patch_network):
-    members = [m for m in patch_network if m.eligible][:3]
+def test_stop_batch_interrupts_long_interval(monkeypatch):
+    members = [
+        SourceMember(qq=10001 + i, nickname=f"m{i}", token=TOK, role=MemberRole.MEMBER)
+        for i in range(3)
+    ]
+
+    def fake_picker(_cap, _t, _s, *, desired_qqs=None, stop_event=None):
+        qqs = list(desired_qqs or [])
+        return cgb.PickerSession(token_map={q: TOK for q in qqs}, fe7_pages=1)
+
+    monkeypatch.setattr(cgb, "load_source_members", lambda *a, **k: list(members))
+    monkeypatch.setattr(cgb, "open_cross_group_picker", fake_picker)
+    monkeypatch.setattr(cgb, "sync_fe1_selection", lambda *_a, **_k: True)
     monkeypatch.setattr(
         cgb,
-        "load_source_members",
-        lambda *a, **k: list(members),
+        "send_cross_group_invite",
+        invoke_758_send_hooks(lambda **_k: (True, {"code": 0, "data": "1800"})),
     )
-    # Instant invites; long wait between them exercises interruptible wait
-    monkeypatch.setattr(
-        cgb, "_invite_batch", lambda **k: [(m, True, None, "") for m in k["members"]]
-    )
+    monkeypatch.setattr(cgb, "wait_target_membership", lambda *_a, **_k: True)
+    with cgb._members_lock:
+        cgb._members_snapshot = MembersCacheSnapshot(
+            source_group_id=100, filter_staff=True, members=tuple(members)
+        )
 
     cgb.start_batch(
         target_group_id=200,
@@ -43,4 +57,4 @@ def test_stop_batch_interrupts_long_interval(monkeypatch, patch_network):
     st = cgb.get_state()
     assert st["running"] is False
     assert st["status"] == TaskRunStatus.STOPPED.value
-    assert st["message"] == "已停止"
+    assert st["message"] == "\u5df2\u505c\u6b62"

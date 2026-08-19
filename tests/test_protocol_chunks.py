@@ -4,10 +4,12 @@ from __future__ import annotations
 import time
 from pathlib import Path
 
+import pytest
+
 import cross_group_batch as cgb
 from cross_group_batch import MemberRole, MembersCacheSnapshot, SourceMember
 from pb_utils import build_cross_group_758_pb, extract_field_bytes, parse_cross_group_758_entries
-from tests.conftest import wait_not_running
+from tests.conftest import invoke_758_send_hooks, wait_not_running
 
 OLD = "u_OLDMEMBERTOKENAAAAAAAA"
 
@@ -41,73 +43,67 @@ def test_protocol_chunk_sizes_table():
     assert cgb.protocol_chunk_sizes(20) == [6, 6, 6, 2]
 
 
-def test_invite_batch_splits_7_as_6_plus_1(monkeypatch):
-    sent: list[list[str]] = []
+def test_protocol_chunk_fn_rejects_more_than_max(monkeypatch):
     monkeypatch.setattr(cgb, "sync_fe1_selection", lambda *_a, **_k: True)
-    monkeypatch.setattr(
-        cgb,
-        "send_cross_group_invite",
-        lambda **k: sent.append(list(k.get("invitee_tokens") or [])) or (True, {"code": 0, "data": "1800"}),
-    )
-    monkeypatch.setattr(cgb, "wait_target_membership", lambda *_a, **_k: True)
     members = _members(7)
     toks = [_tok(i) for i in range(7)]
-    results = cgb._invite_batch(
-        target_group_id=200,
-        source_group_id=100,
-        members=members,
-        tokens=toks,
-        capture_dir=Path("."),
-    )
-    assert [len(x) for x in sent] == [6, 1]
-    assert sent[1] == [toks[6]]
-    assert all(kind == "success" for _m, kind, _c, _msg in results)
-
-
-def test_invite_batch_splits_12_13_20_and_tail_n1(monkeypatch):
-    monkeypatch.setattr(cgb, "sync_fe1_selection", lambda *_a, **_k: True)
-    monkeypatch.setattr(cgb, "wait_target_membership", lambda *_a, **_k: True)
-
-    def run(n: int) -> list[int]:
-        sent: list[list[str]] = []
-        monkeypatch.setattr(
-            cgb,
-            "send_cross_group_invite",
-            lambda **k: sent.append(list(k.get("invitee_tokens") or [])) or (True, {"code": 0, "data": "1800"}),
-        )
-        members = _members(n)
-        toks = [_tok(i) for i in range(n)]
-        cgb._invite_batch(
+    with pytest.raises(ValueError, match="PROTOCOL_INVITE_PACKET_MAX"):
+        cgb._invite_protocol_chunk(
             target_group_id=200,
             source_group_id=100,
             members=members,
             tokens=toks,
             capture_dir=Path("."),
         )
-        assert sent[-1]  # tail exists
-        if n % 6 != 0:
-            assert len(sent[-1]) == n % 6
-        assert all(len(x) <= cgb.PROVEN_758_BLOCK_MAX for x in sent)
-        built = [
-            build_cross_group_758_pb(
-                target_group_id=1111111111,
-                source_group_id=2222222222,
-                invitee_tokens=chunk,
-            )
-            for chunk in sent
-        ]
-        for hx, chunk in zip(built, sent):
-            _t, _s, blocks = parse_cross_group_758_entries(extract_field_bytes(bytes.fromhex(hx), 4) or b"")
-            assert len(blocks) == len(chunk)
-            assert len(blocks) <= cgb.PROVEN_758_BLOCK_MAX
-        return [len(x) for x in sent]
-
-    assert run(12) == [6, 6]
-    assert run(13) == [6, 6, 1]
-    assert run(20) == [6, 6, 6, 2]
 
 
-def test_ui_batch_13_opens_picker_per_protocol_chunk(monkeypatch):
+def test_worker_batch_7_splits_6_plus_1_with_two_pickers(monkeypatch):
+    picker_calls: list[list[int]] = []
+    fe1_calls: list[list[str]] = []
+    sent_758: list[list[str]] = []
+
+    def fake_picker(_cap, _t, _s, *, desired_qqs=None, stop_event=None):
+        qqs = list(desired_qqs or [])
+        picker_calls.append(qqs)
+        return cgb.PickerSession(
+            token_map={q: _tok(q % 100) for q in qqs},
+            fe7_pages=1,
+        )
+
+    def fake_fe1(_cap, tokens, **_k):
+        fe1_calls.append(list(tokens))
+        return True
+
+    def fake_758(**kwargs):
+        sent_758.append(list(kwargs.get("invitee_tokens") or []))
+        return True, {"code": 0, "data": "1800"}
+
+    members = _members(7, start=10001)
+    monkeypatch.setattr(cgb, "open_cross_group_picker", fake_picker)
+    monkeypatch.setattr(cgb, "sync_fe1_selection", fake_fe1)
+    monkeypatch.setattr(cgb, "send_cross_group_invite", invoke_758_send_hooks(fake_758))
+    monkeypatch.setattr(cgb, "wait_target_membership", lambda *_a, **_k: True)
+    with cgb._members_lock:
+        cgb._members_snapshot = MembersCacheSnapshot(
+            source_group_id=100, filter_staff=True, members=tuple(members)
+        )
+    cgb.start_batch(
+        target_group_id=200,
+        source_group_id=100,
+        interval_ms=100,
+        qq_list=[m.qq for m in members],
+        batch_size=7,
+        filter_staff=True,
+    )
+    assert wait_not_running(timeout=3.0)
+    assert len(picker_calls) == 2
+    assert len(fe1_calls) == 2
+    assert [len(x) for x in sent_758] == [6, 1]
+    assert picker_calls[0] == [m.qq for m in members[:6]]
+    assert picker_calls[1] == [members[6].qq]
+
+
+def test_worker_batch_13_three_independent_token_maps(monkeypatch):
     picker_calls: list[list[int]] = []
     fe1_calls: list[list[str]] = []
     sent_758: list[list[str]] = []
@@ -133,7 +129,7 @@ def test_ui_batch_13_opens_picker_per_protocol_chunk(monkeypatch):
     members = _members(13, start=10001)
     monkeypatch.setattr(cgb, "open_cross_group_picker", fake_picker)
     monkeypatch.setattr(cgb, "sync_fe1_selection", fake_fe1)
-    monkeypatch.setattr(cgb, "send_cross_group_invite", fake_758)
+    monkeypatch.setattr(cgb, "send_cross_group_invite", invoke_758_send_hooks(fake_758))
     monkeypatch.setattr(cgb, "wait_target_membership", lambda *_a, **_k: True)
     with cgb._members_lock:
         cgb._members_snapshot = MembersCacheSnapshot(
@@ -147,7 +143,7 @@ def test_ui_batch_13_opens_picker_per_protocol_chunk(monkeypatch):
         batch_size=13,
         filter_staff=True,
     )
-    assert wait_not_running(timeout=3.0)
+    assert wait_not_running(timeout=5.0)
     assert [len(x) for x in picker_calls] == [6, 6, 1]
     assert picker_calls[0] == [m.qq for m in members[:6]]
     assert picker_calls[1] == [m.qq for m in members[6:12]]
@@ -155,20 +151,29 @@ def test_ui_batch_13_opens_picker_per_protocol_chunk(monkeypatch):
     assert [len(x) for x in fe1_calls] == [6, 6, 1]
     assert [len(x) for x in sent_758] == [6, 6, 1]
     assert fe1_calls == sent_758
+    assert sent_758[0] != sent_758[1]
+    assert set(sent_758[0]).isdisjoint(set(sent_758[1]))
+    assert set(sent_758[0]).isdisjoint(set(sent_758[2]))
     assert OLD not in {t for batch in sent_758 for t in batch}
     joined = "\n".join(cgb.get_state()["logs"])
     assert "ui_batch_number=1" in joined
     assert "protocol_chunk_total=3" in joined
     for line in cgb.get_state()["logs"]:
         if "picker ui_batch_number=" in line:
-            assert "u_" not in line.split("picker", 1)[-1] or "token_count=" in line
-            assert TOK_RAW_ABSENT(line)
+            assert "u_REDACT" not in line and OLD not in line
             ages.append(1)
     assert len(ages) == 3
-
-
-def TOK_RAW_ABSENT(line: str) -> bool:
-    return "u_REDACT" not in line and OLD not in line
+    for chunk in sent_758:
+        hx = build_cross_group_758_pb(
+            target_group_id=1111111111,
+            source_group_id=2222222222,
+            invitee_tokens=chunk,
+        )
+        _t, _s, blocks = parse_cross_group_758_entries(
+            extract_field_bytes(bytes.fromhex(hx), 4) or b""
+        )
+        assert len(blocks) == len(chunk)
+        assert len(blocks) <= cgb.PROVEN_758_BLOCK_MAX
 
 
 def test_second_protocol_chunk_missing_token_does_not_reuse_prior(monkeypatch):
@@ -192,7 +197,10 @@ def test_second_protocol_chunk_missing_token_does_not_reuse_prior(monkeypatch):
     monkeypatch.setattr(
         cgb,
         "send_cross_group_invite",
-        lambda **k: sent_758.append(list(k.get("invitee_tokens") or [])) or (True, {"code": 0, "data": "1800"}),
+        invoke_758_send_hooks(
+            lambda **k: sent_758.append(list(k.get("invitee_tokens") or []))
+            or (True, {"code": 0, "data": "1800"})
+        ),
     )
     monkeypatch.setattr(cgb, "wait_target_membership", lambda *_a, **_k: True)
     members = _members(13, start=10001)
@@ -208,7 +216,7 @@ def test_second_protocol_chunk_missing_token_does_not_reuse_prior(monkeypatch):
         batch_size=13,
         filter_staff=True,
     )
-    assert wait_not_running(timeout=3.0)
+    assert wait_not_running(timeout=5.0)
     assert [len(x) for x in picker_calls] == [6, 6, 1]
     assert [len(x) for x in sent_758] == [6, 1]
     first_tokens = set(sent_758[0])
@@ -228,7 +236,7 @@ def test_membership_verify_shared_deadline_not_six_full_timeouts(monkeypatch):
     monkeypatch.setattr(
         cgb,
         "send_cross_group_invite",
-        lambda **_k: (True, {"code": 0, "data": "1800"}),
+        invoke_758_send_hooks(lambda **_k: (True, {"code": 0, "data": "1800"})),
     )
     monkeypatch.setattr(cgb, "MEMBERSHIP_RETRY_SEC", 0.4)
 
@@ -241,7 +249,7 @@ def test_membership_verify_shared_deadline_not_six_full_timeouts(monkeypatch):
     members = _members(6)
     toks = [_tok(i) for i in range(6)]
     t0 = time.monotonic()
-    cgb._invite_batch(
+    cgb._invite_protocol_chunk(
         target_group_id=200,
         source_group_id=100,
         members=members,

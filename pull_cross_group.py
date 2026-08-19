@@ -51,6 +51,8 @@ FE7_SLEEP = 0.12
 FE7_MAX_PAGES = 64
 MEMBERSHIP_RETRY_SEC = 5.0
 MEMBERSHIP_RETRY_INTERVAL = 0.8
+# Cap a single get_group_member_info HTTP wait so shared verify deadlines are real.
+MEMBERSHIP_HTTP_TIMEOUT_CAP = 2.0
 NOT_IN_GROUP_MARKERS = (
     "不在群",
     "不是群成员",
@@ -663,7 +665,10 @@ def send_cross_group_invite(
     capture_dir: Path | None = None,
     source_context_token: str | None = None,
     stop_event=None,
+    before_network_send=None,
+    after_network_send=None,
 ) -> tuple[bool, dict]:
+    """Build and send 0x758. Optional hooks fire only around real _send_packet."""
     del source_context_token
     del capture_dir
     tokens = [t for t in (invitee_tokens or []) if t]
@@ -689,7 +694,15 @@ def send_cross_group_invite(
         invitees=",".join(describe_token(t) for t in tokens),
     )
     _raise_if_stopped(stop_event, stage="INVITE_758")
-    resp = _send_packet(CMD_758, pb_hex, label="758 cross-group invite", stage="INVITE_758")
+    if before_network_send is not None:
+        before_network_send()
+    try:
+        resp = _send_packet(
+            CMD_758, pb_hex, label="758 cross-group invite", stage="INVITE_758"
+        )
+    finally:
+        if after_network_send is not None:
+            after_network_send()
     ok = _response_ok(resp)
     if not ok:
         data = _rsp_hex(resp)
@@ -713,7 +726,12 @@ def _not_in_group_text(raw: dict) -> bool:
     return any(m.lower() in blob for m in NOT_IN_GROUP_MARKERS)
 
 
-def target_group_has_member(target_group_id: int, user_id: int) -> bool | None:
+def target_group_has_member(
+    target_group_id: int,
+    user_id: int,
+    *,
+    request_timeout: float = 20.0,
+) -> bool | None:
     """True in group, False explicitly absent, None if lookup itself failed."""
     try:
         raw = onebot_action(
@@ -723,7 +741,7 @@ def target_group_has_member(target_group_id: int, user_id: int) -> bool | None:
                 "user_id": int(user_id),
                 "no_cache": True,
             },
-            timeout=20,
+            timeout=max(0.05, float(request_timeout)),
         )
     except Exception as exc:
         protocol_log("VERIFY_TARGET_MEMBER", result="lookup_error", err=type(exc).__name__)
@@ -770,28 +788,41 @@ def wait_target_membership(
     timeout: float = MEMBERSHIP_RETRY_SEC,
     interval: float = MEMBERSHIP_RETRY_INTERVAL,
 ) -> bool | None:
-    """Retry membership lookup. None = never confirmed (lookup errors / stopped)."""
-    deadline = time.time() + timeout
+    """Retry membership lookup under a monotonic wall deadline.
+
+    None = never confirmed (lookup errors / stopped / deadline). Does not fire
+    a network request when remaining time is already <= 0.
+    """
+    deadline = time.monotonic() + max(0.0, float(timeout))
     saw_false = False
     last: bool | None = None
     while True:
         if stop_event is not None and getattr(stop_event, "is_set", lambda: False)():
             break
-        last = target_group_has_member(target_group_id, user_id)
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        req_timeout = min(remaining, float(MEMBERSHIP_HTTP_TIMEOUT_CAP))
+        last = target_group_has_member(
+            target_group_id,
+            user_id,
+            request_timeout=req_timeout,
+        )
         if last is True:
             return True
         if last is False:
             saw_false = True
-        if time.time() >= deadline:
-            break
-        remaining = min(interval, max(0.0, deadline - time.time()))
+        remaining = deadline - time.monotonic()
         if remaining <= 0:
             break
+        sleep_for = min(float(interval), remaining)
+        if sleep_for <= 0:
+            break
         if stop_event is not None and hasattr(stop_event, "wait"):
-            if stop_event.wait(remaining):
+            if stop_event.wait(sleep_for):
                 break
         else:
-            time.sleep(remaining)
+            time.sleep(sleep_for)
     if last is True:
         return True
     if saw_false:

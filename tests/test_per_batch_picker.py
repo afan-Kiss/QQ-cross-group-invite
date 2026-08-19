@@ -6,7 +6,7 @@ from pathlib import Path
 import cross_group_batch as cgb
 from cross_group_batch import MemberRole, MembersCacheSnapshot, SourceMember
 import pull_cross_group as pcg
-from tests.conftest import wait_not_running
+from tests.conftest import invoke_758_send_hooks, wait_not_running
 
 TOK_A1 = "u_PICKER1aAAAAAAAAAAAAAA"
 TOK_A2 = "u_PICKER2aAAAAAAAAAAAAAA"
@@ -142,28 +142,47 @@ def test_second_batch_missing_token_does_not_reuse_prior(monkeypatch):
 
 
 def test_protocol_chunking_keeps_tail_n1(monkeypatch):
+    """Worker (not protocol fn) splits 11 as 6+5 when max=6, or with max=10 as 10+1."""
     sent: list[list[str]] = []
+    picker_n = {"n": 0}
+
+    def fake_picker(_cap, _t, _s, *, desired_qqs=None, stop_event=None):
+        picker_n["n"] += 1
+        qqs = list(desired_qqs or [])
+        return cgb.PickerSession(
+            token_map={q: f"u_REDACT{q % 100:02d}AAAAAAAAAAAAAA" for q in qqs},
+            fe7_pages=1,
+        )
+
     monkeypatch.setattr(cgb, "PROTOCOL_INVITE_PACKET_MAX", 10)
+    monkeypatch.setattr(cgb, "open_cross_group_picker", fake_picker)
     monkeypatch.setattr(cgb, "sync_fe1_selection", lambda *_a, **_k: True)
     monkeypatch.setattr(
         cgb,
         "send_cross_group_invite",
-        lambda **k: sent.append(list(k.get("invitee_tokens") or [])) or (True, {"code": 0, "data": "1800"}),
+        invoke_758_send_hooks(
+            lambda **k: sent.append(list(k.get("invitee_tokens") or []))
+            or (True, {"code": 0, "data": "1800"})
+        ),
     )
     monkeypatch.setattr(cgb, "wait_target_membership", lambda *_a, **_k: True)
     members = [
         SourceMember(qq=20000 + i, nickname=f"m{i}", token=f"t{i}", role=MemberRole.MEMBER)
         for i in range(11)
     ]
-    toks = [f"u_REDACT{i:02d}AAAAAAAAAAAAAA" for i in range(11)]
-    results = cgb._invite_batch(
+    with cgb._members_lock:
+        cgb._members_snapshot = MembersCacheSnapshot(
+            source_group_id=100, filter_staff=True, members=tuple(members)
+        )
+    cgb.start_batch(
         target_group_id=200,
         source_group_id=100,
-        members=members,
-        tokens=toks,
-        capture_dir=Path("."),
+        interval_ms=100,
+        qq_list=[m.qq for m in members],
+        batch_size=11,
+        filter_staff=True,
     )
+    assert wait_not_running(timeout=5.0)
     assert [len(x) for x in sent] == [10, 1]
-    assert sent[1] == [toks[10]]
-    assert all(kind == "success" for _m, kind, _c, _msg in results)
-    assert len(results) == 11
+    assert picker_n["n"] == 2
+    assert all(r["status"] == "success" for r in cgb.get_state()["results"])
