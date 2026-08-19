@@ -3,13 +3,15 @@
 
 Gating:
   A) NapCat offline -> SKIPPED: NAPCAT_OFFLINE
-  B) Online but tests/e2e.local.json missing or allow_real_invite!=true
+  B) File missing or allow_real_invite!=true
      -> SKIPPED: REAL_E2E_CONFIG_MISSING_OR_DISABLED
-  C) Online + invalid overlapping / incomplete config -> FAIL (not skip)
-  D) Online + valid config -> execute real invites (never unconditional skip)
+  C) Malformed JSON / invalid base fields / overlapping configured QQs
+     -> FAIL REAL_E2E_CONFIG_INVALID (not skip)
+  D) Scenario QQ list empty -> SKIPPED: REAL_E2E_SCENARIO_NOT_CONFIGURED
+  E) Online + valid scenario config -> execute production start_batch
 
-Each case independently validates its QQs, preflights target absence, then
-runs production start_batch. Cases must not share invitee QQs.
+Minimal N=1 only needs source/target/single_qq. Optional 2+1 / 6+1 / stop
+scenarios are independent and must not block Single N=1.
 """
 from __future__ import annotations
 
@@ -37,45 +39,127 @@ def _napcat_status() -> tuple[bool, str]:
         return False, str(exc)
 
 
-def _qq_list(raw, *, min_n: int, name: str) -> list[int]:
-    if not isinstance(raw, list) or len(raw) < min_n:
-        pytest.fail(f"E2E config: {name} needs at least {min_n} QQs")
-    out: list[int] = []
-    for x in raw:
-        q = int(x)
-        if q <= 0:
-            pytest.fail(f"E2E config: {name} contains invalid QQ")
-        out.append(q)
-    return out
+def _fail_cfg(msg: str) -> None:
+    pytest.fail(f"REAL_E2E_CONFIG_INVALID: {msg}")
 
 
-def validate_e2e_config(data: dict) -> dict:
-    if not isinstance(data, dict) or data.get("allow_real_invite") is not True:
-        pytest.skip("REAL_E2E_CONFIG_MISSING_OR_DISABLED")
-    source = int(data.get("source_group_id") or 0)
-    target = int(data.get("target_group_id") or 0)
+def validate_e2e_base_config(data: dict) -> dict:
+    if not isinstance(data, dict):
+        _fail_cfg("config must be an object")
+    try:
+        source = int(data.get("source_group_id") or 0)
+        target = int(data.get("target_group_id") or 0)
+    except (TypeError, ValueError) as exc:
+        _fail_cfg(f"group ids must be integers: {exc}")
     if source <= 0 or target <= 0:
-        pytest.fail("E2E config: source_group_id and target_group_id must be > 0")
+        _fail_cfg("source_group_id and target_group_id must be > 0")
     if source == target:
-        pytest.fail("E2E config: source and target must differ")
-    single = int(data.get("single_qq") or 0)
-    if single <= 0:
-        pytest.fail("E2E config: single_qq must be > 0")
-    odd = _qq_list(data.get("odd_tail_qqs"), min_n=3, name="odd_tail_qqs")[:3]
-    proto7 = _qq_list(data.get("protocol_7_qqs"), min_n=7, name="protocol_7_qqs")[:7]
-    stop7 = _qq_list(data.get("stop_gate_qqs"), min_n=7, name="stop_gate_qqs")[:7]
-    all_qqs = [single, *odd, *proto7, *stop7]
-    if len(all_qqs) != len(set(all_qqs)):
-        pytest.fail("E2E config: scenario QQ sets must be disjoint")
+        _fail_cfg("source and target must differ")
+    raw_interval = data.get("interval_ms", 1500)
+    try:
+        interval = int(raw_interval)
+    except (TypeError, ValueError) as exc:
+        _fail_cfg(f"interval_ms must be an integer: {exc}")
+    if interval < 100 or interval > 600000:
+        _fail_cfg("interval_ms must be 100-600000")
     return {
         "source_group_id": source,
         "target_group_id": target,
-        "single_qq": single,
-        "odd_tail_qqs": odd,
-        "protocol_7_qqs": proto7,
-        "stop_gate_qqs": stop7,
-        "interval_ms": int(data.get("interval_ms") or 1500),
+        "interval_ms": interval,
     }
+
+
+def _parse_optional_qq_list(raw, *, min_n: int, name: str) -> list[int]:
+    if raw is None or raw == []:
+        return []
+    if not isinstance(raw, list):
+        _fail_cfg(f"{name} must be a list")
+    out: list[int] = []
+    for x in raw:
+        try:
+            q = int(x)
+        except (TypeError, ValueError):
+            _fail_cfg(f"{name} contains invalid QQ")
+        if q <= 0:
+            _fail_cfg(f"{name} contains invalid QQ")
+        if q not in out:
+            out.append(q)
+    if 0 < len(out) < min_n:
+        _fail_cfg(f"{name} needs at least {min_n} QQs")
+    return out[:min_n]
+
+
+def _parse_optional_single_qq(raw) -> int:
+    if raw in (None, "", 0, "0"):
+        return 0
+    try:
+        q = int(raw)
+    except (TypeError, ValueError):
+        _fail_cfg("single_qq must be an integer")
+    if q < 0:
+        _fail_cfg("single_qq contains invalid QQ")
+    return q
+
+
+def _configured_scenario_qqs(cfg: dict) -> dict[str, list[int]]:
+    sets: dict[str, list[int]] = {}
+    single = int(cfg.get("single_qq") or 0)
+    if single > 0:
+        sets["single_qq"] = [single]
+    odd = list(cfg.get("odd_tail_qqs") or [])
+    if odd:
+        sets["odd_tail_qqs"] = odd[:3]
+    proto = list(cfg.get("protocol_7_qqs") or [])
+    if proto:
+        sets["protocol_7_qqs"] = proto[:7]
+    stop = list(cfg.get("stop_gate_qqs") or [])
+    if stop:
+        sets["stop_gate_qqs"] = stop[:7]
+    return sets
+
+
+def _assert_configured_qqs_disjoint(cfg: dict) -> None:
+    seen: dict[int, str] = {}
+    for name, qqs in _configured_scenario_qqs(cfg).items():
+        for qq in qqs:
+            prev = seen.get(qq)
+            if prev is not None:
+                _fail_cfg("scenario QQ sets must be disjoint")
+            seen[qq] = name
+
+
+def validate_e2e_config(data: dict) -> dict:
+    """Base fields + optional scenario QQ lists. Does not require all scenarios."""
+    if not isinstance(data, dict) or data.get("allow_real_invite") is not True:
+        pytest.skip("REAL_E2E_CONFIG_MISSING_OR_DISABLED")
+    base = validate_e2e_base_config(data)
+    cfg = {
+        **base,
+        "single_qq": _parse_optional_single_qq(data.get("single_qq")),
+        "odd_tail_qqs": _parse_optional_qq_list(
+            data.get("odd_tail_qqs"), min_n=3, name="odd_tail_qqs"
+        ),
+        "protocol_7_qqs": _parse_optional_qq_list(
+            data.get("protocol_7_qqs"), min_n=7, name="protocol_7_qqs"
+        ),
+        "stop_gate_qqs": _parse_optional_qq_list(
+            data.get("stop_gate_qqs"), min_n=7, name="stop_gate_qqs"
+        ),
+    }
+    _assert_configured_qqs_disjoint(cfg)
+    return cfg
+
+
+def require_e2e_scenario(cfg: dict, name: str) -> list[int]:
+    if name == "single_qq":
+        qq = int(cfg.get("single_qq") or 0)
+        if qq <= 0:
+            pytest.skip("REAL_E2E_SCENARIO_NOT_CONFIGURED: single_qq")
+        return [qq]
+    qqs = list(cfg.get(name) or [])
+    if not qqs:
+        pytest.skip(f"REAL_E2E_SCENARIO_NOT_CONFIGURED: {name}")
+    return qqs
 
 
 def _load_e2e_config() -> dict:
@@ -84,7 +168,7 @@ def _load_e2e_config() -> dict:
     try:
         data = json.loads(E2E_CONFIG_PATH.read_text(encoding="utf-8"))
     except Exception as exc:  # noqa: BLE001
-        pytest.skip(f"REAL_E2E_CONFIG_MISSING_OR_DISABLED: {exc}")
+        pytest.fail(f"REAL_E2E_CONFIG_INVALID: {exc}")
     return validate_e2e_config(data)
 
 
@@ -194,7 +278,8 @@ def _assert_target_membership(target_group_id: int, qqs: list[int]) -> None:
 
 def test_real_e2e_single_member_n1():
     cfg = _require_real_e2e()
-    qq = int(cfg["single_qq"])
+    qqs = require_e2e_scenario(cfg, "single_qq")
+    qq = qqs[0]
     source = int(cfg["source_group_id"])
     target = int(cfg["target_group_id"])
     preflight_not_in_target(source_group_id=source, target_group_id=target, qqs=[qq])
@@ -215,12 +300,14 @@ def test_real_e2e_single_member_n1():
     _assert_protocol_sends(st, [1], [0])
     events = cgb.parse_send_gate_events(st["logs"])
     assert [e["event"] for e in events if e["event"] == "758_authorized"] == ["758_authorized"]
+    assert [e["seq"] for e in events if e["event"] == "758_send_started"] == [1]
+    assert [e["seq"] for e in events if e["event"] == "758_response_received"] == [1]
     _assert_target_membership(target, [qq])
 
 
 def test_real_e2e_odd_tail_2_plus_1():
     cfg = _require_real_e2e()
-    qqs = list(cfg["odd_tail_qqs"])
+    qqs = require_e2e_scenario(cfg, "odd_tail_qqs")
     source = int(cfg["source_group_id"])
     target = int(cfg["target_group_id"])
     preflight_not_in_target(source_group_id=source, target_group_id=target, qqs=qqs)
@@ -245,7 +332,7 @@ def test_real_e2e_odd_tail_2_plus_1():
 
 def test_real_e2e_protocol_chunks_6_plus_1():
     cfg = _require_real_e2e()
-    qqs = list(cfg["protocol_7_qqs"])
+    qqs = require_e2e_scenario(cfg, "protocol_7_qqs")
     source = int(cfg["source_group_id"])
     target = int(cfg["target_group_id"])
     preflight_not_in_target(source_group_id=source, target_group_id=target, qqs=qqs)
@@ -278,7 +365,7 @@ def test_real_e2e_protocol_chunks_6_plus_1():
 
 def test_real_e2e_stop_gate_between_chunks():
     cfg = _require_real_e2e()
-    qqs = list(cfg["stop_gate_qqs"])
+    qqs = require_e2e_scenario(cfg, "stop_gate_qqs")
     source = int(cfg["source_group_id"])
     target = int(cfg["target_group_id"])
     preflight_not_in_target(source_group_id=source, target_group_id=target, qqs=qqs)

@@ -72,14 +72,27 @@ npm run build
 真实邀请验收走生产 `start_batch` 路径，不另写测试专用邀请逻辑。
 
 1. 复制 `tests/e2e.local.example.json` 为 `tests/e2e.local.json`（不提交 Git）。
-2. 填写 `source_group_id` / `target_group_id`，以及四组**互不重叠**的测试 QQ：
+2. **最小 N=1** 只需填写：
+   - `source_group_id`
+   - `target_group_id`
    - `single_qq`
-   - `odd_tail_qqs`（至少 3 个）
-   - `protocol_7_qqs`（至少 7 个）
-   - `stop_gate_qqs`（至少 7 个，专用，禁止复用 protocol_7）
-3. 所有 QQ 必须是来源群普通成员（不会被 filter_staff 排除）。
-4. **测试开始前这些 QQ 不能已经在目标群**。重跑前需人工确认；测试不会自动踢人。
-5. 设置 `"allow_real_invite": true` 且 NapCat 在线后，`pytest tests/test_real_e2e.py` 才会真实执行。
+   - `interval_ms`（100-600000）
+   - `"allow_real_invite": true`
+3. 然后只跑单人链路：
+
+```powershell
+pytest -q tests/test_real_e2e.py::test_real_e2e_single_member_n1 -s
+```
+
+不需要先准备 `odd_tail_qqs` / `protocol_7_qqs` / `stop_gate_qqs`。未配置的场景会 `SKIPPED: REAL_E2E_SCENARIO_NOT_CONFIGURED`，不会挡住 N=1。
+
+可选后续场景（各组 QQ 必须互不重叠）：
+
+- `odd_tail_qqs`：至少 3 个，2+1 尾包
+- `protocol_7_qqs`：至少 7 个，6+1 分包
+- `stop_gate_qqs`：至少 7 个专用号，两包之间 stop
+
+所有 QQ 必须是来源群普通成员，**测试开始前不能已经在目标群**。重跑前需人工确认；测试不会自动踢人。
 
 ## 构建 / Release
 

@@ -21,7 +21,7 @@ def test_e2e_config_requires_disjoint_qq_sets():
         "stop_gate_qqs": [41, 42, 43, 44, 45, 46, 11],
         "interval_ms": 1500,
     }
-    with pytest.raises(pytest.fail.Exception, match="disjoint"):
+    with pytest.raises(pytest.fail.Exception, match="REAL_E2E_CONFIG_INVALID: scenario QQ sets must be disjoint"):
         e2e.validate_e2e_config(data)
 
 
@@ -39,6 +39,79 @@ def test_e2e_config_accepts_four_disjoint_sets():
     out = e2e.validate_e2e_config(data)
     assert out["stop_gate_qqs"][-1] == 47
     assert out["protocol_7_qqs"][0] == 31
+
+
+def test_minimal_n1_config_does_not_require_other_scenarios():
+    data = {
+        "allow_real_invite": True,
+        "source_group_id": 1,
+        "target_group_id": 2,
+        "single_qq": 10001,
+        "odd_tail_qqs": [],
+        "protocol_7_qqs": [],
+        "stop_gate_qqs": [],
+        "interval_ms": 1500,
+    }
+    base = e2e.validate_e2e_base_config(data)
+    assert base["source_group_id"] == 1
+    cfg = e2e.validate_e2e_config(data)
+    assert e2e.require_e2e_scenario(cfg, "single_qq") == [10001]
+    with pytest.raises(pytest.skip.Exception, match="REAL_E2E_SCENARIO_NOT_CONFIGURED: odd_tail_qqs"):
+        e2e.require_e2e_scenario(cfg, "odd_tail_qqs")
+    with pytest.raises(pytest.skip.Exception, match="REAL_E2E_SCENARIO_NOT_CONFIGURED: protocol_7_qqs"):
+        e2e.require_e2e_scenario(cfg, "protocol_7_qqs")
+    with pytest.raises(pytest.skip.Exception, match="REAL_E2E_SCENARIO_NOT_CONFIGURED: stop_gate_qqs"):
+        e2e.require_e2e_scenario(cfg, "stop_gate_qqs")
+
+
+def test_configured_scenario_overlap_with_single_fails():
+    data = {
+        "allow_real_invite": True,
+        "source_group_id": 1,
+        "target_group_id": 2,
+        "single_qq": 10001,
+        "odd_tail_qqs": [10001, 10002, 10003],
+        "protocol_7_qqs": [],
+        "stop_gate_qqs": [],
+        "interval_ms": 1500,
+    }
+    with pytest.raises(pytest.fail.Exception, match="disjoint"):
+        e2e.validate_e2e_config(data)
+
+
+def test_malformed_json_fails_not_skip(monkeypatch, tmp_path):
+    bad = tmp_path / "e2e.local.json"
+    bad.write_text("{not json", encoding="utf-8")
+    monkeypatch.setattr(e2e, "E2E_CONFIG_PATH", bad)
+    with pytest.raises(pytest.fail.Exception, match="REAL_E2E_CONFIG_INVALID"):
+        e2e._load_e2e_config()
+
+
+def test_interval_out_of_range_fails():
+    data = {
+        "allow_real_invite": True,
+        "source_group_id": 1,
+        "target_group_id": 2,
+        "single_qq": 11,
+        "interval_ms": 50,
+    }
+    with pytest.raises(pytest.fail.Exception, match="REAL_E2E_CONFIG_INVALID: interval_ms"):
+        e2e.validate_e2e_base_config(data)
+    data["interval_ms"] = 600001
+    with pytest.raises(pytest.fail.Exception, match="REAL_E2E_CONFIG_INVALID: interval_ms"):
+        e2e.validate_e2e_base_config(data)
+
+
+def test_allow_real_invite_false_skips():
+    data = {
+        "allow_real_invite": False,
+        "source_group_id": 1,
+        "target_group_id": 2,
+        "single_qq": 11,
+        "interval_ms": 1500,
+    }
+    with pytest.raises(pytest.skip.Exception, match="REAL_E2E_CONFIG_MISSING_OR_DISABLED"):
+        e2e.validate_e2e_config(data)
 
 
 def test_e2e_example_json_has_stop_gate_field():
