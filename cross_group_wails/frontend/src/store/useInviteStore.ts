@@ -38,6 +38,7 @@ const emptyStats: AppStatus = {
   success: 0,
   rate_limited: 0,
   failed: 0,
+  cancelled: 0,
   waiting: 0,
   inviting: 0,
   logs: [],
@@ -94,6 +95,7 @@ export interface InviteTask {
   success: number;
   frequent: number;
   failed: number;
+  cancelled: number;
   status: "running" | "stopped" | "completed" | "error" | "preparing" | "stopping" | "interrupted";
   errorMessage?: string;
   timeline?: Array<{ at: number; event: string; detail?: string }>;
@@ -119,6 +121,7 @@ function mapPersistedTask(t: PersistedTask): InviteTask {
     success: Number(t.success || 0),
     frequent: Number(t.rate_limited || 0),
     failed: Number(t.failed || 0),
+    cancelled: Number(t.cancelled || 0),
     status,
     errorMessage: t.error_message,
     timeline: t.timeline,
@@ -127,6 +130,10 @@ function mapPersistedTask(t: PersistedTask): InviteTask {
 
 function selectableStatus(status: MemberStatus): boolean {
   return status === "waiting";
+}
+
+export function requeueableStatus(status: MemberStatus): boolean {
+  return status === "failed" || status === "rate_limited" || status === "cancelled";
 }
 
 function reconcileSelectedQqs(members: Member[], selected: Set<number>, onlyWaiting = false): Set<number> {
@@ -306,12 +313,14 @@ export const useInviteStore = create<InviteStore>((set, get) => ({
   requeueMember: (qq) =>
     set((s) => {
       const target = s.members.find((m) => m.qq === qq);
-      if (!target || (target.status !== "failed" && target.status !== "rate_limited")) {
+      if (!target || !requeueableStatus(target.status)) {
         return {};
       }
       membersMutationGeneration += 1;
       const members = s.members.map((m) =>
-        m.qq === qq ? { ...m, status: "waiting" as const, failReason: undefined } : m,
+        m.qq === qq
+          ? { ...m, status: "waiting" as const, failReason: undefined, token: "" }
+          : m,
       );
       const next = new Set(s.selectedQqs);
       next.add(qq);
@@ -459,6 +468,7 @@ export const useInviteStore = create<InviteStore>((set, get) => ({
         success: 0,
         frequent: 0,
         failed: 0,
+        cancelled: 0,
         status: "running",
       };
       set((s) => ({
@@ -611,6 +621,7 @@ export const useInviteStore = create<InviteStore>((set, get) => ({
           success: status.success,
           frequent: status.rate_limited,
           failed: status.failed,
+          cancelled: status.cancelled,
           status: mappedStatus,
           endTime: status.finished_at ? toEpochMs(status.finished_at) : task.endTime,
           errorMessage: status.error_message || task.errorMessage,
@@ -628,6 +639,7 @@ export const useInviteStore = create<InviteStore>((set, get) => ({
             success: status.success,
             frequent: status.rate_limited,
             failed: status.failed,
+            cancelled: status.cancelled,
             status: mappedStatus,
             endTime: status.finished_at ? toEpochMs(status.finished_at) : undefined,
             errorMessage: status.error_message,

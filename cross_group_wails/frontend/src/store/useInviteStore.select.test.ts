@@ -53,8 +53,10 @@ describe("selection helpers", () => {
         { qq: 1, nickname: "a", role: "member", status: "waiting" },
         { qq: 2, nickname: "b", role: "member", status: "waiting" },
         { qq: 3, nickname: "c", role: "member", status: "filtered" },
-        { qq: 4, nickname: "d", role: "member", status: "failed" },
+        { qq: 4, nickname: "d", role: "member", status: "failed", failReason: "x", token: "old" },
         { qq: 5, nickname: "e", role: "member", status: "success" },
+        { qq: 6, nickname: "f", role: "member", status: "rate_limited", failReason: "频繁" },
+        { qq: 7, nickname: "g", role: "member", status: "cancelled", failReason: "已停止，未发送邀请" },
       ],
       selectedQqs: new Set([1]),
       membersLoaded: true,
@@ -83,13 +85,37 @@ describe("selection helpers", () => {
     expect(useInviteStore.getState().selectedQqs.has(5)).toBe(false);
   });
 
-  it("requeueMember only works for failed/rate_limited", () => {
+  it("requeueMember works for failed/rate_limited/cancelled but not success/filtered", () => {
     useInviteStore.getState().requeueMember(5);
     expect(vi.mocked(toast)).not.toHaveBeenCalled();
     expect(useInviteStore.getState().members.find((m) => m.qq === 5)?.status).toBe("success");
+    useInviteStore.getState().requeueMember(3);
+    expect(useInviteStore.getState().members.find((m) => m.qq === 3)?.status).toBe("filtered");
+    expect(useInviteStore.getState().selectedQqs.has(3)).toBe(false);
+
     useInviteStore.getState().requeueMember(4);
     expect(useInviteStore.getState().members.find((m) => m.qq === 4)?.status).toBe("waiting");
+    expect(useInviteStore.getState().members.find((m) => m.qq === 4)?.failReason).toBeUndefined();
     expect(useInviteStore.getState().selectedQqs.has(4)).toBe(true);
+
+    useInviteStore.getState().requeueMember(6);
+    expect(useInviteStore.getState().members.find((m) => m.qq === 6)?.status).toBe("waiting");
+    expect(useInviteStore.getState().selectedQqs.has(6)).toBe(true);
+
+    useInviteStore.getState().requeueMember(7);
+    const cancelled = useInviteStore.getState().members.find((m) => m.qq === 7);
+    expect(cancelled?.status).toBe("waiting");
+    expect(cancelled?.failReason).toBeUndefined();
+    expect(cancelled?.token).toBe("");
+    expect(useInviteStore.getState().selectedQqs.has(7)).toBe(true);
+  });
+
+  it("cancelled cannot be selected until requeued to waiting", () => {
+    useInviteStore.getState().selectQq(7);
+    expect(useInviteStore.getState().selectedQqs.has(7)).toBe(false);
+    useInviteStore.getState().requeueMember(7);
+    expect(useInviteStore.getState().members.find((m) => m.qq === 7)?.status).toBe("waiting");
+    expect(useInviteStore.getState().selectedQqs.has(7)).toBe(true);
   });
 
   it("source group change clears members", () => {

@@ -80,6 +80,7 @@ export interface InviteStats {
   success: number;
   rate_limited: number;
   failed: number;
+  cancelled: number;
   waiting: number;
   inviting: number;
 }
@@ -190,6 +191,7 @@ export interface PersistedTask {
   success: number;
   rate_limited: number;
   failed: number;
+  cancelled?: number;
   batch_size?: number;
   interval_ms?: number;
   stop_reason?: string;

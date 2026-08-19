@@ -83,6 +83,9 @@ class PickerSession:
     missing_qqs: list[int] = field(default_factory=list)
     error: str = ""
     hit_page_limit: bool = False
+    termination_reason: str = ""
+    protocol_error_code: int | None = None
+    failed_page: int | None = None
 
 
 def _cfg_int(cfg: dict, *keys: str) -> int | None:
@@ -465,6 +468,9 @@ def open_cross_group_picker(
 
         cursor: bytes | None = None
         seen_cursors: set[bytes] = set()
+        termination_reason = ""
+        protocol_error_code: int | None = None
+        failed_page: int | None = None
         while fe7_pages < FE7_MAX_PAGES:
             _raise_if_stopped(stop_event, stage="PICKER_FE7")
             hx = build_fe7_group_list(source_group_id, page_cursor=cursor)
@@ -477,17 +483,35 @@ def open_cross_group_picker(
             err = _oidb_protocol_failed(resp)
             if err:
                 code, _ = parse_oidb_recv_status(_rsp_hex(resp)) if _rsp_hex(resp) else (None, False)
-                if fe7_pages == 0:
-                    _fail("PICKER_FE7", err, code=code)
-                    return None
+                failed_page = fe7_pages + 1
+                protocol_error_code = code
+                termination_reason = "protocol_error"
                 protocol_log(
                     "PICKER_FE7",
                     result="page_protocol_failed",
-                    page=fe7_pages + 1,
+                    page=failed_page,
                     err=err,
                     proto_code=code if code is not None else "none",
                 )
-                break
+                if not wanted and not token_map:
+                    _fail("PICKER_FE7", err, code=code)
+                    return None
+                missing = sorted(wanted - set(token_map)) if wanted else []
+                msg = f"FE7 第 {failed_page} 页协议错误"
+                if err:
+                    msg = f"{msg}：{err}"
+                return PickerSession(
+                    token_map=token_map,
+                    fe7_pages=fe7_pages,
+                    created_at=created_at,
+                    requested_qqs=requested,
+                    missing_qqs=missing,
+                    error=msg,
+                    hit_page_limit=hit_page_limit,
+                    termination_reason=termination_reason,
+                    protocol_error_code=protocol_error_code,
+                    failed_page=failed_page,
+                )
             fe7_pages += 1
             rsp = _rsp_hex(resp)
             page_map = parse_fe7_token_map(rsp) if rsp else {}
@@ -502,12 +526,15 @@ def open_cross_group_picker(
                 missing=missing_n,
             )
             if wanted and wanted.issubset(token_map.keys()):
+                termination_reason = "desired_complete"
                 protocol_log("PICKER_FE7", result="desired_complete", page=fe7_pages)
                 break
             cursor = extract_fe7_page_cursor(rsp) if rsp else None
             if not cursor:
+                termination_reason = "no_cursor"
                 break
             if cursor in seen_cursors:
+                termination_reason = "cursor_repeat"
                 protocol_log("PICKER_FE7", result="cursor_repeat", page=fe7_pages)
                 break
             seen_cursors.add(cursor)
@@ -515,6 +542,7 @@ def open_cross_group_picker(
                 raise PickerStopped("PICKER_FE7")
         else:
             hit_page_limit = True
+            termination_reason = "page_limit"
 
         missing = sorted(wanted - set(token_map)) if wanted else []
         if hit_page_limit and missing:
@@ -535,6 +563,7 @@ def open_cross_group_picker(
                 missing_qqs=missing,
                 error=msg,
                 hit_page_limit=True,
+                termination_reason="page_limit",
             )
 
         if not token_map:
@@ -556,6 +585,7 @@ def open_cross_group_picker(
                     missing_qqs=list(requested),
                     error=msg,
                     hit_page_limit=hit_page_limit,
+                    termination_reason=termination_reason or "no_cursor",
                 )
             _fail("PICKER_FE7", "选择器未返回任何成员邀请凭证")
             return None
@@ -567,6 +597,7 @@ def open_cross_group_picker(
             mapped=len(token_map),
             requested=len(requested),
             missing=len(missing),
+            termination=termination_reason or "ok",
         )
         return PickerSession(
             token_map=token_map,
@@ -575,6 +606,7 @@ def open_cross_group_picker(
             requested_qqs=requested,
             missing_qqs=missing,
             hit_page_limit=hit_page_limit,
+            termination_reason=termination_reason or "no_cursor",
         )
     except PickerStopped:
         protocol_log(

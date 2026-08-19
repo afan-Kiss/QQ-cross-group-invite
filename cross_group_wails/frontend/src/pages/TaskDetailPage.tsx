@@ -47,12 +47,13 @@ export function TaskDetailPage() {
   const success = task?.success ?? Number(remote?.success || 0);
   const frequent = task?.frequent ?? Number(remote?.rate_limited || 0);
   const failed = task?.failed ?? Number(remote?.failed || 0);
+  const cancelled = task?.cancelled ?? Number(remote?.cancelled || 0);
   const source = task?.sourceGroup ?? String(remote?.source_group_id || "");
   const target = task?.targetGroup ?? String(remote?.target_group_id || "");
   const startTime = toEpochMs(task?.startTime ?? Number(remote?.started_at || 0));
   const endTime = toEpochMs(task?.endTime ?? Number(remote?.finished_at || 0));
   const isLive = Boolean(taskId && stats.task_id && taskId === stats.task_id && (stats.running || inviting));
-  const completed = isLive ? stats.completed : success + frequent + failed;
+  const completed = isLive ? stats.completed : success + frequent + failed + cancelled;
   const pct = total > 0 ? (completed / total) * 100 : 0;
   const durationMs = endTime && startTime ? endTime - startTime : isLive && startTime ? Date.now() - startTime : 0;
   const timeline = task?.timeline || remote?.timeline || [];
@@ -86,12 +87,13 @@ export function TaskDetailPage() {
         )}
       </div>
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
         {[
           { label: "总人数", value: total },
           { label: "成功", value: isLive ? stats.success : success },
           { label: "频繁", value: isLive ? stats.rate_limited : frequent },
           { label: "失败", value: isLive ? stats.failed : failed },
+          { label: "已取消", value: isLive ? stats.cancelled : cancelled },
         ].map((c) => (
           <div key={c.label} className="rounded-[14px] border border-border bg-white p-4 shadow-[var(--shadow-card)]">
             <div className="text-[12px] text-muted-foreground">{c.label}</div>

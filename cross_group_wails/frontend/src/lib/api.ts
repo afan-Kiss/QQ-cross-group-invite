@@ -198,6 +198,7 @@ export function normalizeStatus(
     success,
     rate_limited: Number(raw.rate_limited_count ?? raw.rate_limited ?? frequent.length),
     failed: Number(raw.failed_count ?? raw.failed ?? errors.length),
+    cancelled: Number(raw.cancelled_count ?? raw.cancelled ?? 0),
     waiting: results.length ? waitingFromResults : Math.max(0, total - done),
     inviting: results.length ? invitingFromResults : running && currentQq > 0 ? 1 : 0,
     logs: (raw.logs as string[]) ?? [],

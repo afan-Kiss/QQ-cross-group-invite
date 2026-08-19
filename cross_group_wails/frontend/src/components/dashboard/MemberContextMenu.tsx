@@ -65,7 +65,7 @@ export function MemberContextMenu({ x, y, member, onClose }: Props) {
     },
     {
       label: "重新加入队列",
-      disabled: !(member.status === "failed" || member.status === "rate_limited"),
+      disabled: !(member.status === "failed" || member.status === "rate_limited" || member.status === "cancelled"),
       onClick: () => requeueMember(member.qq),
     },
   ];

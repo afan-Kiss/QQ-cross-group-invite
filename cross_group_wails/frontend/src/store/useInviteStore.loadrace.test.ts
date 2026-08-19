@@ -21,6 +21,7 @@ vi.mock("@/lib/api", () => ({
       success: 0,
       rate_limited: 0,
       failed: 0,
+      cancelled: 0,
       waiting: 0,
       inviting: 0,
       logs: [],

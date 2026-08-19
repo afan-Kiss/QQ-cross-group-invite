@@ -162,6 +162,7 @@ export function InviteProgressTab() {
             <span className="text-primary">成功 {stats.success}</span>
             <span className="text-warning">频繁 {stats.rate_limited}</span>
             <span className="text-danger">失败 {stats.failed}</span>
+            <span className="text-muted-foreground">已取消 {stats.cancelled}</span>
           </div>
         </div>
       </div>

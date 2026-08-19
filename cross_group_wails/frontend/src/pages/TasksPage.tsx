@@ -118,6 +118,7 @@ export function TasksPage() {
                 <th className="px-4 py-3">成功</th>
                 <th className="px-4 py-3">频繁</th>
                 <th className="px-4 py-3">失败</th>
+                <th className="px-4 py-3">已取消</th>
                 <th className="px-4 py-3">状态</th>
                 <th className="px-4 py-3">操作</th>
               </tr>
@@ -144,6 +145,7 @@ export function TasksPage() {
                     <td className="px-4 py-3 text-primary">{formatNumber(t.success)}</td>
                     <td className="px-4 py-3 text-warning">{formatNumber(t.frequent)}</td>
                     <td className="px-4 py-3 text-danger">{formatNumber(t.failed)}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{formatNumber(t.cancelled)}</td>
                     <td className="px-4 py-3">
                       <span
                         className={cn(

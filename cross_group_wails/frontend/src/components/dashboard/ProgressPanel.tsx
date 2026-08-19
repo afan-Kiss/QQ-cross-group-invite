@@ -22,7 +22,7 @@ export function ProgressPanel() {
         <div>成功 <span className="font-medium text-primary">{stats.success}</span></div>
         <div>频繁 <span className="font-medium text-warning">{stats.rate_limited}</span></div>
         <div>失败 <span className="font-medium text-danger">{stats.failed}</span></div>
-        <div>等待 <span className="font-medium">{stats.waiting}</span></div>
+        <div>已取消 <span className="font-medium">{stats.cancelled}</span></div>
       </div>
       <p className="mt-3 text-[12px] text-muted-foreground">
         {inviting ? stats.message || "邀请运行中" : stats.message || "空闲"}

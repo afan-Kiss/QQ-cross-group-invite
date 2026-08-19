@@ -305,3 +305,154 @@ def test_cursor_none_ends_pagination(monkeypatch, tmp_path):
     sess = pcg.open_cross_group_picker(tmp_path, 200, 100)
     assert sess is not None
     assert fe7_n["n"] == 1
+    assert sess.termination_reason == "no_cursor"
+
+
+def test_fe7_page1_protocol_error_returns_session(monkeypatch, tmp_path):
+    def fake_send(cmd, hex_data, **_k):
+        if "0xfe7_4" in cmd:
+            return {"code": 0, "data": _oidb(2)}
+        return {"code": 0, "data": _oidb(0)}
+
+    monkeypatch.setattr(pcg, "_send_packet", fake_send)
+    monkeypatch.setattr(pcg.time, "sleep", lambda *_a, **_k: None)
+    sess = pcg.open_cross_group_picker(tmp_path, 200, 100, desired_qqs=[10001])
+    assert sess is not None
+    assert sess.token_map == {}
+    assert sess.termination_reason == "protocol_error"
+    assert sess.failed_page == 1
+    assert sess.protocol_error_code == 2
+    assert 10001 in sess.missing_qqs
+    assert sess.error
+
+
+def test_fe7_page2_protocol_error_keeps_page1_token(monkeypatch, tmp_path):
+    pages = {"n": 0}
+
+    def fake_send(cmd, hex_data, **_k):
+        if "0xfe7_4" in cmd:
+            pages["n"] += 1
+            if pages["n"] == 1:
+                from pb_utils import encode_field_bytes, encode_pb_message
+
+                body = encode_field_bytes(15, b"c" * 36)
+                return {"code": 0, "data": encode_pb_message({3: [0], 4: [body]}).hex()}
+            return {"code": 0, "data": _oidb(7)}
+        return {"code": 0, "data": _oidb(0)}
+
+    maps = [{10001: TOK_A}, {}]
+    monkeypatch.setattr(pcg, "_send_packet", fake_send)
+    monkeypatch.setattr(pcg, "parse_fe7_token_map", lambda _r: maps.pop(0) if maps else {})
+    monkeypatch.setattr(pcg.time, "sleep", lambda *_a, **_k: None)
+    sess = pcg.open_cross_group_picker(tmp_path, 200, 100, desired_qqs=[10001, 10002])
+    assert sess is not None
+    assert sess.token_map == {10001: TOK_A}
+    assert sess.termination_reason == "protocol_error"
+    assert sess.failed_page == 2
+    assert 10002 in sess.missing_qqs
+    assert 10001 not in sess.missing_qqs
+
+
+def test_page2_error_zero_desired_tokens_does_not_send_fe1_758(monkeypatch):
+    fe1 = []
+    sent_758 = []
+
+    def fake_picker(*_a, **_k):
+        return pcg.PickerSession(
+            token_map={},
+            fe7_pages=1,
+            requested_qqs=[10001, 10002],
+            missing_qqs=[10001, 10002],
+            error="FE7 page 2 protocol error",
+            termination_reason="protocol_error",
+            protocol_error_code=7,
+            failed_page=2,
+        )
+
+    monkeypatch.setattr(cgb, "open_cross_group_picker", fake_picker)
+    monkeypatch.setattr(
+        cgb, "sync_fe1_selection", lambda *_a, **_k: fe1.append(1) or True
+    )
+    monkeypatch.setattr(
+        cgb,
+        "send_cross_group_invite",
+        lambda **k: sent_758.append(k) or (True, {"code": 0, "data": OIDB_OK}),
+    )
+    members = [
+        SourceMember(qq=10001, nickname="a", token=TOK_A, role=MemberRole.MEMBER),
+        SourceMember(qq=10002, nickname="b", token="tok-b", role=MemberRole.MEMBER),
+    ]
+    with cgb._members_lock:
+        cgb._members_snapshot = MembersCacheSnapshot(
+            source_group_id=100, filter_staff=True, members=tuple(members)
+        )
+    cgb.start_batch(
+        target_group_id=200,
+        source_group_id=100,
+        interval_ms=100,
+        qq_list=[10001, 10002],
+        batch_size=2,
+        filter_staff=True,
+    )
+    assert wait_not_running(timeout=2.0)
+    assert fe1 == []
+    assert sent_758 == []
+    st = cgb.get_state()
+    by_qq = {r["qq"]: r for r in st["results"]}
+    assert "FE7" in (by_qq[10001].get("reason") or "")
+    assert "\u534f\u8bae\u9519\u8bef" in (by_qq[10001].get("reason") or "")
+    assert by_qq[10001]["status"] == "failed"
+    assert by_qq[10002]["status"] == "failed"
+
+
+def test_page1_token_page2_error_invites_only_mapped_member(monkeypatch):
+    fe1: list[list[str]] = []
+    sent_758: list[list[str]] = []
+
+    def fake_picker(*_a, **_k):
+        return pcg.PickerSession(
+            token_map={10001: TOK_A},
+            fe7_pages=1,
+            requested_qqs=[10001, 10002],
+            missing_qqs=[10002],
+            termination_reason="protocol_error",
+            protocol_error_code=7,
+            failed_page=2,
+            error="FE7 page 2 protocol error",
+        )
+
+    monkeypatch.setattr(cgb, "open_cross_group_picker", fake_picker)
+    monkeypatch.setattr(
+        cgb, "sync_fe1_selection", lambda _c, tokens, **_k: fe1.append(list(tokens)) or True
+    )
+    monkeypatch.setattr(
+        cgb,
+        "send_cross_group_invite",
+        lambda **k: sent_758.append(list(k.get("invitee_tokens") or []))
+        or (True, {"code": 0, "data": OIDB_OK}),
+    )
+    monkeypatch.setattr(cgb, "wait_target_membership", lambda *_a, **_k: True)
+    members = [
+        SourceMember(qq=10001, nickname="a", token=TOK_A, role=MemberRole.MEMBER),
+        SourceMember(qq=10002, nickname="b", token="tok-b", role=MemberRole.MEMBER),
+    ]
+    with cgb._members_lock:
+        cgb._members_snapshot = MembersCacheSnapshot(
+            source_group_id=100, filter_staff=True, members=tuple(members)
+        )
+    cgb.start_batch(
+        target_group_id=200,
+        source_group_id=100,
+        interval_ms=100,
+        qq_list=[10001, 10002],
+        batch_size=2,
+        filter_staff=True,
+    )
+    assert wait_not_running(timeout=2.0)
+    assert fe1 == [[TOK_A]]
+    assert sent_758 == [[TOK_A]]
+    st = cgb.get_state()
+    by_qq = {r["qq"]: r for r in st["results"]}
+    assert by_qq[10001]["status"] == "success"
+    assert by_qq[10002]["status"] == "failed"
+    assert "\u7b2c 2 \u9875" in (by_qq[10002].get("reason") or "")

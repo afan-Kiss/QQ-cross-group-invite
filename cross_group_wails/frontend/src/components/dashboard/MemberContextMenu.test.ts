@@ -15,10 +15,10 @@ describe("MemberContextMenu queue rules", () => {
     );
   });
 
-  it("requeue remains available for failed/rate_limited", () => {
+  it("requeue remains available for failed/rate_limited/cancelled", () => {
     expect(src).toContain("\u91cd\u65b0\u52a0\u5165\u961f\u5217");
     expect(src).toContain(
-      'disabled: !(member.status === "failed" || member.status === "rate_limited")',
+      'disabled: !(member.status === "failed" || member.status === "rate_limited" || member.status === "cancelled")',
     );
     expect(src).toContain("requeueMember(member.qq)");
   });

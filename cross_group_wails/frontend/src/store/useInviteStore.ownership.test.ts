@@ -56,6 +56,7 @@ function baseStatus(over: Record<string, unknown> = {}) {
     success: 0,
     rate_limited: 0,
     failed: 0,
+    cancelled: 0,
     waiting: 0,
     inviting: 0,
     logs: [],

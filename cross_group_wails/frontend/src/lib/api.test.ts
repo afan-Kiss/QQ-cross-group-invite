@@ -61,6 +61,30 @@ describe("normalizeStatus", () => {
     expect(status.batch.intervalRemainingMs).toBe(1200);
     expect(status.waiting).toBe(1);
     expect(status.rate_series[0].success).toBe(1);
+    expect(status.cancelled).toBe(0);
+  });
+
+  it("maps cancelled_count and keeps terminal invariant fields", () => {
+    const status = normalizeStatus({
+      running: false,
+      status: "stopped",
+      total: 3,
+      done: 3,
+      success: 1,
+      failed_count: 0,
+      rate_limited_count: 1,
+      cancelled_count: 1,
+      frequent: [{ qq: 2, nickname: "b" }],
+      errors: [],
+      results: [
+        { qq: 1, nickname: "a", status: "success", reason: "", started_at: 1, finished_at: 2, duration_ms: 1 },
+        { qq: 2, nickname: "b", status: "rate_limited", reason: "频繁", started_at: 1, finished_at: 2, duration_ms: 1 },
+        { qq: 3, nickname: "c", status: "cancelled", reason: "已停止，未发送邀请", started_at: 1, finished_at: 2, duration_ms: 1 },
+      ],
+      logs: [],
+    });
+    expect(status.cancelled).toBe(1);
+    expect(status.success + status.failed + status.rate_limited + status.cancelled).toBe(status.completed);
   });
 
   it("maps error status without completed message override", () => {

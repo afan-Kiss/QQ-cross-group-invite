@@ -45,7 +45,7 @@ export function MemberDetailDrawer() {
 
   const canSelect = member && member.status === "waiting";
   const canRequeue =
-    member && (member.status === "failed" || member.status === "rate_limited");
+    member && (member.status === "failed" || member.status === "rate_limited" || member.status === "cancelled");
 
   return (
     <>
