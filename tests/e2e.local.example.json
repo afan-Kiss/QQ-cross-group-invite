@@ -4,7 +4,8 @@
   "single_qq": 0,
   "odd_tail_qqs": [],
   "protocol_7_qqs": [],
+  "stop_gate_qqs": [],
   "interval_ms": 1500,
   "allow_real_invite": false,
-  "_comment": "Copy to e2e.local.json and set allow_real_invite=true with real safe QQ numbers. e2e.local.json is gitignored."
+  "_comment": "Copy to e2e.local.json (gitignored). All QQs must be ordinary source-group members, must NOT already be in the target group, and the four QQ sets must be disjoint. Do not auto-kick. Re-run requires manually ensuring these QQs are again absent from the target group."
 }

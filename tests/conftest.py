@@ -45,13 +45,23 @@ def invoke_758_send_hooks(fn):
     def wrapper(**kwargs):
         before = kwargs.get("before_network_send")
         after = kwargs.get("after_network_send")
+        on_resp = kwargs.get("on_response_received")
+        on_exc = kwargs.get("on_send_exception")
         if before is not None:
             before()
         try:
-            return fn(**kwargs)
-        finally:
+            result = fn(**kwargs)
+        except Exception:
             if after is not None:
                 after()
+            if on_exc is not None:
+                on_exc()
+            raise
+        if after is not None:
+            after()
+        if on_resp is not None:
+            on_resp()
+        return result
 
     return wrapper
 

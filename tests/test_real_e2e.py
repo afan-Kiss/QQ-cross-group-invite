@@ -5,7 +5,11 @@ Gating:
   A) NapCat offline -> SKIPPED: NAPCAT_OFFLINE
   B) Online but tests/e2e.local.json missing or allow_real_invite!=true
      -> SKIPPED: REAL_E2E_CONFIG_MISSING_OR_DISABLED
-  C) Online + config -> execute real invites (never unconditional skip)
+  C) Online + invalid overlapping / incomplete config -> FAIL (not skip)
+  D) Online + valid config -> execute real invites (never unconditional skip)
+
+Each case independently validates its QQs, preflights target absence, then
+runs production start_batch. Cases must not share invitee QQs.
 """
 from __future__ import annotations
 
@@ -17,6 +21,7 @@ import pytest
 
 import cross_group_batch as cgb
 from myqq_api import check_napcat_online, load_cfg
+from pull_cross_group import resolve_capture_dir, target_group_has_member, wait_target_membership
 
 E2E_CONFIG_PATH = Path(__file__).resolve().parent / "e2e.local.json"
 
@@ -32,6 +37,47 @@ def _napcat_status() -> tuple[bool, str]:
         return False, str(exc)
 
 
+def _qq_list(raw, *, min_n: int, name: str) -> list[int]:
+    if not isinstance(raw, list) or len(raw) < min_n:
+        pytest.fail(f"E2E config: {name} needs at least {min_n} QQs")
+    out: list[int] = []
+    for x in raw:
+        q = int(x)
+        if q <= 0:
+            pytest.fail(f"E2E config: {name} contains invalid QQ")
+        out.append(q)
+    return out
+
+
+def validate_e2e_config(data: dict) -> dict:
+    if not isinstance(data, dict) or data.get("allow_real_invite") is not True:
+        pytest.skip("REAL_E2E_CONFIG_MISSING_OR_DISABLED")
+    source = int(data.get("source_group_id") or 0)
+    target = int(data.get("target_group_id") or 0)
+    if source <= 0 or target <= 0:
+        pytest.fail("E2E config: source_group_id and target_group_id must be > 0")
+    if source == target:
+        pytest.fail("E2E config: source and target must differ")
+    single = int(data.get("single_qq") or 0)
+    if single <= 0:
+        pytest.fail("E2E config: single_qq must be > 0")
+    odd = _qq_list(data.get("odd_tail_qqs"), min_n=3, name="odd_tail_qqs")[:3]
+    proto7 = _qq_list(data.get("protocol_7_qqs"), min_n=7, name="protocol_7_qqs")[:7]
+    stop7 = _qq_list(data.get("stop_gate_qqs"), min_n=7, name="stop_gate_qqs")[:7]
+    all_qqs = [single, *odd, *proto7, *stop7]
+    if len(all_qqs) != len(set(all_qqs)):
+        pytest.fail("E2E config: scenario QQ sets must be disjoint")
+    return {
+        "source_group_id": source,
+        "target_group_id": target,
+        "single_qq": single,
+        "odd_tail_qqs": odd,
+        "protocol_7_qqs": proto7,
+        "stop_gate_qqs": stop7,
+        "interval_ms": int(data.get("interval_ms") or 1500),
+    }
+
+
 def _load_e2e_config() -> dict:
     if not E2E_CONFIG_PATH.is_file():
         pytest.skip("REAL_E2E_CONFIG_MISSING_OR_DISABLED")
@@ -39,9 +85,7 @@ def _load_e2e_config() -> dict:
         data = json.loads(E2E_CONFIG_PATH.read_text(encoding="utf-8"))
     except Exception as exc:  # noqa: BLE001
         pytest.skip(f"REAL_E2E_CONFIG_MISSING_OR_DISABLED: {exc}")
-    if not isinstance(data, dict) or data.get("allow_real_invite") is not True:
-        pytest.skip("REAL_E2E_CONFIG_MISSING_OR_DISABLED")
-    return data
+    return validate_e2e_config(data)
 
 
 def _require_real_e2e() -> dict:
@@ -58,31 +102,94 @@ def _wait_task(timeout: float = 180.0) -> dict:
         if not st.get("running"):
             return st
         time.sleep(0.2)
-    return cgb.get_state()
+    st = cgb.get_state()
+    if st.get("running"):
+        try:
+            cgb.stop_batch(st.get("task_id"))
+        except Exception:  # noqa: BLE001
+            pass
+        pytest.fail(f"REAL_E2E_TIMEOUT: task still running after {timeout} seconds")
+    return st
 
 
-def _assert_no_raw_token(text: str) -> None:
-    assert "u_" not in text or "token_count=" in text
+def _assert_logs_clean(st: dict) -> None:
+    cgb.assert_no_raw_invite_tokens(st.get("logs") or [], where="state.logs")
 
 
-def _summarize(st: dict) -> dict:
-    logs = "\n".join(st.get("logs") or [])
-    return {
-        "status": st.get("status"),
-        "success": st.get("success"),
-        "failed": st.get("failed"),
-        "rate_limited": st.get("rate_limited"),
-        "cancelled": st.get("cancelled"),
-        "done": st.get("done"),
-        "total": st.get("total"),
-        "picker_lines": [ln for ln in (st.get("logs") or []) if "picker ui_batch" in ln],
-        "gate": {
-            "authorized": logs.count("758_authorized"),
-            "send_started": logs.count("758_send_started"),
-            "send_finished": logs.count("758_send_finished"),
-            "stop_requested": logs.count("stop_requested"),
-        },
-    }
+def _assert_counts(
+    st: dict,
+    *,
+    total: int,
+    success: int,
+    cancelled: int = 0,
+    failed: int = 0,
+    rate_limited: int = 0,
+) -> None:
+    assert st["total"] == total
+    assert st["done"] == total
+    assert st["success"] == success
+    assert st["failed"] == failed
+    assert st["rate_limited"] == rate_limited
+    assert st["cancelled"] == cancelled
+    waiting = sum(1 for r in st["results"] if r["status"] == "waiting")
+    inviting = sum(1 for r in st["results"] if r["status"] == "inviting")
+    assert waiting == 0
+    assert inviting == 0
+    assert st["success"] + st["failed"] + st["rate_limited"] + st["cancelled"] == st["done"]
+
+
+def _assert_protocol_sends(st: dict, counts: list[int], codes: list[int]) -> None:
+    sends = st.get("protocol_sends") or []
+    assert [int(x.get("invitee_count") or 0) for x in sends] == counts
+    assert [x.get("protocol_code") for x in sends] == codes
+
+
+def _source_by_qq(source_group_id: int) -> dict[int, cgb.SourceMember]:
+    cfg = load_cfg()
+    cap = resolve_capture_dir(cfg)
+    members = cgb.load_source_members(
+        source_group_id,
+        filter_staff=True,
+        capture_dir=cap,
+        record_logs=False,
+    )
+    return {m.qq: m for m in members}
+
+
+def preflight_not_in_target(
+    *,
+    source_group_id: int,
+    target_group_id: int,
+    qqs: list[int],
+    members_by_qq: dict[int, cgb.SourceMember] | None = None,
+) -> None:
+    by_qq = members_by_qq if members_by_qq is not None else _source_by_qq(source_group_id)
+    for qq in qqs:
+        member = by_qq.get(int(qq))
+        if member is None:
+            pytest.fail(f"E2E_PRECONDITION_FAILED: qq {qq} not in source group")
+        if not member.eligible:
+            pytest.fail(
+                f"E2E_PRECONDITION_FAILED: qq {qq} is not eligible "
+                f"({member.filter_reason or 'filter_staff'})"
+            )
+        present = target_group_has_member(target_group_id, int(qq), request_timeout=5.0)
+        if present is True:
+            pytest.fail(
+                f"E2E_PRECONDITION_FAILED: qq {qq} already exists in target group. "
+                "Remove this test account from the target group before rerun."
+            )
+        if present is None:
+            pytest.fail(
+                "E2E_PRECONDITION_UNVERIFIED: cannot verify target membership before test"
+            )
+
+
+def _assert_target_membership(target_group_id: int, qqs: list[int]) -> None:
+    for qq in qqs:
+        present = wait_target_membership(target_group_id, int(qq), timeout=8.0)
+        if present is not True:
+            pytest.fail(f"target membership != True for qq {qq} (got {present})")
 
 
 def test_real_e2e_single_member_n1():
@@ -90,108 +197,136 @@ def test_real_e2e_single_member_n1():
     qq = int(cfg["single_qq"])
     source = int(cfg["source_group_id"])
     target = int(cfg["target_group_id"])
-    interval = int(cfg.get("interval_ms") or 1500)
+    preflight_not_in_target(source_group_id=source, target_group_id=target, qqs=[qq])
     cgb.start_batch(
         target_group_id=target,
         source_group_id=source,
-        interval_ms=interval,
+        interval_ms=int(cfg["interval_ms"]),
         qq_list=[qq],
         batch_size=1,
         filter_staff=True,
     )
     st = _wait_task()
-    summary = _summarize(st)
-    for line in st.get("logs") or []:
-        if "picker" in line:
-            _assert_no_raw_token(line)
-    assert st["status"] == "success" or st["status"] == "completed"
-    assert st["success"] >= 1
-    assert st["total"] == 1
-    assert st["done"] == 1
-    assert summary["gate"]["authorized"] >= 1
-    assert summary["gate"]["send_started"] >= 1
+    _assert_logs_clean(st)
+    assert st["status"] == "completed"
+    _assert_counts(st, total=1, success=1)
     by_qq = {r["qq"]: r for r in st["results"]}
     assert by_qq[qq]["status"] == "success"
+    _assert_protocol_sends(st, [1], [0])
+    events = cgb.parse_send_gate_events(st["logs"])
+    assert [e["event"] for e in events if e["event"] == "758_authorized"] == ["758_authorized"]
+    _assert_target_membership(target, [qq])
 
 
 def test_real_e2e_odd_tail_2_plus_1():
     cfg = _require_real_e2e()
-    qqs = [int(x) for x in cfg.get("odd_tail_qqs") or []]
-    if len(qqs) < 3:
-        pytest.skip("REAL_E2E_CONFIG_MISSING_OR_DISABLED: odd_tail_qqs needs 3 QQs")
+    qqs = list(cfg["odd_tail_qqs"])
     source = int(cfg["source_group_id"])
     target = int(cfg["target_group_id"])
-    interval = int(cfg.get("interval_ms") or 1500)
+    preflight_not_in_target(source_group_id=source, target_group_id=target, qqs=qqs)
     cgb.start_batch(
         target_group_id=target,
         source_group_id=source,
-        interval_ms=interval,
-        qq_list=qqs[:3],
+        interval_ms=int(cfg["interval_ms"]),
+        qq_list=qqs,
         batch_size=2,
         filter_staff=True,
     )
     st = _wait_task()
-    assert st["status"] in {"completed", "success"}
-    assert st["done"] == 3
-    # Last UI batch should be N=1 (2+1).
-    assert any("protocol_chunk" in ln and "token_count=1" in ln for ln in st.get("logs") or [])
+    _assert_logs_clean(st)
+    assert st["status"] == "completed"
+    _assert_counts(st, total=3, success=3)
+    by_qq = {r["qq"]: r for r in st["results"]}
+    for qq in qqs:
+        assert by_qq[qq]["status"] == "success"
+    _assert_protocol_sends(st, [2, 1], [0, 0])
+    _assert_target_membership(target, qqs)
 
 
 def test_real_e2e_protocol_chunks_6_plus_1():
     cfg = _require_real_e2e()
-    qqs = [int(x) for x in cfg.get("protocol_7_qqs") or []]
-    if len(qqs) < 7:
-        pytest.skip("REAL_E2E_CONFIG_MISSING_OR_DISABLED: protocol_7_qqs needs 7 QQs")
+    qqs = list(cfg["protocol_7_qqs"])
     source = int(cfg["source_group_id"])
     target = int(cfg["target_group_id"])
-    interval = int(cfg.get("interval_ms") or 1500)
+    preflight_not_in_target(source_group_id=source, target_group_id=target, qqs=qqs)
     cgb.start_batch(
         target_group_id=target,
         source_group_id=source,
-        interval_ms=interval,
-        qq_list=qqs[:7],
+        interval_ms=int(cfg["interval_ms"]),
+        qq_list=qqs,
         batch_size=7,
         filter_staff=True,
     )
     st = _wait_task(timeout=300.0)
+    _assert_logs_clean(st)
     logs = "\n".join(st.get("logs") or [])
     assert "protocol_chunk_total=2" in logs
-    assert logs.count("758_authorized") >= 2
-    assert logs.count("758_send_started") >= 2
-    assert st["done"] == 7
+    events = cgb.parse_send_gate_events(st["logs"])
+    assert [e["event"] for e in events if e["event"] == "758_authorized"] == [
+        "758_authorized",
+        "758_authorized",
+    ]
+    assert [e["seq"] for e in events if e["event"] == "758_send_started"] == [1, 2]
+    assert st["status"] == "completed"
+    _assert_counts(st, total=7, success=7)
+    by_qq = {r["qq"]: r for r in st["results"]}
+    for qq in qqs:
+        assert by_qq[qq]["status"] == "success"
+    _assert_protocol_sends(st, [6, 1], [0, 0])
+    _assert_target_membership(target, qqs)
 
 
 def test_real_e2e_stop_gate_between_chunks():
     cfg = _require_real_e2e()
-    qqs = [int(x) for x in cfg.get("protocol_7_qqs") or []]
-    if len(qqs) < 7:
-        pytest.skip("REAL_E2E_CONFIG_MISSING_OR_DISABLED: protocol_7_qqs needs 7 QQs")
+    qqs = list(cfg["stop_gate_qqs"])
     source = int(cfg["source_group_id"])
     target = int(cfg["target_group_id"])
-    interval = int(cfg.get("interval_ms") or 2000)
+    preflight_not_in_target(source_group_id=source, target_group_id=target, qqs=qqs)
+    interval = max(int(cfg["interval_ms"]), 1500)
     task_id = cgb.start_batch(
         target_group_id=target,
         source_group_id=source,
         interval_ms=interval,
-        qq_list=qqs[:7],
+        qq_list=qqs,
         batch_size=7,
         filter_staff=True,
     )
-    # Wait until first 758 authorized, then stop before second chunk.
     deadline = time.time() + 120.0
+    stopped = False
     while time.time() < deadline:
-        logs = "\n".join(cgb.get_state().get("logs") or [])
-        if "758_send_finished" in logs or "758_send_started" in logs:
+        events = cgb.parse_send_gate_events(cgb.get_state().get("logs") or [])
+        got_resp = any(
+            e["event"] == "758_response_received" and e.get("seq") == 1 for e in events
+        )
+        if got_resp:
             cgb.stop_batch(task_id)
+            stopped = True
             break
         if not cgb.get_state().get("running"):
             break
         time.sleep(0.05)
+    if not stopped:
+        pytest.fail("stop gate never saw 758_response_received seq=1")
     st = _wait_task(timeout=120.0)
-    logs = "\n".join(st.get("logs") or [])
-    assert "stop_requested" in logs
-    # After stop, no new authorize beyond those already started.
-    auth = logs.count("758_authorized")
-    started = logs.count("758_send_started")
-    assert started <= auth
-    assert st["status"] in {"stopped", "completed", "error"}
+    _assert_logs_clean(st)
+    events = cgb.parse_send_gate_events(st.get("logs") or [])
+    stop_i = next(i for i, e in enumerate(events) if e["event"] == "stop_requested")
+    after = events[stop_i + 1 :]
+    assert not any(e["event"] == "758_authorized" and e.get("seq") == 2 for e in after)
+    assert not any(e["event"] == "758_send_started" and e.get("seq") == 2 for e in after)
+    auth = [e for e in events if e["event"] == "758_authorized"]
+    started = [e for e in events if e["event"] == "758_send_started"]
+    finished = [e for e in events if e["event"] == "758_send_finished"]
+    resp = [e for e in events if e["event"] == "758_response_received"]
+    assert len(auth) == 1 and auth[0]["seq"] == 1
+    assert len(started) == 1 and started[0]["seq"] == 1
+    assert len(finished) == 1 and finished[0]["seq"] == 1
+    assert len(resp) == 1 and resp[0]["seq"] == 1
+    assert st["status"] == "stopped"
+    _assert_counts(st, total=7, success=6, cancelled=1)
+    by_qq = {r["qq"]: r for r in st["results"]}
+    for qq in qqs[:6]:
+        assert by_qq[qq]["status"] == "success"
+    assert by_qq[qqs[6]]["status"] == "cancelled"
+    _assert_protocol_sends(st, [6], [0])
+    _assert_target_membership(target, qqs[:6])

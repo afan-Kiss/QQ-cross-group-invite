@@ -667,6 +667,8 @@ def send_cross_group_invite(
     stop_event=None,
     before_network_send=None,
     after_network_send=None,
+    on_response_received=None,
+    on_send_exception=None,
 ) -> tuple[bool, dict]:
     """Build and send 0x758. Optional hooks fire only around real _send_packet."""
     del source_context_token
@@ -696,13 +698,22 @@ def send_cross_group_invite(
     _raise_if_stopped(stop_event, stage="INVITE_758")
     if before_network_send is not None:
         before_network_send()
+    send_exc: BaseException | None = None
+    resp: dict = {}
     try:
         resp = _send_packet(
             CMD_758, pb_hex, label="758 cross-group invite", stage="INVITE_758"
         )
-    finally:
-        if after_network_send is not None:
-            after_network_send()
+    except BaseException as exc:  # noqa: BLE001
+        send_exc = exc
+    if after_network_send is not None:
+        after_network_send()
+    if send_exc is not None:
+        if on_send_exception is not None:
+            on_send_exception()
+        raise send_exc
+    if on_response_received is not None:
+        on_response_received()
     ok = _response_ok(resp)
     if not ok:
         data = _rsp_hex(resp)

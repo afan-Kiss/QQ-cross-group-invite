@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
-"""interval_ms must pace real 758 send attempts across protocol chunks."""
+"""interval_ms must pace protocol attempts BEFORE fresh picker."""
 from __future__ import annotations
 
+import threading
 import time
 
 import cross_group_batch as cgb
@@ -18,19 +19,30 @@ def _members(n: int) -> list[SourceMember]:
     ]
 
 
-def _install_happy_path(monkeypatch, members, *, on_send=None, send_result=None):
+def _install(monkeypatch, members, *, picker_delay=0.0, membership_delay=0.0, on_send=None, send_result=None):
+    picker_started: list[float] = []
+    fe1_at: list[float] = []
+    send_at: list[float] = []
+    sizes: list[int] = []
+    fe1_n = {"n": 0}
+
     def fake_picker(_cap, _t, _s, *, desired_qqs=None, stop_event=None):
+        picker_started.append(time.monotonic())
+        if picker_delay:
+            time.sleep(picker_delay)
         qqs = list(desired_qqs or [])
         return cgb.PickerSession(
             token_map={q: f"u_T{q % 100:02d}AAAAAAAAAAAAAAAAAA"[:24] for q in qqs},
             fe7_pages=1,
         )
 
-    timestamps: list[float] = []
-    sizes: list[int] = []
+    def fake_fe1(_cap, tokens, **_k):
+        fe1_n["n"] += 1
+        fe1_at.append(time.monotonic())
+        return True
 
     def fake_758(**kwargs):
-        timestamps.append(time.monotonic())
+        send_at.append(time.monotonic())
         toks = list(kwargs.get("invitee_tokens") or [])
         sizes.append(len(toks))
         if on_send is not None:
@@ -39,20 +51,25 @@ def _install_happy_path(monkeypatch, members, *, on_send=None, send_result=None)
             return send_result(kwargs)
         return True, {"code": 0, "data": "1800"}
 
+    def fake_wait(*_a, **_k):
+        if membership_delay:
+            time.sleep(membership_delay)
+        return True
+
     monkeypatch.setattr(cgb, "open_cross_group_picker", fake_picker)
-    monkeypatch.setattr(cgb, "sync_fe1_selection", lambda *_a, **_k: True)
+    monkeypatch.setattr(cgb, "sync_fe1_selection", fake_fe1)
     monkeypatch.setattr(cgb, "send_cross_group_invite", invoke_758_send_hooks(fake_758))
-    monkeypatch.setattr(cgb, "wait_target_membership", lambda *_a, **_k: True)
+    monkeypatch.setattr(cgb, "wait_target_membership", fake_wait)
     with cgb._members_lock:
         cgb._members_snapshot = MembersCacheSnapshot(
             source_group_id=100, filter_staff=True, members=tuple(members)
         )
-    return timestamps, sizes
+    return picker_started, fe1_at, send_at, sizes, fe1_n
 
 
 def test_batch20_cadence_between_758_sends(monkeypatch):
     members = _members(20)
-    timestamps, sizes = _install_happy_path(monkeypatch, members)
+    _picker, _fe1, timestamps, sizes, _n = _install(monkeypatch, members)
     cgb.start_batch(
         target_group_id=200,
         source_group_id=100,
@@ -68,21 +85,66 @@ def test_batch20_cadence_between_758_sends(monkeypatch):
         assert (b - a) >= 0.18
 
 
-def test_batch13_three_sends_respect_interval(monkeypatch):
-    members = _members(13)
-    timestamps, sizes = _install_happy_path(monkeypatch, members)
+def test_cadence_wait_happens_before_second_picker(monkeypatch):
+    members = _members(7)
+    picker_started, _fe1, send_at, sizes, fe1_n = _install(monkeypatch, members)
     cgb.start_batch(
         target_group_id=200,
         source_group_id=100,
-        interval_ms=150,
+        interval_ms=800,
         qq_list=[m.qq for m in members],
-        batch_size=13,
+        batch_size=7,
         filter_staff=True,
     )
     assert wait_not_running(timeout=5.0)
-    assert sizes == [6, 6, 1]
-    for a, b in zip(timestamps, timestamps[1:]):
-        assert (b - a) >= 0.13
+    assert sizes == [6, 1]
+    assert len(picker_started) == 2
+    assert picker_started[1] >= send_at[0] + 0.75
+    assert picker_started[1] > send_at[0]
+    assert fe1_n["n"] == 2
+    sends = cgb.get_state()["protocol_sends"]
+    assert [s["invitee_count"] for s in sends] == [6, 1]
+
+
+def test_fe1_to_758_not_delayed_by_interval(monkeypatch):
+    members = _members(7)
+    _install(monkeypatch, members)
+    cgb.start_batch(
+        target_group_id=200,
+        source_group_id=100,
+        interval_ms=1000,
+        qq_list=[m.qq for m in members],
+        batch_size=7,
+        filter_staff=True,
+    )
+    assert wait_not_running(timeout=6.0)
+    timings = []
+    for line in cgb.get_state()["logs"]:
+        if "chunk_timing" in line and "fe1_to_send_ms=" in line:
+            part = line.split("fe1_to_send_ms=", 1)[1]
+            timings.append(int(part.split()[0]))
+    assert len(timings) == 2
+    assert all(ms < 250 for ms in timings)
+
+
+def test_slow_prior_work_skips_extra_interval_sleep(monkeypatch):
+    members = _members(7)
+    picker_started, _fe1, send_at, sizes, _n = _install(
+        monkeypatch, members, membership_delay=0.35
+    )
+    cgb.start_batch(
+        target_group_id=200,
+        source_group_id=100,
+        interval_ms=200,
+        qq_list=[m.qq for m in members],
+        batch_size=7,
+        filter_staff=True,
+    )
+    assert wait_not_running(timeout=5.0)
+    assert sizes == [6, 1]
+    gap = picker_started[1] - send_at[0]
+    assert gap >= 0.30
+    assert gap < 0.55
 
 
 def test_rate_limited_first_chunk_still_waits_before_next(monkeypatch):
@@ -98,7 +160,7 @@ def test_rate_limited_first_chunk_still_waits_before_next(monkeypatch):
             return False, {"code": 0, "data": fail_hex}
         return True, {"code": 0, "data": "1800"}
 
-    timestamps, sizes = _install_happy_path(
+    picker_started, _fe1, timestamps, sizes, _fn = _install(
         monkeypatch, members, send_result=send_result
     )
     cgb.start_batch(
@@ -112,17 +174,13 @@ def test_rate_limited_first_chunk_still_waits_before_next(monkeypatch):
     assert wait_not_running(timeout=5.0)
     assert sizes == [6, 1]
     assert (timestamps[1] - timestamps[0]) >= 0.18
+    assert picker_started[1] >= timestamps[0] + 0.18
 
 
-def test_stop_during_cadence_wait_skips_further_758(monkeypatch):
-    import threading
-
+def test_stop_during_cadence_wait_skips_current_picker(monkeypatch):
     members = _members(13)
 
     def on_send(_kwargs):
-        if len(getattr(on_send, "n", [])) >= 0:
-            pass
-
         def delayed_stop():
             time.sleep(0.05)
             cgb.stop_batch()
@@ -131,7 +189,10 @@ def test_stop_during_cadence_wait_skips_further_758(monkeypatch):
             on_send.armed = True
             threading.Thread(target=delayed_stop, daemon=True).start()
 
-    timestamps, sizes = _install_happy_path(monkeypatch, members, on_send=on_send)
+    picker_started, fe1_at, timestamps, sizes, fe1_n = _install(
+        monkeypatch, members, on_send=on_send
+    )
+    t0 = time.monotonic()
     cgb.start_batch(
         target_group_id=200,
         source_group_id=100,
@@ -141,7 +202,13 @@ def test_stop_during_cadence_wait_skips_further_758(monkeypatch):
         filter_staff=True,
     )
     assert wait_not_running(timeout=3.0)
+    assert time.monotonic() - t0 < 1.5
     assert sizes == [6]
     assert len(timestamps) == 1
+    assert len(picker_started) == 1
+    assert fe1_n["n"] == 1
     st = cgb.get_state()
     assert st["status"] == "stopped"
+    by_qq = {r["qq"]: r for r in st["results"]}
+    assert by_qq[10007]["status"] == "cancelled"
+    assert st["cancelled_count"] >= 7

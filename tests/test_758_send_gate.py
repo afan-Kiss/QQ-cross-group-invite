@@ -64,6 +64,9 @@ def test_authorize_then_stop_blocks_subsequent_758(monkeypatch):
         cgb.stop_batch()
         if after:
             after()
+        resp_cb = kwargs.get("on_response_received")
+        if resp_cb:
+            resp_cb()
         return True, {"code": 0, "data": "1800"}
 
     monkeypatch.setattr(cgb, "send_cross_group_invite", fake_758)
@@ -91,6 +94,7 @@ def test_authorize_then_stop_blocks_subsequent_758(monkeypatch):
     assert "758_authorized" in logs
     assert "758_send_started" in logs
     assert "758_send_finished" in logs
+    assert "758_response_received" in logs
     assert "stop_requested" in logs
 
 
@@ -118,6 +122,38 @@ def test_builder_fail_after_authorize_has_no_send_started(monkeypatch):
     logs = "\n".join(cgb.get_state()["logs"])
     assert "758_authorized" in logs
     assert "758_send_started" not in logs
+    assert "758_response_received" not in logs
+
+
+def test_network_send_exception_logs_exception_not_response(monkeypatch):
+    from tests.conftest import invoke_758_send_hooks
+
+    monkeypatch.setattr(cgb, "sync_fe1_selection", lambda *_a, **_k: True)
+
+    def boom(**_k):
+        raise RuntimeError("urllib explode")
+
+    monkeypatch.setattr(cgb, "send_cross_group_invite", invoke_758_send_hooks(boom))
+    _ready_running()
+    try:
+        cgb._invite_protocol_chunk(
+            target_group_id=200,
+            source_group_id=100,
+            members=_members(1),
+            tokens=[TOK],
+            capture_dir=Path("."),
+        )
+        raised = False
+    except RuntimeError:
+        raised = True
+    assert raised
+    events = cgb.parse_send_gate_events(cgb.get_state()["logs"])
+    kinds = [e["event"] for e in events]
+    assert "758_authorized" in kinds
+    assert "758_send_started" in kinds
+    assert "758_send_finished" in kinds
+    assert "758_send_exception" in kinds
+    assert "758_response_received" not in kinds
 
 
 def test_stop_between_worker_chunks_skips_chunk2_picker_and_758(monkeypatch):

@@ -158,6 +158,28 @@ class MembersCacheSnapshot:
 
 
 @dataclass
+class ProtocolSendResult:
+    """One 758 protocol send unit. Never stores invite tokens."""
+
+    seq: int = 0
+    invitee_count: int = 0
+    protocol_code: int | None = None
+    transport_ok: bool = False
+    sent_at: float = 0.0
+    finished_at: float = 0.0
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "seq": self.seq,
+            "invitee_count": self.invitee_count,
+            "protocol_code": self.protocol_code,
+            "transport_ok": self.transport_ok,
+            "sent_at": self.sent_at,
+            "finished_at": self.finished_at,
+        }
+
+
+@dataclass
 class InviteResult:
     qq: int
     nickname: str
@@ -232,6 +254,7 @@ class BatchState:
     rate_series: list[RateBucket] = field(default_factory=list)
     logs: list[str] = field(default_factory=list)
     timeline: list[dict[str, Any]] = field(default_factory=list)
+    protocol_sends: list[ProtocolSendResult] = field(default_factory=list)
     _stop: threading.Event = field(default_factory=threading.Event)
 
     def to_dict(self) -> dict[str, Any]:
@@ -275,6 +298,7 @@ class BatchState:
             "rate_series": [x.to_dict() for x in self.rate_series],
             "logs": self.logs[-200:],
             "timeline": list(self.timeline),
+            "protocol_sends": [x.to_dict() for x in self.protocol_sends],
         }
 
 
@@ -534,6 +558,7 @@ def _persist_current_task(**extra: Any) -> None:
             "stop_reason": extra.get("stop_reason", ""),
             "error_message": _state.error_message,
             "timeline": list(_state.timeline),
+            "protocol_sends": [x.to_dict() for x in _state.protocol_sends],
         }
     _upsert_task_record(record)
 
@@ -626,6 +651,45 @@ def protocol_chunk_sizes(n: int, packet_max: int | None = None) -> list[int]:
     return sizes
 
 
+_SEND_GATE_EVENT_RE = re.compile(
+    r"(?P<event>758_authorized|758_send_started|758_send_finished|"
+    r"758_response_received|758_send_exception|stop_requested|stop_blocked_new_758)"
+    r" t=(?P<t>[-+]?\d+(?:\.\d+)?)"
+    r"(?: seq=(?P<seq>\d+))?"
+)
+RAW_INVITE_TOKEN_RE = re.compile(r"u_[A-Za-z0-9_-]{12,}")
+
+
+def parse_send_gate_events(logs: list[str] | str) -> list[dict[str, Any]]:
+    """Parse ordered 758/stop gate events from engine logs."""
+    lines = logs.splitlines() if isinstance(logs, str) else list(logs or [])
+    out: list[dict[str, Any]] = []
+    for line in lines:
+        m = _SEND_GATE_EVENT_RE.search(line)
+        if not m:
+            continue
+        seq_raw = m.group("seq")
+        out.append(
+            {
+                "event": m.group("event"),
+                "t": float(m.group("t")),
+                "seq": int(seq_raw) if seq_raw else None,
+            }
+        )
+    return out
+
+
+def raw_invite_tokens_in_text(text: str) -> list[str]:
+    return RAW_INVITE_TOKEN_RE.findall(text or "")
+
+
+def assert_no_raw_invite_tokens(logs: list[str] | str, *, where: str = "logs") -> None:
+    blob = logs if isinstance(logs, str) else "\n".join(logs or [])
+    leaked = raw_invite_tokens_in_text(blob)
+    if leaked:
+        raise AssertionError(f"raw invite token leaked in {where}: {leaked[0][:8]}...")
+
+
 def _send_gate_log(event: str, seq: int | None = None) -> None:
     extra = f" seq={seq}" if seq is not None else ""
     _log(f"{event} t={time.monotonic():.6f}{extra}")
@@ -665,6 +729,35 @@ def _mark_758_network_send_started(seq: int) -> None:
 
 def _mark_758_network_send_finished(seq: int) -> None:
     _send_gate_log("758_send_finished", seq)
+
+
+def _mark_758_response_received(seq: int) -> None:
+    _send_gate_log("758_response_received", seq)
+
+
+def _mark_758_send_exception(seq: int) -> None:
+    _send_gate_log("758_send_exception", seq)
+
+
+def _record_protocol_send(
+    *,
+    seq: int,
+    invitee_count: int,
+    protocol_code: int | None,
+    transport_ok: bool,
+    sent_at: float,
+    finished_at: float,
+) -> None:
+    rec = ProtocolSendResult(
+        seq=seq,
+        invitee_count=invitee_count,
+        protocol_code=protocol_code,
+        transport_ok=bool(transport_ok),
+        sent_at=sent_at,
+        finished_at=finished_at,
+    )
+    with _state_lock:
+        _state.protocol_sends.append(rec)
 
 
 def _wait_for_758_cadence(interval_ms: int) -> bool:
@@ -943,14 +1036,17 @@ def _invite_protocol_chunk(
     tokens: list[str],
     capture_dir,
     interval_ms: int = 0,
+    protocol_chunk_index: int = 0,
+    picker_started_mono: float = 0.0,
+    picker_finished_mono: float = 0.0,
 ) -> list[tuple[SourceMember, str, int | None, str]]:
     """One protocol send unit: FE1 + one 758. Caller must already fresh-pick tokens.
 
+    Cadence wait belongs in the worker BEFORE open_cross_group_picker.
+    interval_ms is ignored here so fresh tokens are never left idle.
     Requires 1 <= len(members) <= PROTOCOL_INVITE_PACKET_MAX. Never splits.
-    Outcome kind: success | failed | rate_limited | cancelled
-    cancelled = stopped before 758 was authorized (not a protocol failure).
-    After 758 is authorized/sent, membership verify always completes for this chunk.
     """
+    del interval_ms
     n = len(members)
     packet_max = max(1, int(PROTOCOL_INVITE_PACKET_MAX))
     if n < 1:
@@ -974,31 +1070,78 @@ def _invite_protocol_chunk(
                 return [(m, "cancelled", None, "已停止，未发送邀请") for m in members]
             reason = "跨群选择同步失败，未发送邀请"
             return [(m, "failed", None, reason) for m in members]
-        if _wait_for_758_cadence(int(interval_ms or 0)):
-            return [(m, "cancelled", None, "已停止，未发送邀请") for m in members]
+        fe1_finished_mono = time.monotonic()
         auth_seq = authorize_758_send()
         if auth_seq is None:
             return [(m, "cancelled", None, "已停止，未发送邀请") for m in members]
+        authorized_mono = time.monotonic()
+        sent_wall = 0.0
 
         def _before() -> None:
+            nonlocal sent_wall
+            sent_wall = _now()
             _mark_758_network_send_started(auth_seq)
 
         def _after() -> None:
             _mark_758_network_send_finished(auth_seq)
 
-        ok, resp = send_cross_group_invite(
-            target_group_id=target_group_id,
-            source_group_id=source_group_id,
-            invitee_tokens=tokens,
-            capture_dir=capture_dir,
-            stop_event=None,
-            before_network_send=_before,
-            after_network_send=_after,
-        )
+        def _resp() -> None:
+            _mark_758_response_received(auth_seq)
+
+        def _exc() -> None:
+            _mark_758_send_exception(auth_seq)
+
+        try:
+            ok, resp = send_cross_group_invite(
+                target_group_id=target_group_id,
+                source_group_id=source_group_id,
+                invitee_tokens=tokens,
+                capture_dir=capture_dir,
+                stop_event=None,
+                before_network_send=_before,
+                after_network_send=_after,
+                on_response_received=_resp,
+                on_send_exception=_exc,
+            )
+        except Exception:
+            if sent_wall:
+                _record_protocol_send(
+                    seq=auth_seq,
+                    invitee_count=n,
+                    protocol_code=None,
+                    transport_ok=False,
+                    sent_at=sent_wall,
+                    finished_at=_now(),
+                )
+            raise
     except PickerStopped:
         return [(m, "cancelled", None, "已停止，未发送邀请") for m in members]
+    finished_wall = _now()
+    send_started_mono = _last_758_send_mono
+    if picker_started_mono > 0 and send_started_mono > 0:
+        picker_to_send_ms = int(max(0.0, (send_started_mono - picker_started_mono) * 1000))
+        fe1_to_send_ms = int(max(0.0, (send_started_mono - fe1_finished_mono) * 1000))
+        _log(
+            f"chunk_timing protocol_chunk_index={protocol_chunk_index} "
+            f"picker_started_mono={picker_started_mono:.6f} "
+            f"picker_finished_mono={picker_finished_mono:.6f} "
+            f"fe1_finished_mono={fe1_finished_mono:.6f} "
+            f"758_authorized_mono={authorized_mono:.6f} "
+            f"758_send_started_mono={send_started_mono:.6f} "
+            f"picker_to_send_ms={picker_to_send_ms} "
+            f"fe1_to_send_ms={fe1_to_send_ms} "
+            f"invitee_count={n}"
+        )
     rsp_hex = _rsp_hex(resp)
     code, _ = parse_758_recv_status(rsp_hex) if rsp_hex else (None, False)
+    _record_protocol_send(
+        seq=auth_seq,
+        invitee_count=n,
+        protocol_code=code,
+        transport_ok=bool(ok),
+        sent_at=sent_wall or finished_wall,
+        finished_at=finished_wall,
+    )
     msg = _extract_error_text(rsp_hex)
     if not ok:
         if isinstance(resp, dict) and resp.get("error") == "stopped":
@@ -1291,6 +1434,7 @@ def start_batch(
         _state.rate_series.clear()
         _state.logs.clear()
         _state.timeline.clear()
+        _state.protocol_sends.clear()
         _state.message = "准备中..."
         _state.error_message = ""
         _state.started_at = _now()
@@ -1414,12 +1558,24 @@ def start_batch(
                             f"正在邀请 {proto_chunk[0].nickname}({proto_chunk[0].qq})"
                         )
 
+                    if _wait_for_758_cadence(interval_ms):
+                        rest = []
+                        for later in proto_chunks[proto_i - 1 :]:
+                            rest.extend(later)
+                        _cancel_members_unsent(rest, started_at_by_qq)
+                        stopped_here = True
+                        break
+
                     desired = [m.qq for m in proto_chunk]
                     _log(
                         f"正在准备第 {batch_idx + 1} 批跨群邀请凭证 "
                         f"(协议子包 {proto_i}/{proto_total})..."
                     )
                     picker_t0 = time.monotonic()
+                    _log(
+                        f"picker_started protocol_chunk_index={proto_i} "
+                        f"t={picker_t0:.6f}"
+                    )
                     try:
                         picker = open_cross_group_picker(
                             cap,
@@ -1436,7 +1592,8 @@ def start_batch(
                         stopped_here = True
                         break
 
-                    picker_age_ms = int(max(0.0, (time.monotonic() - picker_t0) * 1000))
+                    picker_t1 = time.monotonic()
+                    picker_age_ms = int(max(0.0, (picker_t1 - picker_t0) * 1000))
                     if picker is None:
                         raise RuntimeError(
                             "来源群成员已加载，但跨群邀请凭证未准备成功"
@@ -1490,7 +1647,9 @@ def start_batch(
                             members=ready,
                             tokens=ready_tokens,
                             capture_dir=cap,
-                            interval_ms=interval_ms,
+                            protocol_chunk_index=proto_i,
+                            picker_started_mono=picker_t0,
+                            picker_finished_mono=picker_t1,
                         )
                         _apply_invite_outcomes(batch_results, started_at_by_qq)
 
